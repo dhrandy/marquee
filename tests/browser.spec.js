@@ -59,6 +59,9 @@ test("desktop navigation, status filters, settings, weather, and session invalid
   ).toHaveCount(0);
   await page.locator('[data-type="tv"]').check();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByPlaceholder("City name").fill("Sample");
+  await page.getByRole("button", { name: "Find city", exact: true }).click();
+  await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
   await page.locator('[data-pref="weather"]').check();
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(page.locator("#weather-content")).toContainText("68°F");
@@ -403,3 +406,34 @@ test("search footers stay aligned with long titles, missing overviews, and after
   values = await centers();
   expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1);
 });
+
+for (const width of [1440, 393, 320, 280]) {
+  test(`weather city picker and administrator name settings at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await login(page);
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByPlaceholder('City name').fill('Sample');
+    await page.getByRole('button', { name: 'Find city', exact: true }).click();
+    await page.getByRole('button', { name: 'Sample City, Example Region', exact: true }).click();
+    await page.locator('#weather-units').selectOption('celsius');
+    await page.locator('[data-pref="weather"]').check();
+    await expect(page.locator('#weather-content')).toContainText('20°C');
+    await page.locator('#display-name').fill('Movie Room');
+    await page.getByRole('button', { name: 'Save name', exact: true }).click();
+    await expect(page.locator('#display-name-status')).toHaveText('Saved for everyone.');
+    await expect(page.locator('.masthead .app-name')).toHaveText('Movie Room');
+    await page.locator('#weather-settings').scrollIntoViewIfNeeded();
+    await page.locator('#settings').screenshot({ path: `${shots}/marquee-settings-weather-${width}.png` });
+    await page.locator('#display-name-settings').scrollIntoViewIfNeeded();
+    await page.locator('#settings').screenshot({ path: `${shots}/marquee-settings-name-${width}.png` });
+    expect(await page.locator('#settings').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.getByRole('button', { name: 'Close settings' }).click();
+    await page.reload();
+    await expect(page.locator('#weather-content')).toContainText('20°C');
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.locator('#weather-city-selected')).toHaveText('Sample City, Example Region');
+    await page.locator('#display-name').fill('Marquee');
+    await page.getByRole('button', { name: 'Save name', exact: true }).click();
+    await expect(page.locator('#display-name-status')).toHaveText('Saved for everyone.');
+  });
+}

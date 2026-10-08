@@ -43,7 +43,12 @@ export async function authenticate(username, password) {
   );
   if (!auth.User?.Id || !auth.AccessToken)
     throw new Error("Invalid authentication response");
-  return { id: auth.User.Id, name: auth.User.Name, token: auth.AccessToken };
+  return {
+    id: auth.User.Id,
+    name: auth.User.Name,
+    token: auth.AccessToken,
+    isAdmin: auth.User.Policy?.IsAdministrator === true,
+  };
 }
 
 export async function recentItems(user) {

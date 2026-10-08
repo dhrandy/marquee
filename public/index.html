@@ -147,6 +147,24 @@
           <option value="list">List</option>
         </select>
       </label>
+      <div class="settings-group" id="weather-settings">
+        <h3>Weather</h3>
+        <p>Free weather and city search from Open-Meteo. No key or account needed.</p>
+        <label for="weather-city-query">Find your city</label>
+        <div class="settings-input-row"><input id="weather-city-query" maxlength="100" placeholder="City name" autocomplete="off" /><button id="weather-city-search">Find city</button></div>
+        <div id="weather-city-results" class="city-results"></div>
+        <p id="weather-city-selected">No city selected</p>
+        <label class="setting">Temperature units<select id="weather-units"><option value="fahrenheit">Fahrenheit (°F)</option><option value="celsius">Celsius (°C)</option></select></label>
+        <p id="weather-settings-status" role="status"></p>
+        <small>Saved for your account on this device. City searches and chosen coordinates are sent to Open-Meteo.</small>
+      </div>
+      <div class="settings-group" id="display-name-settings" hidden>
+        <h3>Display name</h3>
+        <p>Jellyfin administrators can set the name everyone sees.</p>
+        <label for="display-name">Dashboard name</label>
+        <div class="settings-input-row"><input id="display-name" maxlength="40" value="Marquee" /><button id="save-display-name">Save name</button></div>
+        <p id="display-name-status" role="status"></p>
+      </div>
       <div class="connections">
         <h3>Connections</h3>
         <p>Test each service with the server's saved settings.</p>

@@ -22,7 +22,7 @@ const service = http.createServer(async (req, res) => {
     }
     return res.end(
       JSON.stringify({
-        User: { Id: Username, Name: Username },
+        User: { Id: Username, Name: Username, Policy: { IsAdministrator: Username === "admin" } },
         AccessToken: `token-${Username}`,
       }),
     );
@@ -136,6 +136,7 @@ const server = spawn(process.execPath, ["src/server.js"], {
   env: {
     ...process.env,
     PORT: "18739",
+    MARQUEE_DATA_DIR: "/tmp/marquee-live-test-settings",
     DEMO_MODE: "false",
     COOKIE_SECURE: "false",
     JELLYFIN_URL: "http://127.0.0.1:18740",
@@ -357,11 +358,31 @@ try {
     assert.match(radarrBody.error, /not configured/i);
     assert.equal((await post({ service: "nope" })).status, 400);
   });
+  await test("only Jellyfin administrators can save the shared display name", async () => {
+    const viewer = (await signin("alice")).headers.get("set-cookie").split(";")[0];
+    const admin = (await signin("admin")).headers.get("set-cookie").split(";")[0];
+    const update = (cookie, name, origin = base) => fetch(`${base}/api/display-name`, { method: "POST", headers: { Cookie: cookie, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+    assert.equal((await update(viewer, "Nope")).status, 403);
+    assert.equal((await update(admin, "Safe name", "https://evil.invalid")).status, 403);
+    assert.equal((await update(admin, "<script>bad</script>")).status, 400);
+    assert.equal((await update(admin, "x".repeat(41))).status, 400);
+    assert.equal((await update(admin, "Movie Room")).status, 200);
+    assert.equal((await (await fetch(`${base}/api/config`)).json()).name, "Movie Room");
+    const stored = JSON.parse(await (await import("node:fs/promises")).readFile("/tmp/marquee-live-test-settings/settings.json", "utf8"));
+    assert.equal(stored.name, "Movie Room");
+    assert.equal((await update(admin, "Marquee")).status, 200);
+    assert.equal((await fetch(`${base}/api/weather?latitude=91&longitude=0&units=celsius`, { headers: { Cookie: viewer } })).status, 400);
+    assert.equal((await fetch(`${base}/api/weather?latitude=0&longitude=0&units=invalid`, { headers: { Cookie: viewer } })).status, 400);
+    assert.equal((await fetch(`${base}/api/weather/cities?query=a`, { headers: { Cookie: viewer } })).status, 400);
+    assert.equal((await fetch(`${base}/api/weather/cities?query=city`)).status, 401);
+  });
+
   await test("bad passwords are rejected, repeated attempts are limited", async () => {
     for (let i = 0; i < 10; i++)
       assert.equal((await signin("alice", "wrong")).status, 401);
     assert.equal((await signin("alice", "wrong")).status, 429);
   });
+
 } finally {
   server.kill();
   service.close();

@@ -8,6 +8,8 @@ const state = {
   key: "",
   demo: false,
   canRequest: false,
+  name: "Marquee",
+  cityResults: [],
 };
 const defaults = {
   recent: true,
@@ -16,6 +18,8 @@ const defaults = {
   addedDates: true,
   shelfNavigation: true,
   weather: false,
+  weatherCity: null,
+  weatherUnits: "fahrenheit",
   search: true,
   hideUnmonitored: false,
   requests: true,
@@ -116,6 +120,12 @@ function buildSettings() {
     }),
   );
   $("#default-view").value = state.prefs.defaultView;
+  $("#weather-units").value = state.prefs.weatherUnits;
+  $("#weather-city-selected").textContent =
+    state.prefs.weatherCity?.label || "No city selected";
+  $("#display-name").value = state.name;
+  $("#weather-city-results").replaceChildren();
+  $("#weather-settings-status").textContent = "";
 }
 async function enter(name) {
   state.key = `marquee:${name}:preferences`;
@@ -141,6 +151,7 @@ async function enter(name) {
   applyPrefs();
   const me = await api("/api/me");
   state.canRequest = me.canRequest;
+  $("#display-name-settings").hidden = !me.isAdmin;
   await Promise.all([loadRecent(), loadCalendar(), loadRequests()]);
 }
 function fixBrokenPosters() {
@@ -301,14 +312,26 @@ function move(amount) {
       state.date.getMonth() + amount,
       1,
     );
-  else if (state.view === "agenda") state.date = addDays(state.date, amount * 14);
+  else if (state.view === "agenda")
+    state.date = addDays(state.date, amount * 14);
   else
     state.date = addDays(state.date, amount * (state.view === "week" ? 7 : 1));
   loadCalendar();
 }
 async function loadWeather() {
   try {
-    const data = await api("/api/weather");
+    const city = state.prefs.weatherCity;
+    if (!city) {
+      $("#weather-content").textContent = "Choose a city in Settings";
+      $("#weather-forecast").textContent = "";
+      return;
+    }
+    const params = new URLSearchParams({
+      latitude: city.latitude,
+      longitude: city.longitude,
+      units: state.prefs.weatherUnits,
+    });
+    const data = await api(`/api/weather?${params}`);
     const codes = {
       0: "Clear",
       1: "Mostly clear",
@@ -325,7 +348,7 @@ async function loadWeather() {
       95: "Thunderstorms",
     };
     $("#weather-content").textContent =
-      `${Math.round(data.current.temperature_2m)}°${data.current_units.temperature_2m.replace("°", "")} · ${codes[data.current.weather_code] || "Mixed conditions"}`;
+      `${city.label} · ${Math.round(data.current.temperature_2m)}°${data.current_units.temperature_2m.replace("°", "")} · ${codes[data.current.weather_code] || "Mixed conditions"}`;
     $("#weather-forecast").textContent = data.daily.time
       .map(
         (date, i) =>
@@ -412,6 +435,75 @@ $("#logout").addEventListener("click", async () => {
   } catch (error) {
     report(error);
   }
+});
+function setDisplayName(name) {
+  state.name = name;
+  all(".app-name").forEach((el) => {
+    el.textContent = name;
+  });
+  document.title = `${name} · Media dashboard`;
+  $("#display-name").value = name;
+}
+$("#save-display-name").addEventListener("click", async () => {
+  const button = $("#save-display-name");
+  button.disabled = true;
+  try {
+    const data = await api("/api/display-name", {
+      method: "POST",
+      body: JSON.stringify({ name: $("#display-name").value }),
+    });
+    setDisplayName(data.name);
+    $("#display-name-status").textContent = "Saved for everyone.";
+  } catch (error) {
+    $("#display-name-status").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+$("#weather-city-search").addEventListener("click", async () => {
+  const button = $("#weather-city-search");
+  button.disabled = true;
+  $("#weather-city-results").replaceChildren();
+  try {
+    const data = await api(
+      `/api/weather/cities?query=${encodeURIComponent($("#weather-city-query").value.trim())}`,
+    );
+    state.cityResults = data.cities;
+    $("#weather-city-results").innerHTML = data.cities
+      .map(
+        (city, index) =>
+          `<button data-city="${index}">${escape(city.label)}</button>`,
+      )
+      .join("");
+    $("#weather-settings-status").textContent = data.cities.length
+      ? "Choose your city below."
+      : "No cities found. Try a nearby city or add a country.";
+  } catch (error) {
+    $("#weather-settings-status").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+$("#weather-city-query").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    $("#weather-city-search").click();
+  }
+});
+$("#weather-city-results").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-city]");
+  if (!button) return;
+  const city = state.cityResults[Number(button.dataset.city)];
+  if (!city) return;
+  state.prefs.weatherCity = city;
+  $("#weather-city-selected").textContent = city.label;
+  $("#weather-city-results").replaceChildren();
+  $("#weather-settings-status").textContent = "City saved.";
+  persist();
+});
+$("#weather-units").addEventListener("change", (event) => {
+  state.prefs.weatherUnits = event.target.value;
+  persist();
 });
 $("#settings-button").addEventListener("click", () =>
   $("#settings").showModal(),
@@ -525,10 +617,7 @@ $("#search-results").addEventListener("click", async (event) => {
 (async () => {
   const config = await api("/api/config");
   state.demo = config.demo;
-  all(".app-name").forEach((el) => {
-    el.textContent = config.name;
-  });
-  document.title = `${config.name} · Media dashboard`;
+  setDisplayName(config.name);
   $("#demo-badge").hidden = !config.demo;
   $("#login-form").hidden = config.demo;
   $("#demo-login").hidden = !config.demo;

@@ -30,7 +30,8 @@ This is a local beta. No application image or public release has been published 
 - Sonarr TV episodes and Radarr movie releases in month, week, day, agenda (next 14 days), or list views. The app remembers the last view used on each device.
 - Monday-first calendar, today highlight, previous/next period, refresh, and type/status filters. An optional hide-unmonitored filter drops unmonitored Sonarr/Radarr entries. Movies can appear twice: cinema and digital/physical releases are separate entries.
 - Green: available file. Red: release has passed but the file is missing. Yellow: upcoming TV. Gray: unreleased movie.
-- Optional current weather and three-day temperature forecast using Open-Meteo, off by default. No weather API key needed.
+- Optional current weather and three-day forecast, off by default. Choose a city and Fahrenheit/Celsius in Settings, per viewer and device. Open-Meteo weather and city search are free for non-commercial use, with no API key or account.
+- Jellyfin administrators can change the shared display name in Settings. It defaults to Marquee and survives container restarts.
 - Search Seerr (Jellyseerr or Overseerr) for movies and shows with posters, availability, and request buttons. Requesting is restricted to Jellyfin user IDs listed in `SEERR_REQUEST_ALLOWLIST`; an empty list disables requesting for everyone.
 - A quiet "Your requests" section lists recent request status. No badges, no counts.
 - Poster and title taps deep-link into Jellyfin's web player through the external URL setting.
@@ -56,7 +57,7 @@ docker compose up -d
 
 Open the configured port through an HTTPS reverse proxy. `COOKIE_SECURE=true` requires HTTPS. For a local HTTP demo only, set `DEMO_MODE=true` and `COOKIE_SECURE=false`.
 
-The initial beta copies the mounted source into a temporary writable container directory and installs the locked production dependencies at startup. This needs internet access to the package registry. Sessions live in memory, so a restart signs users out. No persistent application volume is required. Display preferences remain in the browser.
+The initial beta copies the mounted source into a temporary writable container directory and installs the locked production dependencies at startup. This needs internet access to the package registry. Sessions live in memory, so a restart signs users out. The `marquee-settings` volume keeps the administrator-set display name across container restarts. Display and weather preferences remain per account in the browser. Do not delete the settings volume when upgrading.
 
 ### Copy-paste compose
 
@@ -77,7 +78,6 @@ services:
     environment:
       PORT: "8739"
       TZ: ${TZ}
-      APP_NAME: ${APP_NAME}
       DEMO_MODE: ${DEMO_MODE}
       COOKIE_SECURE: ${COOKIE_SECURE}
       JELLYFIN_URL: ${JELLYFIN_URL}
@@ -89,11 +89,9 @@ services:
       SEERR_API_KEY: ${SEERR_API_KEY}
       SEERR_REQUEST_ALLOWLIST: ${SEERR_REQUEST_ALLOWLIST}
       JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
-      WEATHER_LATITUDE: ${WEATHER_LATITUDE}
-      WEATHER_LONGITUDE: ${WEATHER_LONGITUDE}
-      WEATHER_UNITS: ${WEATHER_UNITS}
     volumes:
       - ./:/source:ro
+      - marquee-settings:/home/node
     tmpfs:
       - /app:uid=1000,gid=1000,mode=0700
       - /home/node/.npm:uid=1000,gid=1000,mode=0700
@@ -104,10 +102,19 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8739/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8739/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       start_period: 60s
+
+volumes:
+  marquee-settings:
 ```
 
 ### Filled `.env` example
@@ -121,8 +128,6 @@ These are example values, not working credentials.
 MARQUEE_PORT=8739
 # Your timezone, for example America/New_York. List: en.wikipedia.org/wiki/List_of_tz_database_time_zones
 TZ=Etc/UTC
-# The name shown in the header and browser tab.
-APP_NAME=Marquee
 # Demo mode shows fake titles with no login. For trying the app only - never for a real deployment.
 DEMO_MODE=false
 # true when Marquee sits behind an HTTPS reverse proxy (recommended). false only for a local HTTP demo.
@@ -156,10 +161,9 @@ SEERR_REQUEST_ALLOWLIST=
 # RADARR_WEB_URL=https://radarr.example.com
 # SEERR_WEB_URL=https://seerr.example.com
 
-# Optional weather widget (off per viewer until enabled). Coordinates only; Open-Meteo needs no key.
-WEATHER_LATITUDE=replace-with-latitude
-WEATHER_LONGITUDE=replace-with-longitude
-WEATHER_UNITS=fahrenheit
+# Weather is set per viewer in Settings: city picker and F/C units.
+# Open-Meteo weather and city search are free for non-commercial use. No API key or account needed.
+# Dashboard display name is set by a Jellyfin administrator in Settings (default Marquee).
 ```
 
 Dockhand users can put these variables in the stack's Environment tab instead of a `.env` file. The source folder must still be mounted: change `./:/source:ro` to your source checkout location if Dockhand's stack directory differs. No particular host OS, NAS, or stack manager is required.
@@ -176,7 +180,8 @@ Terminate HTTPS at your preferred reverse proxy and forward to port 8739. Preser
 - `SEERR_URL` and `SEERR_API_KEY`: Jellyseerr or Overseerr base URL and API key. Search uses `/api/v1/search`; requests use `/api/v1/request`.
 - `SEERR_REQUEST_ALLOWLIST`: comma-separated Jellyfin user IDs allowed to request titles. Empty means nobody can request. Requests are submitted as the Seerr account that owns the API key. Find a Jellyfin user ID under Dashboard > Users (it is in the URL when you open the user).
 - Internal/external URL split: `JELLYFIN_URL`, `SONARR_URL`, `RADARR_URL`, and `SEERR_URL` are how the container reaches each service (Docker network or LAN). `JELLYFIN_WEB_URL` is the public address browsers open when someone taps a poster; it defaults to `JELLYFIN_URL`. Set both when containers use an internal address phones cannot open. `SONARR_WEB_URL`, `RADARR_WEB_URL`, and `SEERR_WEB_URL` are reserved for future deep links and unused today.
-- `WEATHER_LATITUDE` and `WEATHER_LONGITUDE`: optional coordinates. The widget is hidden until the viewer enables it. `WEATHER_UNITS` is `fahrenheit` or `celsius`.
+- Weather: use Settings to find and pick a city, choose F/C units, and enable the widget. These choices are saved for that viewer on that device, not in `.env`.
+- Display name: Jellyfin administrators see a name field in Settings. The default is Marquee; the shared value is stored in the settings volume. This changes the dashboard header and browser tab. Installed PWA icons/name remain Marquee.
 - `TZ`: server timezone. Calendar air times and poster dates use the viewer's browser timezone.
 
 The app server must be able to reach all configured services. Browser CORS settings are not needed because requests go through the server.
@@ -193,7 +198,7 @@ Media APIs and image proxies require a session. Images are limited to item IDs r
 
 Demo mode must not be enabled for private live deployments: it allows anyone to open the sample dashboard without Jellyfin credentials. Demo adapters are separate from the live adapters and cannot expose live data.
 
-Weather requests share coordinates with Open-Meteo only when the widget is enabled. Results are cached for 15 minutes. Attribution stays visible with the widget. See [Open-Meteo documentation](https://open-meteo.com/en/docs) for service terms and use limits.
+City searches share the typed city name with Open-Meteo when you press Find city. Forecast requests share the selected city coordinates only when the widget is enabled. Results are cached for 15 minutes. Attribution stays visible with the widget. Weather and geocoding need no key or account and are free for non-commercial use. See [geocoding documentation](https://open-meteo.com/en/docs/geocoding-api) and [Open-Meteo documentation](https://open-meteo.com/en/docs) for service terms and use limits.
 
 ## Development and tests
 

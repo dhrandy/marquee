@@ -1,6 +1,8 @@
 import express from "express";
 import crypto from "node:crypto";
 import path from "node:path";
+import fs from "node:fs/promises";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import {
   authenticate,
@@ -15,6 +17,23 @@ import {
 import { demoEvents, demoRequests, demoSearch, titles } from "./demo.js";
 import { validateRange } from "./model.js";
 
+const settingsPath = path.join(
+  process.env.MARQUEE_DATA_DIR || path.join(os.homedir(), ".marquee"),
+  "settings.json",
+);
+let displayName = "Marquee";
+try {
+  const saved = JSON.parse(await fs.readFile(settingsPath, "utf8"));
+  if (
+    typeof saved.name === "string" &&
+    saved.name.trim() &&
+    saved.name.length <= 40
+  )
+    displayName = saved.name;
+} catch (error) {
+  if (error.code !== "ENOENT")
+    console.warn("Display settings could not be loaded; using Marquee.");
+}
 const app = express();
 const root = path.dirname(fileURLToPath(import.meta.url));
 const demo = process.env.DEMO_MODE === "true";
@@ -76,9 +95,7 @@ function cookie(res, value, maxAge) {
   });
 }
 
-app.get("/api/config", (req, res) =>
-  res.json({ demo, name: process.env.APP_NAME || "Marquee" }),
-);
+app.get("/api/config", (req, res) => res.json({ demo, name: displayName }));
 app.post("/api/login", async (req, res) => {
   const ip = req.socket.remoteAddress;
   const current = attempts.get(ip) || {
@@ -111,7 +128,7 @@ app.post("/api/login", async (req, res) => {
   }
   try {
     const user = demo
-      ? { id: "demo", name: "Demo viewer" }
+      ? { id: "demo", name: "Demo viewer", isAdmin: true }
       : await authenticate(username, password);
     const old = session(req);
     if (old) sessions.delete(old.sid);
@@ -144,9 +161,54 @@ const seerrAllowlist = () =>
 app.get("/api/me", requireUser, (req, res) =>
   res.json({
     name: req.user.name,
+    isAdmin: req.user.isAdmin === true,
     canRequest: demo || seerrAllowlist().includes(req.user.id),
   }),
 );
+app.post("/api/display-name", requireUser, async (req, res) => {
+  if (!req.user.isAdmin)
+    return res
+      .status(403)
+      .json({
+        error: "Only a Jellyfin administrator can change the display name.",
+      });
+  const name = req.body?.name;
+  if (
+    typeof name !== "string" ||
+    !name.trim() ||
+    name.trim().length > 40 ||
+    /[<>\x00-\x1f\x7f]/.test(name)
+  )
+    return res
+      .status(400)
+      .json({
+        error:
+          "Enter a display name of 1 to 40 characters, without markup or control characters.",
+      });
+  try {
+    if (!demo) {
+      await fs.mkdir(path.dirname(settingsPath), {
+        recursive: true,
+        mode: 0o700,
+      });
+      await fs.writeFile(
+        settingsPath + ".tmp",
+        JSON.stringify({ name: name.trim() }),
+        { mode: 0o600 },
+      );
+      await fs.rename(settingsPath + ".tmp", settingsPath);
+    }
+    displayName = name.trim();
+    res.json({ name: displayName });
+  } catch {
+    res
+      .status(500)
+      .json({
+        error:
+          "Could not save the display name. Check the settings volume is writable.",
+      });
+  }
+});
 app.get("/api/seerr/search", requireUser, async (req, res) => {
   const query = String(req.query.query ?? "");
   const page = Number(req.query.page || 1);
@@ -289,33 +351,108 @@ app.get("/api/calendar", requireUser, async (req, res) => {
       : await calendar(start, end),
   );
 });
-let weatherCache;
-app.get("/api/weather", requireUser, async (req, res) => {
+const weatherCache = new Map();
+const weatherAttempts = new Map();
+function weatherLimit(req, res, next) {
+  const old = weatherAttempts.get(req.user.id);
+  const entry =
+    old && old.until > Date.now()
+      ? old
+      : { count: 0, until: Date.now() + 60000 };
+  entry.count++;
+  weatherAttempts.set(req.user.id, entry);
+  if (entry.count > 30)
+    return res
+      .status(429)
+      .json({ error: "Too many weather requests. Try again in a minute." });
+  next();
+}
+app.get("/api/weather/cities", requireUser, weatherLimit, async (req, res) => {
+  const query = req.query.query;
+  if (
+    typeof query !== "string" ||
+    query.trim().length < 2 ||
+    query.length > 100
+  )
+    return res
+      .status(400)
+      .json({ error: "Enter a city name of 2 to 100 characters." });
   if (demo)
     return res.json({
-      current: { temperature_2m: 68, weather_code: 2 },
-      current_units: { temperature_2m: "°F" },
-      daily: {
-        time: ["2026-10-07", "2026-10-08", "2026-10-09"],
-        temperature_2m_max: [72, 74, 71],
-        temperature_2m_min: [54, 56, 52],
-      },
+      cities: [
+        {
+          id: 1,
+          label: "Sample City, Example Region",
+          latitude: 40,
+          longitude: -75,
+        },
+      ],
     });
-  const latitude = Number(process.env.WEATHER_LATITUDE);
-  const longitude = Number(process.env.WEATHER_LONGITUDE);
+  try {
+    const params = new URLSearchParams({
+      name: query.trim(),
+      count: "8",
+      language: "en",
+      format: "json",
+    });
+    const response = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?${params}`,
+      { signal: AbortSignal.timeout(10000), redirect: "error" },
+    );
+    if (!response.ok) throw new Error();
+    const data = await response.json();
+    const cities = (data.results || [])
+      .filter(
+        (c) => Number.isFinite(c.latitude) && Number.isFinite(c.longitude),
+      )
+      .slice(0, 8)
+      .map((c) => ({
+        id: c.id,
+        label: [c.name, c.admin1, c.country]
+          .filter(Boolean)
+          .join(", ")
+          .slice(0, 240),
+        latitude: c.latitude,
+        longitude: c.longitude,
+      }));
+    res.json({ cities });
+  } catch {
+    res.status(502).json({ error: "City search is temporarily unavailable." });
+  }
+});
+app.get("/api/weather", requireUser, weatherLimit, async (req, res) => {
+  const { latitude: lat, longitude: lon, units } = req.query;
+  const latitude = Number(lat),
+    longitude = Number(lon);
   if (
-    !process.env.WEATHER_LATITUDE ||
-    !process.env.WEATHER_LONGITUDE ||
+    typeof lat !== "string" ||
+    typeof lon !== "string" ||
+    !lat.trim() ||
+    !lon.trim() ||
     !Number.isFinite(latitude) ||
     !Number.isFinite(longitude) ||
     Math.abs(latitude) > 90 ||
-    Math.abs(longitude) > 180
+    Math.abs(longitude) > 180 ||
+    !["celsius", "fahrenheit"].includes(units)
   )
     return res
-      .status(503)
-      .json({ error: "Set weather latitude and longitude on the server." });
-  if (weatherCache && weatherCache.expires > Date.now())
-    return res.json(weatherCache.data);
+      .status(400)
+      .json({ error: "Choose a city and temperature units in Settings." });
+  if (demo) {
+    const celsius = units === "celsius";
+    return res.json({
+      current: { temperature_2m: celsius ? 20 : 68, weather_code: 2 },
+      current_units: { temperature_2m: celsius ? "°C" : "°F" },
+      daily: {
+        time: ["2026-10-07", "2026-10-08", "2026-10-09"],
+        temperature_2m_max: celsius ? [22, 23, 22] : [72, 74, 71],
+        temperature_2m_min: celsius ? [12, 13, 11] : [54, 56, 52],
+      },
+    });
+  }
+  const key = `${latitude}:${longitude}:${units}`;
+  const cached = weatherCache.get(key);
+  if (cached && cached.expires > Date.now()) return res.json(cached.data);
   try {
     const params = new URLSearchParams({
       latitude,
@@ -324,16 +461,17 @@ app.get("/api/weather", requireUser, async (req, res) => {
       daily: "temperature_2m_max,temperature_2m_min",
       forecast_days: "3",
       timezone: "auto",
-      temperature_unit:
-        process.env.WEATHER_UNITS === "celsius" ? "celsius" : "fahrenheit",
+      temperature_unit: units,
     });
     const response = await fetch(
       `https://api.open-meteo.com/v1/forecast?${params}`,
-      { signal: AbortSignal.timeout(10000) },
+      { signal: AbortSignal.timeout(10000), redirect: "error" },
     );
-    if (!response.ok) throw new Error("Weather unavailable");
+    if (!response.ok) throw new Error();
     const data = await response.json();
-    weatherCache = { data, expires: Date.now() + 15 * 60 * 1000 };
+    if (weatherCache.size >= 200)
+      weatherCache.delete(weatherCache.keys().next().value);
+    weatherCache.set(key, { data, expires: Date.now() + 15 * 60 * 1000 });
     res.json(data);
   } catch {
     res.status(502).json({ error: "Weather is temporarily unavailable." });
@@ -348,6 +486,8 @@ app.use((err, req, res, next) =>
 setInterval(() => {
   for (const [id, data] of sessions)
     if (data.expires < Date.now()) sessions.delete(id);
+  for (const [id, data] of weatherAttempts)
+    if (data.until < Date.now()) weatherAttempts.delete(id);
   for (const [ip, data] of attempts)
     if (data.until < Date.now()) attempts.delete(ip);
 }, 60000).unref();

@@ -14,7 +14,6 @@ services:
     environment:
       PORT: "8739"
       TZ: ${TZ}
-      APP_NAME: ${APP_NAME}
       DEMO_MODE: ${DEMO_MODE}
       COOKIE_SECURE: ${COOKIE_SECURE}
       JELLYFIN_URL: ${JELLYFIN_URL}
@@ -26,11 +25,9 @@ services:
       SEERR_API_KEY: ${SEERR_API_KEY}
       SEERR_REQUEST_ALLOWLIST: ${SEERR_REQUEST_ALLOWLIST}
       JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
-      WEATHER_LATITUDE: ${WEATHER_LATITUDE}
-      WEATHER_LONGITUDE: ${WEATHER_LONGITUDE}
-      WEATHER_UNITS: ${WEATHER_UNITS}
     volumes:
       - ./:/source:ro
+      - marquee-settings:/home/node
     tmpfs:
       - /app:uid=1000,gid=1000,mode=0700
       - /home/node/.npm:uid=1000,gid=1000,mode=0700
@@ -51,3 +48,6 @@ services:
       interval: 30s
       timeout: 5s
       start_period: 60s
+
+volumes:
+  marquee-settings:
