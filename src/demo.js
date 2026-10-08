@@ -105,7 +105,7 @@ export function demoEvents(start, end) {
         "movie",
         "Orbit Nine",
         "Meridian Studios",
-        n === 8 ? "missing" : "unreleased",
+        "cinema",
       );
       add(
         "tv",

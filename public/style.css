@@ -1006,3 +1006,6 @@ dialog select { min-width: 0; max-width: 100%; }
 }
 
 .request-unavailable { color: var(--muted); font-size: 11px; line-height: 1.5; }
+
+.cinema { color: #75c9e5; }
+.entry.cinema { border-color: #75c9e5; }

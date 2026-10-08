@@ -70,7 +70,7 @@
           <div class="section-heading calendar-heading">
             <div><span class="eyebrow">WHAT'S ON THE HORIZON</span><h2>Release calendar</h2></div>
             <div id="legend" class="legend">
-              <span class="available">● Available</span><span class="missing">● Missing</span>
+              <span class="cinema">● In cinemas</span><span class="available">● Available</span><span class="missing">● Missing</span>
               <span class="upcoming">● Upcoming</span><span class="unreleased">○ Unreleased</span>
             </div>
           </div>
@@ -98,6 +98,7 @@
               <label><input type="checkbox" data-type="tv" checked />TV</label>
               <label><input type="checkbox" data-type="movie" checked />Movies</label>
               <label><input type="checkbox" data-status="available" checked />Available</label>
+              <label><input type="checkbox" data-status="cinema" checked />In cinemas</label>
               <label><input type="checkbox" data-status="missing" checked />Missing</label>
               <label><input type="checkbox" data-status="upcoming" checked />Upcoming</label>
               <label><input type="checkbox" data-status="unreleased" checked />Unreleased</label>
@@ -157,7 +158,7 @@
         <p id="weather-city-selected">No city selected</p>
         <label class="setting">Temperature units<select id="weather-units"><option value="fahrenheit">Fahrenheit (°F)</option><option value="celsius">Celsius (°C)</option></select></label>
         <p id="weather-settings-status" role="status"></p>
-        <small>Saved for your account on this device. City searches and chosen coordinates are sent to Open-Meteo.</small>
+        <small>Saved server-side for your Jellyfin account across devices. City searches and chosen coordinates are sent to Open-Meteo.</small>
       </div>
       <div class="settings-group" id="display-name-settings" hidden>
         <h3>Display name</h3>

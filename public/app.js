@@ -29,6 +29,7 @@ const defaults = {
 const statusLabel = {
   available: "Available",
   missing: "Missing",
+  cinema: "In cinemas",
   upcoming: "Upcoming",
   unreleased: "Unreleased",
 };
@@ -79,8 +80,31 @@ function report(error) {
   $("#global-error").hidden = false;
 }
 function persist() {
-  localStorage.setItem(state.key, JSON.stringify(state.prefs));
+  const { weather, weatherCity, weatherUnits, ...devicePrefs } = state.prefs;
+  localStorage.setItem(state.key, JSON.stringify(devicePrefs));
   applyPrefs();
+}
+let weatherWrites = Promise.resolve();
+function saveWeather() {
+  const value = {
+    weather: state.prefs.weather,
+    weatherCity: state.prefs.weatherCity,
+    weatherUnits: state.prefs.weatherUnits,
+  };
+  $("#weather-settings-status").textContent = "Saving…";
+  weatherWrites = weatherWrites
+    .catch(() => {})
+    .then(async () => {
+      await api("/api/weather-settings", {
+        method: "POST",
+        body: JSON.stringify(value),
+      });
+      $("#weather-settings-status").textContent = "Saved to your account.";
+    })
+    .catch((error) => {
+      $("#weather-settings-status").textContent = error.message;
+    });
+  return weatherWrites;
 }
 function applyPrefs() {
   $("#recent-section").hidden = !state.prefs.recent;
@@ -117,6 +141,7 @@ function buildSettings() {
     el.addEventListener("change", () => {
       state.prefs[el.dataset.pref] = el.checked;
       persist();
+      if (el.dataset.pref === "weather") saveWeather();
       if (el.dataset.pref === "requests" && el.checked) loadRequests();
     }),
   );
@@ -138,6 +163,7 @@ async function enter(name) {
   } catch {
     state.prefs = { ...defaults };
   }
+  Object.assign(state.prefs, await api("/api/weather-settings"));
   state.view =
     state.prefs.lastView ||
     (state.prefs.defaultView === "auto"
@@ -503,12 +529,13 @@ $("#weather-city-results").addEventListener("click", (event) => {
   state.prefs.weatherCity = city;
   $("#weather-city-selected").textContent = city.label;
   $("#weather-city-results").replaceChildren();
-  $("#weather-settings-status").textContent = "City saved.";
   persist();
+  saveWeather();
 });
 $("#weather-units").addEventListener("change", (event) => {
   state.prefs.weatherUnits = event.target.value;
   persist();
+  saveWeather();
 });
 $("#settings-button").addEventListener("click", () =>
   $("#settings").showModal(),

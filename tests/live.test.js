@@ -10,6 +10,7 @@ const service = http.createServer(async (req, res) => {
     path: url.pathname,
     query: url.searchParams,
     authorization: req.headers.authorization,
+    apiKey: req.headers["x-api-key"],
   });
   res.setHeader("Content-Type", "application/json");
   if (url.pathname === "/Users/AuthenticateByName") {
@@ -39,6 +40,34 @@ const service = http.createServer(async (req, res) => {
     }
     if (url.searchParams.has("ParentId"))
       return res.end(JSON.stringify({ TotalRecordCount: 4 }));
+    if (user === "bulk-viewer") {
+      const allItems = Array.from({ length: 220 }, (_, i) => ({
+        Id: `bulk-${i}`,
+        SeriesId: `bulk-series-${Math.floor(i / 110)}`,
+        SeasonId: `bulk-season-${Math.floor(i / 110)}`,
+        SeriesName: `Imported show ${Math.floor(i / 110)}`,
+        Type: "Episode",
+        ParentIndexNumber: 1,
+        DateCreated: "2026-10-08T10:00:00Z",
+      }));
+      allItems.push(
+        ...Array.from({ length: 25 }, (_, i) => ({
+          Id: `older-${i}`,
+          Name: `Older movie ${i}`,
+          Type: "Movie",
+          DateCreated: "2026-10-07T10:00:00Z",
+        })),
+      );
+      const start = Number(url.searchParams.get("StartIndex") || 0);
+      const take = Number(url.searchParams.get("Limit") || 18);
+      return res.end(
+        JSON.stringify({
+          Items: allItems.slice(start, start + take),
+          TotalRecordCount: allItems.length,
+        }),
+      );
+    }
+
     return res.end(
       JSON.stringify({
         Items: [
@@ -49,7 +78,7 @@ const service = http.createServer(async (req, res) => {
             Name: "<script>alert(1)</script>",
             SeriesName: `${user} private series`,
             Type: "Episode",
-            ParentIndexNumber: 2,
+            ParentIndexNumber: user === "missing-season" ? undefined : 2,
             IndexNumber: 1,
             DateCreated: "2026-10-07T10:00:00Z",
           },
@@ -67,6 +96,8 @@ const service = http.createServer(async (req, res) => {
       }),
     );
   }
+  if (url.pathname === "/Users/missing-season/Items/season-1")
+    return res.end(JSON.stringify({ IndexNumber: 1 }));
   if (url.pathname === "/api/v3/calendar")
     return res.end(
       JSON.stringify([
@@ -125,11 +156,19 @@ const service = http.createServer(async (req, res) => {
             id: 1,
             status: 2,
             createdAt: "2026-10-06T10:00:00Z",
-            media: { mediaType: "movie", title: "Requested Film", status: 3 },
+            type: "movie",
+            media: { mediaType: "movie", tmdbId: 9001, status: 3 },
           },
         ],
       }),
     );
+  if (url.pathname === "/api/v1/movie/9001") {
+    assert.equal(req.headers["x-api-user"], "4");
+    assert.equal(req.headers["x-api-key"], "seerr-mock");
+    return res.end(
+      JSON.stringify({ title: "Requested Film", posterPath: "/abc.jpg" }),
+    );
+  }
   if (url.pathname === "/api/v1/request" && req.method === "POST") {
     let body = "";
     for await (const chunk of req) body += chunk;
@@ -163,7 +202,7 @@ const server = spawn(process.execPath, ["src/server.js"], {
     DEMO_MODE: "false",
     COOKIE_SECURE: "false",
     JELLYFIN_URL: "http://127.0.0.1:18740",
-    SONARR_URL: "http://127.0.0.1:18740",
+    SONARR_URL: " 127.0.0.1:18740/// ",
     SONARR_API_KEY: "mock-key",
     RADARR_URL: "",
     JELLYFIN_WEB_URL: "https://jellyfin.example.test",
@@ -202,7 +241,7 @@ try {
     const data = JSON.parse(text);
     assert.equal(data.items.length, 1);
     assert.equal(data.items[0].title, "alice private series");
-    assert.equal(data.items[0].subtitle, "Season 2 / 4 Episodes");
+    assert.equal(data.items[0].subtitle, "Season 2 / 4 Episodes · Episode 1: <script>alert(1)</script>");
     assert.match(
       data.items[0].link,
       /^https:\/\/jellyfin\.example\.test\/web\/index\.html#!\/details\?id=episode-1/,
@@ -497,6 +536,105 @@ try {
     });
     assert.equal(denied.status, 403);
     assert.match((await denied.json()).error, /import your Jellyfin account/i);
+  });
+  await test("recent shelf fills 18 distinct cards after bulk episode imports", async () => {
+    const login = await signin("bulk-viewer");
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const response = await fetch(`${base}/api/recent`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.equal(data.items.length, 18);
+    assert.deepEqual(
+      data.items.slice(0, 2).map((i) => i.title),
+      ["Imported show 0", "Imported show 1"],
+    );
+    assert.equal(data.items[2].title, "Older movie 0");
+    assert.equal(data.items[17].title, "Older movie 15");
+    const pages = calls.filter(
+      (c) =>
+        c.path === "/Items" &&
+        c.query.get("UserId") === "bulk-viewer" &&
+        !c.query.has("ParentId"),
+    );
+    assert.equal(pages.length, 3);
+    for (const call of pages)
+      assert.match(call.authorization, /token-bulk-viewer/);
+  });
+  await test("Sonarr status and calendar use the normalized API URL and key", async () => {
+    const login = await signin("alice");
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const result = await fetch(`${base}/api/test-connection`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: base,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ service: "sonarr" }),
+    });
+    assert.deepEqual(await result.json(), { ok: true });
+    const statusCall = calls.find((c) => c.path === "/api/v3/system/status");
+    assert.equal(statusCall.apiKey, "mock-key");
+  });
+  await test("recent season number falls back to Jellyfin season metadata, with episode title", async () => {
+    const login = await signin("missing-season");
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const data = await (
+      await fetch(`${base}/api/recent`, { headers: { Cookie: cookie } })
+    ).json();
+    assert.match(
+      data.items[0].subtitle,
+      /^Season 1 \/ 4 Episodes · Episode 1:/,
+    );
+  });
+  await test("weather preferences are account-private and saved with shared display settings", async () => {
+    const login = await signin("alice");
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const value = {
+      weather: true,
+      weatherCity: { label: "Sample City", latitude: 40, longitude: -80 },
+      weatherUnits: "celsius",
+    };
+    const response = await fetch(`${base}/api/weather-settings`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: base,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(value),
+    });
+    assert.equal(response.status, 200);
+    const secondLogin = await signin("alice");
+    const second = secondLogin.headers.get("set-cookie").split(";")[0];
+    assert.deepEqual(
+      await (
+        await fetch(`${base}/api/weather-settings`, {
+          headers: { Cookie: second },
+        })
+      ).json(),
+      value,
+    );
+    const other = await signin("bob");
+    const otherCookie = other.headers.get("set-cookie").split(";")[0];
+    assert.equal(
+      (
+        await (
+          await fetch(`${base}/api/weather-settings`, {
+            headers: { Cookie: otherCookie },
+          })
+        ).json()
+      ).weather,
+      false,
+    );
+    const disk = JSON.parse(
+      await (
+        await import("node:fs/promises")
+      ).readFile("/tmp/marquee-live-test-settings/settings.json", "utf8"),
+    );
+    assert.deepEqual(disk.weatherByUser.alice, value);
   });
   await test("bad passwords are rejected, repeated attempts are limited", async () => {
     for (let i = 0; i < 10; i++)

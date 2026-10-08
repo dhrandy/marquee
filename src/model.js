@@ -40,7 +40,7 @@ export function normalizeMovies(rows, now = new Date()) {
         title: row.title,
         subtitle: `${studio} · In cinemas`,
         date: row.inCinemas,
-        status: movieStatus(row, row.inCinemas, now),
+        status: "cinema",
         monitored,
       });
     if (home && home !== row.inCinemas)

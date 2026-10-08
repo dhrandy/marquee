@@ -10,19 +10,66 @@ export async function upstream(
   path,
   { headers = {}, method = "GET", body } = {},
 ) {
-  if (!base) throw new Error("Service not configured");
-  const url = new URL(base.replace(/\/$/, "") + path);
-  if (!["http:", "https:"].includes(url.protocol))
-    throw new Error("Invalid service URL");
-  const response = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json", ...headers },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(10000),
-    redirect: "error",
-  });
-  if (!response.ok) throw new Error(`Service returned ${response.status}`);
-  return response.json();
+  const url = serviceUrl(base, path);
+  let response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json", ...headers },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(10000),
+      redirect: "error",
+    });
+  } catch (error) {
+    throw new Error(connectionError(error));
+  }
+  if (!response.ok)
+    throw new Error(
+      `Service answered HTTP ${response.status}. Check its URL and API key or credentials.`,
+    );
+  try {
+    return await response.json();
+  } catch {
+    throw new Error(
+      "Service answered, but did not return valid JSON. Check its API base URL.",
+    );
+  }
+}
+
+export function serviceUrl(base, path) {
+  if (!base?.trim()) throw new Error("Service not configured.");
+  let address = base.trim();
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(address)) address = `http://${address}`;
+  let url;
+  try {
+    url = new URL(address.replace(/\/+$/, "") + path);
+  } catch {
+    throw new Error("The configured service URL is invalid.");
+  }
+  if (
+    !["http:", "https:"].includes(url.protocol) ||
+    url.username ||
+    url.password
+  )
+    throw new Error(
+      "The configured URL must be HTTP(S), without embedded credentials.",
+    );
+  return url;
+}
+
+function connectionError(error) {
+  const code = error.cause?.code;
+  if (code === "ENOTFOUND")
+    return "Host not found (DNS). Check the service URL.";
+  if (code === "ECONNREFUSED")
+    return "Connection refused. Check the service port.";
+  if (error.name === "TimeoutError" || code === "UND_ERR_CONNECT_TIMEOUT")
+    return "Timed out waiting for the service.";
+  if (/CERT|TLS|SSL|SELF_SIGNED/.test(code || ""))
+    return "TLS certificate validation failed. Use a trusted certificate or the intended local HTTP URL.";
+  if (/redirect/i.test(error.cause?.message || ""))
+    return "Service redirected the API request. Use its final API base URL, including any configured URL base.";
+  return "Could not connect to the service. Check the URL and container connectivity.";
 }
 
 export function jellyfinHeaders(token = "") {
@@ -52,27 +99,48 @@ export async function authenticate(username, password) {
 }
 
 export async function recentItems(user) {
-  const query = new URLSearchParams({
-    UserId: user.id,
-    SortBy: "DateCreated",
-    SortOrder: "Descending",
-    Recursive: "true",
-    IncludeItemTypes: "Movie,Episode",
-    Limit: "18",
-    Fields: "DateCreated",
-    EnableUserData: "true",
-  });
-  const data = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, {
-    headers: jellyfinHeaders(user.token),
-  });
+  // Limit cards after season grouping, not raw episodes. Large imports can
+  // otherwise fill an entire Jellyfin page with only one or two seasons.
   const groups = new Map();
-  for (const item of data.Items || []) {
-    const key = item.Type === "Episode" ? item.SeasonId || item.Id : item.Id;
-    if (!groups.has(key)) groups.set(key, item);
+  const pageSize = 100;
+  let startIndex = 0;
+  while (groups.size < 18) {
+    const query = new URLSearchParams({
+      UserId: user.id,
+      SortBy: "DateCreated,SortName",
+      SortOrder: "Descending",
+      Recursive: "true",
+      IncludeItemTypes: "Movie,Episode",
+      Limit: String(pageSize),
+      StartIndex: String(startIndex),
+      Fields: "DateCreated",
+      EnableUserData: "true",
+      EnableTotalRecordCount: "true",
+    });
+    const data = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, {
+      headers: jellyfinHeaders(user.token),
+    });
+    const items = data.Items || [];
+    for (const item of items) {
+      const key = item.Type === "Episode" ? item.SeasonId || item.Id : item.Id;
+      if (!groups.has(key)) groups.set(key, item);
+      if (groups.size === 18) break;
+    }
+    startIndex += items.length;
+    if (
+      !items.length ||
+      items.length < pageSize ||
+      (Number.isFinite(data.TotalRecordCount) &&
+        startIndex >= data.TotalRecordCount)
+    )
+      break;
   }
   return Promise.all(
     [...groups.values()].map(async (item) => {
       let count;
+      let seasonNumber = Number.isInteger(item.ParentIndexNumber)
+        ? item.ParentIndexNumber
+        : null;
       if (item.Type === "Episode" && item.SeasonId) {
         const params = new URLSearchParams({
           UserId: user.id,
@@ -87,14 +155,30 @@ export async function recentItems(user) {
           { headers: jellyfinHeaders(user.token) },
         );
         count = season.TotalRecordCount;
+        if (seasonNumber === null) {
+          try {
+            const details = await upstream(
+              process.env.JELLYFIN_URL,
+              `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(item.SeasonId)}`,
+              { headers: jellyfinHeaders(user.token) },
+            );
+            if (Number.isInteger(details.IndexNumber))
+              seasonNumber = details.IndexNumber;
+          } catch {
+            /* Missing metadata is unknown, never silently season zero. */
+          }
+        }
       }
+      const episode = Number.isInteger(item.IndexNumber)
+        ? `Episode ${item.IndexNumber}`
+        : "Episode unknown";
       const imageId = item.SeriesId || item.Id;
       return {
         id: imageId,
         title: item.SeriesName || item.Name,
         subtitle:
           item.Type === "Episode"
-            ? `Season ${item.ParentIndexNumber || 0} / ${count ?? "Unknown"} Episodes`
+            ? `Season ${seasonNumber ?? "unknown"} / ${count ?? "Unknown"} Episodes · ${episode}${item.Name ? `: ${item.Name}` : ""}`
             : `${item.ProductionYear || ""} · Movie`,
         added: item.DateCreated,
         link: jellyfinLink(item.Id),
@@ -131,11 +215,15 @@ export async function calendar(start, end) {
         const rows = await upstream(service.base, `/api/v3/calendar?${query}`, {
           headers: { "X-Api-Key": service.key },
         });
+        if (!Array.isArray(rows))
+          throw new Error(
+            "Calendar API answered an unexpected format. Check the API base URL.",
+          );
         return { events: service.normalize(rows) };
-      } catch {
+      } catch (error) {
         return {
           events: [],
-          warning: `${service.name} could not be reached. Check its connection settings.`,
+          warning: `${service.name}: ${error.message}`,
         };
       }
     }),
@@ -215,7 +303,13 @@ export async function seerrIdentity(jellyfinId) {
       },
     },
   );
-  if (!quota.movie || !quota.tv || typeof quota.movie.restricted !== "boolean" || typeof quota.tv.restricted !== "boolean" || !Number.isSafeInteger(user.permissions))
+  if (
+    !quota.movie ||
+    !quota.tv ||
+    typeof quota.movie.restricted !== "boolean" ||
+    typeof quota.tv.restricted !== "boolean" ||
+    !Number.isSafeInteger(user.permissions)
+  )
     throw new Error("Seerr permissions could not be verified.");
   const permitted = (bit) =>
     user.id === 1 || Boolean(user.permissions & (2 | 32 | bit));
@@ -271,6 +365,43 @@ export async function seerrRequests(userId) {
       },
     },
   );
+  // Seerr request records carry media IDs/status, not TMDB titles. Resolve the
+  // ten visible rows through Seerr's own metadata API as the linked user.
+  await Promise.all(
+    (data.results || []).slice(0, 10).map(async (request) => {
+      const type = request.type || request.media?.mediaType;
+      const id = request.media?.tmdbId;
+      if (
+        !["movie", "tv"].includes(type) ||
+        !Number.isSafeInteger(id) ||
+        id <= 0
+      )
+        return;
+      try {
+        const details = await upstream(
+          process.env.SEERR_URL,
+          `/api/v1/${type}/${id}`,
+          {
+            headers: {
+              "X-Api-Key": process.env.SEERR_API_KEY,
+              "X-API-User": String(userId),
+            },
+          },
+        );
+        request.media = {
+          ...request.media,
+          mediaType: type,
+          title:
+            details.title ||
+            details.name ||
+            request.media?.title ||
+            request.media?.name,
+        };
+      } catch {
+        /* Keep request status visible if metadata is temporarily unavailable. */
+      }
+    }),
+  );
   return normalizeSeerrRequests(data);
 }
 
@@ -301,31 +432,11 @@ export async function testService(name) {
   if (!service) return { ok: false, error: "Unknown service." };
   if (!service.base) return { ok: false, error: `${name} is not configured.` };
   try {
-    const url = new URL(service.base.replace(/\/$/, "") + service.path);
-    if (!["http:", "https:"].includes(url.protocol))
-      return { ok: false, error: "The configured URL is not valid HTTP(S)." };
-    const headers = service.key ? { "X-Api-Key": service.key } : {};
-    const response = await fetch(url, {
-      headers,
-      signal: AbortSignal.timeout(8000),
-      redirect: "error",
+    await upstream(service.base, service.path, {
+      headers: service.key ? { "X-Api-Key": service.key } : {},
     });
-    if (!response.ok)
-      return {
-        ok: false,
-        error: `Answered HTTP ${response.status}. Check the ${service.key ? "URL and API key" : "URL"}.`,
-      };
     return { ok: true };
   } catch (error) {
-    const code = error.cause?.code;
-    const detail =
-      code === "ENOTFOUND"
-        ? "Host not found (DNS). Check the URL."
-        : code === "ECONNREFUSED"
-          ? "Connection refused. Check the port and that the service is running."
-          : error.name === "TimeoutError" || code === "UND_ERR_CONNECT_TIMEOUT"
-            ? "Timed out. The service did not answer."
-            : `Could not connect: ${error.cause?.message || error.message}`;
-    return { ok: false, error: detail };
+    return { ok: false, error: error.message };
   }
 }

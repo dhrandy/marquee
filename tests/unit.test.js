@@ -1,3 +1,4 @@
+import { serviceUrl, upstream } from "../src/adapters.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -34,21 +35,22 @@ test("normalization keeps episode data and splits cinema from digital releases",
     ])[0].subtitle,
     "S02E03 · Pilot",
   );
-  const movies = normalizeMovies([
-    {
-      id: 1,
-      title: "Sample film",
-      studio: "Sample Studio",
-      inCinemas: "2026-10-01",
-      digitalRelease: "2026-10-09",
-      monitored: true,
-    },
-  ],
-  now,
-);
+  const movies = normalizeMovies(
+    [
+      {
+        id: 1,
+        title: "Sample film",
+        studio: "Sample Studio",
+        inCinemas: "2026-10-01",
+        digitalRelease: "2026-10-09",
+        monitored: true,
+      },
+    ],
+    now,
+  );
   assert.equal(movies.length, 2);
   assert.equal(movies[0].subtitle, "Sample Studio · In cinemas");
-  assert.equal(movies[0].status, "missing");
+  assert.equal(movies[0].status, "cinema");
   assert.equal(movies[1].subtitle, "Sample Studio · Digital release");
   assert.equal(movies[1].status, "unreleased");
   const collapsed = normalizeMovies(
@@ -141,4 +143,40 @@ test("seerr requests normalize status and fall back to a TMDB id title", () => {
   assert.equal(requests[0].status, 2);
   assert.equal(requests[1].title, "TMDB #42");
   assert.equal(requests[1].availability, null);
+});
+
+test("service URLs normalize scheme-less addresses and trailing slashes, preserving URL bases", () => {
+  assert.equal(
+    serviceUrl("  example.test:8989///  ", "/api/v3/system/status").href,
+    "http://example.test:8989/api/v3/system/status",
+  );
+  assert.equal(
+    serviceUrl("https://example.test/sonarr/", "/api/v3/calendar").href,
+    "https://example.test/sonarr/api/v3/calendar",
+  );
+  assert.throws(() => serviceUrl("file:///tmp", "/api"));
+  assert.throws(() => serviceUrl("http://user:password@example.test", "/api"));
+});
+
+test("upstream distinguishes API failures without exposing private response bodies", async () => {
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async () =>
+      new Response("private upstream details", { status: 401 });
+    await assert.rejects(upstream("http://example.test", "/api"), /HTTP 401/);
+    globalThis.fetch = async () =>
+      new Response("<html>login page with secret</html>");
+    await assert.rejects(
+      upstream("http://example.test", "/api"),
+      /did not return valid JSON/,
+    );
+    globalThis.fetch = async () => {
+      throw new TypeError("fetch failed", {
+        cause: new Error("unexpected redirect"),
+      });
+    };
+    await assert.rejects(upstream("http://example.test", "/api"), /redirected/);
+  } finally {
+    globalThis.fetch = original;
+  }
 });

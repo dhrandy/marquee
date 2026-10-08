@@ -23,8 +23,10 @@ const settingsPath = path.join(
   "settings.json",
 );
 let displayName = "Marquee";
+let savedSettings = { weatherByUser: {} };
 try {
   const saved = JSON.parse(await fs.readFile(settingsPath, "utf8"));
+  savedSettings = { ...saved, weatherByUser: saved.weatherByUser || {} };
   if (
     typeof saved.name === "string" &&
     saved.name.trim() &&
@@ -34,6 +36,48 @@ try {
 } catch (error) {
   if (error.code !== "ENOENT")
     console.warn("Display settings could not be loaded; using Marquee.");
+}
+let settingsWrites = Promise.resolve();
+function saveSettings(update) {
+  const write = settingsWrites
+    .catch(() => {})
+    .then(async () => {
+      const next = update(savedSettings);
+      if (!demo) {
+        await fs.mkdir(path.dirname(settingsPath), {
+          recursive: true,
+          mode: 0o700,
+        });
+        await fs.writeFile(settingsPath + ".tmp", JSON.stringify(next), {
+          mode: 0o600,
+        });
+        await fs.rename(settingsPath + ".tmp", settingsPath);
+      }
+      savedSettings = next;
+    });
+  settingsWrites = write;
+  return write;
+}
+const defaultWeather = {
+  weather: false,
+  weatherCity: null,
+  weatherUnits: "fahrenheit",
+};
+function validWeather(value) {
+  const city = value?.weatherCity;
+  return (
+    typeof value?.weather === "boolean" &&
+    ["fahrenheit", "celsius"].includes(value.weatherUnits) &&
+    (city === null ||
+      (city &&
+        typeof city.label === "string" &&
+        city.label.length <= 200 &&
+        !/[<>\x00-\x1f]/.test(city.label) &&
+        Number.isFinite(city.latitude) &&
+        Math.abs(city.latitude) <= 90 &&
+        Number.isFinite(city.longitude) &&
+        Math.abs(city.longitude) <= 180))
+  );
 }
 const app = express();
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -142,10 +186,9 @@ app.post("/api/login", async (req, res) => {
     cookie(res, id, ttl);
     attempts.delete(ip);
     res.json({ name: user.name });
-  } catch {
+  } catch (error) {
     res.status(401).json({
-      error:
-        "Could not sign in. Check your credentials and Jellyfin connection.",
+      error: `Could not sign in. ${error.message}`,
     });
   }
 });
@@ -190,6 +233,43 @@ app.get("/api/me", requireUser, async (req, res) => {
     requestAccess: publicAccess(access),
   });
 });
+app.get("/api/weather-settings", requireUser, (req, res) => {
+  const value = savedSettings.weatherByUser[demo ? req.user.sid : req.user.id];
+  res.json(validWeather(value) ? value : defaultWeather);
+});
+app.post("/api/weather-settings", requireUser, async (req, res) => {
+  if (!validWeather(req.body))
+    return res
+      .status(400)
+      .json({ error: "Choose valid weather units and city coordinates." });
+  const { weather, weatherCity, weatherUnits } = req.body;
+  const value = {
+    weather,
+    weatherCity: weatherCity
+      ? {
+          label: weatherCity.label,
+          latitude: weatherCity.latitude,
+          longitude: weatherCity.longitude,
+        }
+      : null,
+    weatherUnits,
+  };
+  try {
+    await saveSettings((current) => ({
+      ...current,
+      weatherByUser: {
+        ...current.weatherByUser,
+        [demo ? req.user.sid : req.user.id]: value,
+      },
+    }));
+    res.json(value);
+  } catch {
+    res.status(500).json({
+      error:
+        "Could not save weather settings. Check the settings volume is writable.",
+    });
+  }
+});
 app.post("/api/display-name", requireUser, async (req, res) => {
   if (!req.user.isAdmin)
     return res.status(403).json({
@@ -207,18 +287,7 @@ app.post("/api/display-name", requireUser, async (req, res) => {
         "Enter a display name of 1 to 40 characters, without markup or control characters.",
     });
   try {
-    if (!demo) {
-      await fs.mkdir(path.dirname(settingsPath), {
-        recursive: true,
-        mode: 0o700,
-      });
-      await fs.writeFile(
-        settingsPath + ".tmp",
-        JSON.stringify({ name: name.trim() }),
-        { mode: 0o600 },
-      );
-      await fs.rename(settingsPath + ".tmp", settingsPath);
-    }
+    await saveSettings((current) => ({ ...current, name: name.trim() }));
     displayName = name.trim();
     res.json({ name: displayName });
   } catch {
@@ -298,13 +367,11 @@ app.post("/api/seerr/request", requireUser, async (req, res) => {
     res.json({ ok: true, status: result.status ?? null });
   } catch (error) {
     const denied = /Service returned (403|409)/.test(error.message);
-    res
-      .status(denied ? 403 : 502)
-      .json({
-        error: denied
-          ? "Seerr declined this request. Check your permissions, remaining quota, or whether it was already requested."
-          : "Seerr could not complete the request.",
-      });
+    res.status(denied ? 403 : 502).json({
+      error: denied
+        ? "Seerr declined this request. Check your permissions, remaining quota, or whether it was already requested."
+        : "Seerr could not complete the request.",
+    });
   }
 });
 app.get("/api/seerr/image", requireUser, async (req, res) => {
@@ -388,13 +455,13 @@ app.get("/api/calendar", requireUser, async (req, res) => {
 const weatherCache = new Map();
 const weatherAttempts = new Map();
 function weatherLimit(req, res, next) {
-  const old = weatherAttempts.get(req.user.id);
+  const old = weatherAttempts.get(demo ? req.user.sid : req.user.id);
   const entry =
     old && old.until > Date.now()
       ? old
       : { count: 0, until: Date.now() + 60000 };
   entry.count++;
-  weatherAttempts.set(req.user.id, entry);
+  weatherAttempts.set(demo ? req.user.sid : req.user.id, entry);
   if (entry.count > 30)
     return res
       .status(429)

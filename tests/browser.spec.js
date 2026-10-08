@@ -427,7 +427,9 @@ for (const width of [1440, 393, 320, 280]) {
     await page.locator('#display-name-settings').scrollIntoViewIfNeeded();
     await page.locator('#settings').screenshot({ path: `${shots}/marquee-settings-name-${width}.png` });
     expect(await page.locator('#settings').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await expect(page.locator('#weather-settings-status')).toHaveText('Saved to your account.');
     await page.getByRole('button', { name: 'Close settings' }).click();
+    await page.evaluate(() => localStorage.clear());
     await page.reload();
     await expect(page.locator('#weather-content')).toContainText('20°C');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();

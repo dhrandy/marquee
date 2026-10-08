@@ -32,7 +32,7 @@ This is a local beta. No application image or public release has been published 
 - Sonarr TV episodes and Radarr movie releases in month, week, day, agenda (next 14 days), or list views. The app remembers the last view used on each device.
 - Monday-first calendar, today highlight, previous/next period, refresh, and type/status filters. An optional hide-unmonitored filter drops unmonitored Sonarr/Radarr entries. Movies can appear twice: cinema and digital/physical releases are separate entries.
 - Green: available file. Red: release has passed but the file is missing. Yellow: upcoming TV. Gray: unreleased movie.
-- Optional current weather and three-day forecast, off by default. Choose a city and Fahrenheit/Celsius in Settings, per viewer and device. Open-Meteo weather and city search are free for non-commercial use, with no API key or account.
+- Optional current weather and three-day forecast, off by default. Choose a city and Fahrenheit/Celsius in Settings, saved server-side per Jellyfin account. Open-Meteo weather and city search are free for non-commercial use, with no API key or account.
 - Jellyfin administrators can change the shared display name in Settings. It defaults to Marquee and survives container restarts.
 - A quiet "Your requests" section lists recent request status. No badges, no counts.
 - Poster and title taps deep-link into Jellyfin's web player through the external URL setting.
@@ -40,7 +40,7 @@ This is a local beta. No application image or public release has been published 
 - Installable as a PWA (manifest and service worker). Only static assets are cached; media API responses are never cached.
 - Settings can hide either main section, weather, the status legend, added dates, and poster navigation arrows.
 - Mobile defaults to a readable list. Month/week remain available with horizontal scrolling instead of squeezed columns.
-- Settings are stored per account on the current device. The display name is shared; other display/weather preferences are per viewer/device.
+- Display preferences are stored on the current device. Weather enabled state, city and F/C units are saved server-side per Jellyfin account and follow that user across devices. The display name is shared.
 - Demo mode with fictional titles and original sample poster art. No external credentials required.
 
 ## Run with Docker Compose
@@ -58,7 +58,7 @@ docker compose up -d
 
 Open the configured port through an HTTPS reverse proxy. `COOKIE_SECURE=true` requires HTTPS. For a local HTTP demo only, set `DEMO_MODE=true` and `COOKIE_SECURE=false`.
 
-The initial beta copies the mounted source into a temporary writable container directory and installs the locked production dependencies at startup. This needs internet access to the package registry. Sessions live in memory, so a restart signs users out. The `marquee-settings` volume keeps the administrator-set display name across container restarts. Display and weather preferences remain per account in the browser. Do not delete the settings volume when upgrading.
+The initial beta copies the mounted source into a temporary writable container directory and installs the locked production dependencies at startup. This needs internet access to the package registry. Sessions live in memory, so a restart signs users out. The `marquee-settings` volume keeps the administrator-set display name and per-user weather preferences across container restarts. Other display preferences remain on the current device. Do not delete the settings volume when upgrading.
 
 ### CasaOS or standalone stack (no clone needed)
 
@@ -344,13 +344,13 @@ Terminate HTTPS at your preferred reverse proxy and forward to port 8739. Preser
 - Display name: Jellyfin administrators see a name field in Settings. The default is Marquee; the shared value is stored in the settings volume. This changes the dashboard header and browser tab. Installed PWA icons/name remain Marquee.
 - `TZ`: server timezone. Calendar air times and poster dates use the viewer's browser timezone.
 
-The app server must be able to reach all configured services. Browser CORS settings are not needed because requests go through the server.
+The app server must be able to reach all configured services. Browser CORS settings are not needed because requests go through the server. Service URLs may include a configured URL-base path; trailing slashes are optional. A missing scheme defaults to HTTP. HTTPS certificates must be trusted, and API redirects are not followed. Connection tests and calendar warnings distinguish HTTP errors, redirects, timeouts and invalid API responses.
 
-Movie dates prefer digital release, then physical release, then cinema release. One movie appears once per response. A file always makes an entry Available. TV season counts include the episodes visible to that Jellyfin user in that season, not only the newly added batch. The shelf groups the 18 newest movie/episode records by TV season. Different seasons of a show may appear separately.
+Movie dates prefer digital release, then physical release, then cinema release. Cinema and digital/home releases appear separately. Cinema entries have their own blue status and are not marked missing. A file always makes an entry Available. TV season counts include the episodes visible to that Jellyfin user in that season, not only the newly added batch. The shelf shows up to 18 recently added movie/TV-season cards, fetching more episodes as needed so a large season import does not crowd out other titles. Different seasons of a show may appear separately. Each TV card identifies the latest-added episode number and title; missing season metadata is resolved from Jellyfin rather than assumed to be season zero.
 
 ## Privacy and permissions
 
-The recent Jellyfin shelf and Seerr request list are per-user. **The Sonarr/Radarr calendar is shared among all signed-in viewers.** Seerr search runs as the linked user and the request list shows only that user's requests. They may include titles a viewer cannot access in Jellyfin. Do not deploy for untrusted users without a calendar permission layer. Seerr requesting follows the linked user's own movie/TV permissions and quotas; the Seerr API key never reaches the browser. Request-list titles come from Seerr's response; if a title is missing there, the row falls back to its TMDB id.
+The recent Jellyfin shelf and Seerr request list are per-user. **The Sonarr/Radarr calendar is shared among all signed-in viewers.** Seerr search runs as the linked user and the request list shows only that user's requests. They may include titles a viewer cannot access in Jellyfin. Do not deploy for untrusted users without a calendar permission layer. Seerr requesting follows the linked user's own movie/TV permissions and quotas; the Seerr API key never reaches the browser. Request-list titles are resolved through Seerr's movie/TV metadata API using the linked user. If metadata is temporarily unavailable, the request status remains visible with its TMDB id.
 
 Passwords are sent to Jellyfin and are not stored or logged. Jellyfin access tokens and opaque sessions stay in server memory. Cookies are HttpOnly, SameSite Strict, secure by default, and expire after eight hours. Sign-out removes the local session. It does not revoke the Jellyfin access token upstream; server restarts drop stored tokens.
 
