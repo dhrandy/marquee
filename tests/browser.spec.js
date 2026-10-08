@@ -261,7 +261,7 @@ test("PWA manifest and service worker are served and linked", async ({
   const manifest = await (await request.get("/manifest.webmanifest")).json();
   expect(manifest.name).toBe("Marquee");
   expect(manifest.display).toBe("standalone");
-  expect(manifest.icons.length).toBe(3);
+  expect(manifest.icons.length).toBe(4);
   for (const icon of manifest.icons) {
     const response = await request.get(icon.src);
     expect(response.status()).toBe(200);
@@ -446,3 +446,19 @@ test("Seerr request buttons reflect movie/TV access and escape denial text", asy
   await expect(page.locator(".request-btn")).toHaveCount(1);
   await expect(page.locator(".request-unavailable")).toHaveText("TV requests are not permitted by Seerr.");
 });
+
+for (const width of [1440, 393, 320, 280]) {
+  test(`chosen marquee logo renders in header and favicon at ${width}px`, async ({ page, request }) => {
+    await page.setViewportSize({ width, height: 950 });
+    await login(page);
+    const logo = page.locator('.masthead .brand-mark');
+    await expect(logo).toHaveAttribute('src', '/icons/header-logo-96.png');
+    expect(await logo.evaluate(img => img.complete && img.naturalWidth === 112 && img.naturalHeight === 96)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.screenshot({ path: `${shots}/marquee-logo-${width}.png` });
+    await expect(page.locator('link[rel="icon"][type="image/png"]')).toHaveAttribute('href', '/favicon.png');
+    expect((await request.get('/favicon.ico')).status()).toBe(200);
+    await page.goto('/favicon.png');
+    await page.screenshot({ path: `${shots}/marquee-favicon-${width}.png` });
+  });
+}

@@ -63,17 +63,12 @@ button:disabled {
   gap: 13px;
 }
 .brand-mark {
-  background: var(--purple);
-  color: #191627;
-  width: 39px;
-  height: 39px;
-  display: grid;
-  place-items: center;
-  font-family: Georgia, serif;
-  font-size: 25px;
-  font-weight: bold;
-  border-radius: 9px;
+  width: 56px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
+
 .brand strong {
   display: block;
   font-size: 23px;
@@ -526,9 +521,8 @@ dialog small {
     display: none;
   }
   .brand-mark {
-    width: 32px;
-    height: 32px;
-    font-size: 22px;
+    width: 42px;
+    height: 36px;
   }
   .account {
     gap: 5px;

@@ -1,10 +1,16 @@
-const VERSION = "marquee-v3";
+const VERSION = "marquee-v4";
 const SHELL = [
   "/",
   "/style.css",
   "/app.js",
   "/manifest.webmanifest",
   "/art/placeholder.svg",
+  "/favicon.ico",
+  "/favicon.png",
+  "/icons/header-logo-96.png",
+  "/icons/apple-touch-icon.png",
+  "/icons/icon-maskable-192.png",
+  "/icons/icon-maskable-512.png",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
 ];
