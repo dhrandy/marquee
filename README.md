@@ -62,25 +62,36 @@ The initial beta copies the mounted source into a temporary writable container d
 
 ### CasaOS or standalone stack (no clone needed)
 
-Use `compose.casaos.yaml` when pasting a stack into CasaOS or a Docker manager without a source checkout. No source folder or `/source` mount is needed. Put the existing connection variables in the manager's Environment tab or `.env`. The container downloads this repository's `main` archive into temporary storage, installs locked production dependencies, and starts the app. Every restart downloads current main; recreate/restart to update. Startup needs HTTPS access to GitHub and npm. A failed download/install stops startup rather than running incomplete code. Settings stay in `/DATA/AppData/marquee/settings`, created automatically by the bind mount. The `marquee-init` service fixes this folder's ownership for the non-root app, then exits successfully. No host terminal commands needed. Docker Compose waits for init to complete before starting Marquee. CasaOS AppManagement currently uses Compose v2; older installations may behave differently. An init container showing `Exited (0)` is expected. If init fails, Marquee is blocked until init is recreated successfully.
+Use `compose.casaos.yaml` when pasting a stack into CasaOS or a Docker manager without a source checkout. No source folder or `/source` mount is needed. The CasaOS Environment UI lists each service URL/key with a description. URLs and keys start empty; fill them before starting. Defaults are timezone America/New_York, demo off, secure cookies on, and host port 8739. Change the published host port in the Ports UI, not just the MARQUEE_PORT reference field. No separate `.env` is required for this variant. The container downloads this repository's `main` archive into temporary storage, installs locked production dependencies, and starts the app. Every restart downloads current main; recreate/restart to update. Startup needs HTTPS access to GitHub and npm. A failed download/install stops startup rather than running incomplete code. Settings stay in `/DATA/AppData/marquee/settings`, created automatically by the bind mount. The `marquee-init` service fixes this folder's ownership for the non-root app, then exits successfully. No host terminal commands needed. Docker Compose waits for init to complete before starting Marquee. CasaOS AppManagement currently uses Compose v2; older installations may behave differently. An init container showing `Exited (0)` is expected. If init fails, Marquee is blocked until init is recreated successfully.
 
 ```yaml
+name: marquee
 services:
   marquee-init:
     image: alpine:3.21
-    user: "0:0"
-    command: ["sh", "-c", "chown -R 1000:1000 /settings"]
+    user: 0:0
+    command:
+    - sh
+    - -c
+    - chown -R 1000:1000 /settings
     volumes:
-      - /DATA/AppData/marquee/settings:/settings
+    - type: bind
+      source: /DATA/AppData/marquee/settings
+      target: /settings
     read_only: true
     cap_drop:
-      - ALL
+    - ALL
     cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
+    - CHOWN
+    - DAC_OVERRIDE
     security_opt:
-      - no-new-privileges:true
-    restart: "no"
+    - no-new-privileges:true
+    restart: 'no'
+    x-casaos:
+      volumes:
+      - container: /settings
+        description:
+          en_US: Same settings folder as the main service; ownership is set to UID/GID 1000.
   marquee:
     image: node:22-alpine
     container_name: marquee
@@ -91,46 +102,124 @@ services:
       marquee-init:
         condition: service_completed_successfully
     command:
-      - sh
-      - -c
-      - set -eu; wget -O /app/source.tar.gz https://codeload.github.com/dhrandy/marquee/tar.gz/refs/heads/main; tar -xzf /app/source.tar.gz -C /app --strip-components=1; rm /app/source.tar.gz; npm ci --omit=dev --ignore-scripts --no-audit --no-fund; exec node src/server.js
+    - sh
+    - -c
+    - set -eu; wget -O /app/source.tar.gz https://codeload.github.com/dhrandy/marquee/tar.gz/refs/heads/main; tar
+      -xzf /app/source.tar.gz -C /app --strip-components=1; rm /app/source.tar.gz; npm ci --omit=dev --ignore-scripts
+      --no-audit --no-fund; exec node src/server.js
     ports:
-      - "${MARQUEE_PORT}:8739"
+    - target: 8739
+      published: '8739'
+      protocol: tcp
     environment:
-      PORT: "8739"
-      TZ: ${TZ}
-      DEMO_MODE: ${DEMO_MODE}
-      COOKIE_SECURE: ${COOKIE_SECURE}
-      JELLYFIN_URL: ${JELLYFIN_URL}
-      SONARR_URL: ${SONARR_URL}
-      SONARR_API_KEY: ${SONARR_API_KEY}
-      RADARR_URL: ${RADARR_URL}
-      RADARR_API_KEY: ${RADARR_API_KEY}
-      SEERR_URL: ${SEERR_URL}
-      SEERR_API_KEY: ${SEERR_API_KEY}
-      JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
+      PORT: '8739'
+      TZ: America/New_York
+      DEMO_MODE: 'false'
+      COOKIE_SECURE: 'true'
+      JELLYFIN_URL: ''
+      SONARR_URL: ''
+      SONARR_API_KEY: ''
+      RADARR_URL: ''
+      RADARR_API_KEY: ''
+      SEERR_URL: ''
+      SEERR_API_KEY: ''
+      JELLYFIN_WEB_URL: ''
+      MARQUEE_PORT: '8739'
     volumes:
-      - /DATA/AppData/marquee/settings:/home/node
+    - type: bind
+      source: /DATA/AppData/marquee/settings
+      target: /home/node
     tmpfs:
-      - /app:uid=1000,gid=1000,mode=0700
-      - /home/node/.npm:uid=1000,gid=1000,mode=0700
+    - /app:uid=1000,gid=1000,mode=0700
+    - /home/node/.npm:uid=1000,gid=1000,mode=0700
     read_only: true
     cap_drop:
-      - ALL
+    - ALL
     security_opt:
-      - no-new-privileges:true
+    - no-new-privileges:true
     restart: unless-stopped
     healthcheck:
       test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://127.0.0.1:8739/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
-        ]
+      - CMD
+      - node
+      - -e
+      - fetch('http://127.0.0.1:8739/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
       interval: 30s
       timeout: 5s
       start_period: 60s
+    x-casaos:
+      envs:
+      - container: PORT
+        description:
+          en_US: Internal application port. Keep 8739; change the host port in Ports below.
+      - container: TZ
+        description:
+          en_US: Timezone, for example America/New_York.
+      - container: DEMO_MODE
+        description:
+          en_US: false for your live services. true shows fictional data without login; never expose demo mode publicly.
+      - container: COOKIE_SECURE
+        description:
+          en_US: true behind an HTTPS reverse proxy. false only when accessing a trusted local HTTP setup.
+      - container: JELLYFIN_URL
+        description:
+          en_US: Jellyfin API base URL reachable from this container, including http/https and port.
+      - container: SONARR_URL
+        description:
+          en_US: Sonarr API base URL reachable from this container.
+      - container: SONARR_API_KEY
+        description:
+          en_US: Sonarr API key from Settings > General.
+      - container: RADARR_URL
+        description:
+          en_US: Radarr API base URL reachable from this container.
+      - container: RADARR_API_KEY
+        description:
+          en_US: Radarr API key from Settings > General.
+      - container: SEERR_URL
+        description:
+          en_US: Seerr API base URL reachable from this container.
+      - container: SEERR_API_KEY
+        description:
+          en_US: Seerr server API key. Users must be imported with their linked Jellyfin IDs.
+      - container: JELLYFIN_WEB_URL
+        description:
+          en_US: Browser-facing Jellyfin base URL for poster links. Blank falls back to JELLYFIN_URL.
+      - container: MARQUEE_PORT
+        description:
+          en_US: Host-port reference only. Change the actual published port in Ports below; keep this value in sync.
+      ports:
+      - container: '8739'
+        description:
+          en_US: Marquee web UI host port (default 8739).
+        protocol: tcp
+      volumes:
+      - container: /home/node
+        description:
+          en_US: Persistent settings folder. Keep the init-service source path in sync if changed.
+x-casaos:
+  architectures:
+  - amd64
+  - arm64
+  main: marquee
+  description:
+    en_US: 'Marquee beta: Jellyfin recently added, Sonarr/Radarr releases, Seerr requests, and optional weather.
+      Downloads current main at startup; no source clone needed.'
+  tagline:
+    en_US: Your media, at a glance.
+  developer: dhrandy
+  author: dhrandy
+  category: Media
+  icon: https://raw.githubusercontent.com/dhrandy/marquee/main/public/icons/icon-192.png
+  title:
+    en_US: Marquee
+  port_map: '8739'
+  scheme: http
+  index: /
+  tips:
+    before_install:
+      en_US: Enter your service URLs and API keys in Environment. Settings persist in /DATA/AppData/marquee/settings.
+        The init container exits with code 0 normally. HTTPS access to GitHub and npm is required on startup.
 ```
 
 The original `compose.yaml` below is for an existing local/git checkout. Do not use its source mount with an empty CasaOS folder.
