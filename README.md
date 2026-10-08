@@ -70,13 +70,13 @@ The initial beta copies the mounted source into a temporary writable container d
 
 ### CasaOS or standalone stack (no clone needed)
 
-This is the easiest option for CasaOS, Dockhand, or another stack manager. You do not need to download the source folder or create a `.env` file.
+This is the easiest option for CasaOS, Dockhand, or another stack manager. You do not need to download the source folder. Settings come from a `.env` file beside your compose file, or your stack manager's Environment settings.
 
 1. Copy the complete example below into your stack editor (or use `compose.casaos.yaml`).
-2. Fill in the empty service URLs and API keys under `environment`. Keep your keys private.
+2. Add the variables from the `.env` example below to a `.env` file beside your compose file, or to the stack's Environment settings. Fill in your own service URLs and API keys. Keep your keys private.
 3. Set your timezone. Leave `DEMO_MODE` off for your real media.
 4. Keep `COOKIE_SECURE` true for HTTPS. Use false only on a trusted plain-HTTP home network.
-5. Change `published: "8739"` if you want a different host port. Keep `target: 8739`.
+5. Set `MARQUEE_PORT` to your host port (usually `8739`). Keep `target: 8739` in the compose.
 6. Start the stack. Open your server at that port, or use your HTTPS reverse proxy.
 
 You only need to edit the settings above. The commented startup steps download Marquee, install its runtime packages, and start it automatically. Your server needs internet access to GitHub and npm during startup. If a download fails, startup stops rather than running an incomplete app.
@@ -148,23 +148,23 @@ services:
     # Change published for your host port; keep target 8739.
     ports:
       - target: 8739
-        published: "8739"
+        published: "${MARQUEE_PORT}"
         protocol: tcp
-    # Enter service URLs/API keys below. Keep keys out of public copies.
+    # Values come from your .env file or stack Environment settings.
     environment:
-      TZ: America/New_York
-      DEMO_MODE: "false"
+      TZ: ${TZ}
+      DEMO_MODE: ${DEMO_MODE}
       # false only for a trusted plain-HTTP LAN; keep true behind HTTPS.
-      COOKIE_SECURE: "true"
-      JELLYFIN_URL: ""
-      SONARR_URL: ""
-      SONARR_API_KEY: ""
-      RADARR_URL: ""
-      RADARR_API_KEY: ""
-      SEERR_URL: ""
-      SEERR_API_KEY: ""
+      COOKIE_SECURE: ${COOKIE_SECURE}
+      JELLYFIN_URL: ${JELLYFIN_URL}
+      SONARR_URL: ${SONARR_URL}
+      SONARR_API_KEY: ${SONARR_API_KEY}
+      RADARR_URL: ${RADARR_URL}
+      RADARR_API_KEY: ${RADARR_API_KEY}
+      SEERR_URL: ${SEERR_URL}
+      SEERR_API_KEY: ${SEERR_API_KEY}
       # Browser-facing Jellyfin URL; blank falls back to JELLYFIN_URL.
-      JELLYFIN_WEB_URL: ""
+      JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
     volumes:
       - type: bind
         # Persistent settings: keep this source in sync with marquee-init.
