@@ -323,7 +323,12 @@ function openEpisode(id) {
     .join("");
   const image = $("#episode-backdrop");
   image.hidden = !event.backdrop;
+  image.onerror = () => {
+    image.hidden = true;
+    image.removeAttribute("src");
+  };
   if (event.backdrop) image.src = event.backdrop;
+  else image.removeAttribute("src");
   $("#episode-trailer").href =
     `https://www.youtube.com/results?search_query=${encodeURIComponent(event.title + " official trailer")}`;
   $("#episode-detail").showModal();

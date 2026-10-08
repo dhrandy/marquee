@@ -15,6 +15,7 @@ import {
   seerrRequest,
   seerrRequests,
   testService,
+  serviceUrl,
 } from "./adapters.js";
 import { demoEvents, demoRequests, demoSearch, titles } from "./demo.js";
 import { validateRange } from "./model.js";
@@ -331,7 +332,16 @@ app.get("/api/seerr/popular", requireUser, async (req, res) => {
         ...sample.find((item) => item.mediaType === type),
         id: 1000 + i + (type === "tv" ? 100 : 0),
         title: (type === "tv" ? tvNames : movieNames)[i],
-        poster: i === 0 ? (type === "tv" ? "north" : "signal") : i === 1 ? (type === "tv" ? "hours" : "orbit") : "placeholder",
+        poster:
+          i === 0
+            ? type === "tv"
+              ? "north"
+              : "signal"
+            : i === 1
+              ? type === "tv"
+                ? "hours"
+                : "orbit"
+              : "placeholder",
         availability: i === 0 ? 5 : i === 1 ? 2 : null,
         requested: i === 1,
       }));
@@ -506,9 +516,28 @@ app.get("/api/calendar", requireUser, async (req, res) => {
   const data = demo
     ? { events: demoEvents(start, end), warnings: [] }
     : await calendar(start, end);
-  req.user.calendarImages = new Map();
+  const calendarImages = new Map();
+  req.user.calendarImages = calendarImages;
+  sessions.get(req.user.sid).calendarImages = calendarImages;
   for (const event of data.events) {
-    if (event.backdrop) {
+    // Use Sonarr's cached cover when present instead of depending on its remote
+    // artwork host. Only fixed MediaCover paths for this returned series qualify.
+    const local =
+      typeof event.localBackdrop === "string"
+        ? event.localBackdrop.match(
+            /(?:^|\/)MediaCover\/(\d+)\/(fanart|poster)\.(jpg|png)(?:\?[^#]*)?$/i,
+          )
+        : null;
+    if (local && Number(local[1]) === event.seriesId) {
+      req.user.calendarImages.set(event.id, {
+        url: serviceUrl(
+          process.env.SONARR_URL,
+          `/MediaCover/${local[1]}/${local[2]}.${local[3]}`,
+        ).href,
+        sonarr: true,
+      });
+    }
+    if (!req.user.calendarImages.has(event.id) && event.backdrop) {
       try {
         const url = new URL(event.backdrop);
         if (
@@ -518,11 +547,16 @@ app.get("/api/calendar", requireUser, async (req, res) => {
           !url.password &&
           !url.port
         )
-          req.user.calendarImages.set(event.id, url.href);
+          req.user.calendarImages.set(event.id, {
+            url: url.href,
+            sonarr: false,
+          });
       } catch {
         /* Ignore invalid artwork URLs from upstream metadata. */
       }
     }
+    delete event.localBackdrop;
+    delete event.seriesId;
     event.backdrop = req.user.calendarImages.has(event.id)
       ? `/api/calendar-image/${encodeURIComponent(event.id)}`
       : demo && event.type === "tv"
@@ -532,10 +566,11 @@ app.get("/api/calendar", requireUser, async (req, res) => {
   res.json(data);
 });
 app.get("/api/calendar-image/:id", requireUser, async (req, res) => {
-  const url = req.user.calendarImages?.get(req.params.id);
-  if (!url) return res.sendStatus(404);
+  const image = req.user.calendarImages?.get(req.params.id);
+  if (!image) return res.sendStatus(404);
   try {
-    const response = await fetch(url, {
+    const response = await fetch(image.url, {
+      headers: image.sonarr ? { "X-Api-Key": process.env.SONARR_API_KEY } : {},
       redirect: "error",
       signal: AbortSignal.timeout(10000),
     });

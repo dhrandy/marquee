@@ -103,7 +103,18 @@ const service = http.createServer(async (req, res) => {
       JSON.stringify([
         {
           id: 1,
-          series: { title: "Demo show", monitored: true },
+          series: {
+            id: 17,
+            title: "Demo show",
+            monitored: true,
+            images: [
+              {
+                coverType: "fanart",
+                url: "/MediaCover/17/fanart.jpg?lastWrite=123",
+                remoteUrl: "https://artworks.thetvdb.com/missing.jpg",
+              },
+            ],
+          },
           title: "Pilot",
           seasonNumber: 1,
           episodeNumber: 1,
@@ -113,6 +124,11 @@ const service = http.createServer(async (req, res) => {
         },
       ]),
     );
+  if (url.pathname === "/MediaCover/17/fanart.jpg") {
+    assert.equal(req.headers["x-api-key"], "mock-key");
+    res.setHeader("Content-Type", "image/png");
+    return res.end(Buffer.from("89504e470d0a1a0a", "hex"));
+  }
   if (url.pathname === "/api/v1/user")
     return res.end(
       JSON.stringify({
@@ -691,6 +707,21 @@ try {
       ).status,
       404,
     );
+  });
+  await test("calendar images use Sonarr cached covers with its server key", async () => {
+    const login = await signin("alice");
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const data = await (
+      await fetch(`${base}/api/calendar?start=2026-10-01&end=2026-10-31`, {
+        headers: { Cookie: cookie },
+      })
+    ).json();
+    assert.equal(data.events[0].backdrop, "/api/calendar-image/tv-1");
+    const image = await fetch(`${base}${data.events[0].backdrop}`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(image.status, 200);
+    assert.match(image.headers.get("content-type"), /image/);
   });
   await test("bad passwords are rejected, repeated attempts are limited", async () => {
     for (let i = 0; i < 10; i++)

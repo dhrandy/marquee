@@ -509,3 +509,13 @@ for (const width of [1440, 393, 320, 280]) {
     await page.locator('#popular-section').screenshot({ path: `${shots}/marquee-popular-${width}.png` });
   });
 }
+
+test('broken episode artwork falls back to the solid hero without a broken image icon', async ({ page }) => {
+  await page.route('**/api/calendar?**', route => route.fulfill({ json: { events: [{ id: 'broken', type: 'tv', title: 'Sample', subtitle: 'S01E01', date: new Date().toISOString(), status: 'upcoming', backdrop: '/api/calendar-image/broken' }], warnings: [] } }));
+  await page.route('**/api/calendar-image/broken', route => route.fulfill({ status: 404 }));
+  await login(page);
+  await page.locator('.entry[data-event]').first().click();
+  await expect(page.locator('#episode-detail')).toBeVisible();
+  await expect(page.locator('#episode-backdrop')).toBeHidden();
+  await page.locator('#episode-detail').screenshot({ path: `${shots}/marquee-episode-fallback.png` });
+});
