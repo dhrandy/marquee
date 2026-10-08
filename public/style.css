@@ -1044,7 +1044,11 @@ dialog select { min-width: 0; max-width: 100%; }
 
 .episode-meta { font-size: 13px; color: var(--muted); }
 
-#popular-collapse { float: right; }
+.popular-title { display: flex; align-items: center; gap: 6px; }
+#popular-collapse { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 8px; border: 0; border-radius: 6px; color: var(--muted); }
+#popular-collapse svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
+#popular-collapse[aria-expanded="false"] svg { transform: rotate(-90deg); }
+#popular-collapse:hover { color: var(--ink); }
 .popular-row .poster-art { overflow: hidden; }
 .popular-row .poster-art img { transition: transform 180ms ease; }
 @media(hover:hover) { .ranked-poster:hover .poster-art img { transform: scale(1.045); } .ranked-poster:hover h3 { color: var(--purple); } }

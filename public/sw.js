@@ -1,4 +1,4 @@
-const VERSION = "marquee-v4";
+const VERSION = "marquee-v5";
 const SHELL = [
   "/",
   "/style.css",
@@ -53,17 +53,19 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
+  // Network-first keeps a newly loaded HTML document and its code/styles in sync.
+  // Cache-first assets previously left installed clients on old handlers forever.
   event.respondWith(
-    caches.match(request).then(
-      (hit) =>
-        hit ||
-        fetch(request).then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(VERSION).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        }),
-    ),
+    fetch(request)
+      .then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          event.waitUntil(
+            caches.open(VERSION).then((cache) => cache.put(request, copy)),
+          );
+        }
+        return response;
+      })
+      .catch(() => caches.match(request)),
   );
 });

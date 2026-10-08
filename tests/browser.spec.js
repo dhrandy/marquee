@@ -692,7 +692,10 @@ test("top ten collapse and settings hiding persist", async ({ page }) => {
     .locator("#popular-section")
     .screenshot({ path: `${shots}/marquee-popular-collapsed.png` });
   await page.reload();
-  await expect(page.locator("#popular-collapse")).toHaveText("Expand");
+  await expect(page.locator("#popular-collapse")).toHaveAttribute(
+    "aria-label",
+    "Expand popular titles",
+  );
   await page.locator("#popular-collapse").click();
   await expect(page.locator("#popular-content")).toBeVisible();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -766,4 +769,67 @@ test("shared queue is titled Requests and keeps requester names", async ({
   await page
     .locator("#requests-section")
     .screenshot({ path: `${shots}/marquee-shared-requests.png` });
+});
+
+for (const width of [1440, 393, 280]) {
+  test(`chevron collapse at ${width}px hides shelves and expands with keyboard`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await login(page);
+    const toggle = page.getByRole("button", {
+      name: "Collapse popular titles",
+    });
+    await toggle.click();
+    await expect(page.locator("#popular-movies")).toBeHidden();
+    await expect(page.locator("#popular-tv")).toBeHidden();
+    await expect(page.locator("#popular-collapse")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await page
+      .locator("#popular-section")
+      .screenshot({ path: `${shots}/marquee-chevron-collapsed-${width}.png` });
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#popular-movies")).toBeVisible();
+    await page
+      .locator(".popular-heading")
+      .screenshot({ path: `${shots}/marquee-chevron-expanded-${width}.png` });
+  });
+}
+test("installed service worker replaces stale cached styles with network version", async ({
+  page,
+}) => {
+  await login(page);
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller)
+      await new Promise((resolve) =>
+        navigator.serviceWorker.addEventListener("controllerchange", resolve, {
+          once: true,
+        }),
+      );
+    const cache = await caches.open("marquee-v5");
+    await cache.put(
+      "/style.css",
+      new Response("/* stale marker */", {
+        headers: { "Content-Type": "text/css" },
+      }),
+    );
+    await cache.put(
+      "/app.js",
+      new Response("/* stale handler */", {
+        headers: { "Content-Type": "application/javascript" },
+      }),
+    );
+  });
+  await page.reload();
+  await expect(page.locator("#popular-collapse")).toBeVisible();
+  await page.locator("#popular-collapse").click();
+  await expect(page.locator("#popular-content")).toBeHidden();
+  const css = await page.evaluate(async () =>
+    (await fetch("/style.css")).text(),
+  );
+  expect(css).not.toContain("stale marker");
+  expect(css).toContain(".popular-title");
 });

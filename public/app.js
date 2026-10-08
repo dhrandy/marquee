@@ -114,7 +114,13 @@ function applyPrefs() {
   $("#search-section").hidden = !state.prefs.search;
   $("#popular-section").hidden = !state.prefs.popular;
   $("#popular-content").hidden = Boolean(state.prefs.popularCollapsed);
-  $("#popular-collapse").textContent = state.prefs.popularCollapsed
+  $("#popular-collapse").setAttribute(
+    "aria-label",
+    state.prefs.popularCollapsed
+      ? "Expand popular titles"
+      : "Collapse popular titles",
+  );
+  $("#popular-collapse").title = state.prefs.popularCollapsed
     ? "Expand"
     : "Collapse";
   $("#popular-collapse").setAttribute(
