@@ -4,13 +4,6 @@
 
 A small self-hosted media home screen: recently added at the top, a release calendar underneath. Sign in with your Jellyfin account. Your recent titles follow your Jellyfin library permissions.
 
-<img src="docs/images/desktop.png" alt="Marquee desktop demo with poster shelf and monthly calendar" width="100%">
-
-<details>
-<summary>Mobile demo</summary>
-<p align="center"><img src="docs/images/mobile.png" alt="Marquee mobile demo with readable calendar list" width="300"></p>
-</details>
-
 ## Beta
 
 This is a local beta. No application image or public release has been published yet. The compose setup below runs the source using the official Node image, without a Dockerfile. Live-server compatibility and container deployment still need testing before a release.
