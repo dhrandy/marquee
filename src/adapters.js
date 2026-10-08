@@ -451,7 +451,7 @@ export async function seerrRequest(mediaType, mediaId, userId) {
 export async function seerrRequests(userId) {
   const data = await upstream(
     process.env.SEERR_URL,
-    `/api/v1/request?take=10&skip=0&sort=added&filter=all&requestedBy=${userId}`,
+    `/api/v1/request?take=10&skip=0&sort=added&filter=all`,
     {
       headers: {
         "X-Api-Key": process.env.SEERR_API_KEY,

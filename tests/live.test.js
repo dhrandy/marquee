@@ -253,7 +253,9 @@ const service = http.createServer(async (req, res) => {
         ],
       }),
     );
-  if (url.pathname === "/api/v1/request" && req.method === "GET")
+  if (url.pathname === "/api/v1/request" && req.method === "GET") {
+    assert.equal(url.searchParams.has("requestedBy"), false);
+    assert.equal(req.headers["x-api-user"], "4");
     return res.end(
       JSON.stringify({
         results: [
@@ -268,9 +270,20 @@ const service = http.createServer(async (req, res) => {
             },
             media: { mediaType: "movie", tmdbId: 9001, status: 3 },
           },
+          {
+            id: 2,
+            status: 1,
+            type: "movie",
+            requestedBy: {
+              displayName: "Another viewer",
+              email: "other-private@example.test",
+            },
+            media: { mediaType: "movie", tmdbId: 9001, status: 2 },
+          },
         ],
       }),
     );
+  }
   if (url.pathname === "/api/v1/movie/9001") {
     assert.equal(req.headers["x-api-user"], "4");
     assert.equal(req.headers["x-api-key"], "seerr-mock");
@@ -466,6 +479,11 @@ try {
     assert.equal(requests.requests[0].title, "Requested Film");
     assert.equal(requests.requests[0].status, 2);
     assert.equal(requests.requests[0].requestedBy, "Sample viewer");
+    assert.equal(requests.requests[1].requestedBy, "Another viewer");
+    assert.equal(
+      JSON.stringify(requests).includes("other-private@example.test"),
+      false,
+    );
     assert.equal(
       JSON.stringify(requests).includes("private@example.test"),
       false,

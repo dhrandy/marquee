@@ -756,3 +756,14 @@ test("weather refreshes on a 15-minute timer and stops when disabled", async ({
   await page.clock.fastForward(30 * 60 * 1000);
   expect(calls).toBe(1);
 });
+
+test("shared queue is titled Requests and keeps requester names", async ({
+  page,
+}) => {
+  await login(page);
+  await expect(page.locator("#requests-section h2")).toHaveText("Requests");
+  await expect(page.locator(".request-row").first()).toContainText("by");
+  await page
+    .locator("#requests-section")
+    .screenshot({ path: `${shots}/marquee-shared-requests.png` });
+});
