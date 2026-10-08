@@ -1,6 +1,7 @@
 import {
   normalizeEpisodes,
   normalizeMovies,
+  normalizedRating,
   normalizeSeerrResults,
   normalizeSeerrRequests,
 } from "./model.js";
@@ -117,7 +118,8 @@ export async function recentItems(user) {
       IsPlaceHolder: "false",
       Limit: String(pageSize),
       StartIndex: String(startIndex),
-      Fields: "DateCreated,Overview,Genres,Studios,RunTimeTicks",
+      Fields:
+        "DateCreated,Overview,Genres,Studios,RunTimeTicks,CommunityRating",
       EnableUserData: "true",
       EnableTotalRecordCount: "true",
     });
@@ -221,7 +223,9 @@ export async function recentItems(user) {
           (item.BackdropImageTags?.length ? item.Id : item.SeriesId || null),
         art: "placeholder",
         tagline: "",
+        rating: normalizedRating(item.CommunityRating, "Jellyfin community"),
         detail: {
+          rating: normalizedRating(item.CommunityRating, "Jellyfin community"),
           title: item.SeriesName || item.Name,
           year: item.ProductionYear ? String(item.ProductionYear) : "",
           subtitle:
@@ -417,6 +421,7 @@ export async function seerrDetails(type, id, userId) {
         .slice(0, 3)
         .join(", ") || null,
     runtime: data.runtime || data.episodeRunTime?.[0] || null,
+    rating: normalizedRating(data.voteAverage, "TMDB", data.voteCount),
     poster: safeArt(data.posterPath),
     backdrop: safeArt(data.backdropPath) || safeArt(data.posterPath),
   };

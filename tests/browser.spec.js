@@ -989,3 +989,91 @@ for (const width of [1440, 393, 320, 280]) {
     await expect(page.locator("#episode-poster")).toBeVisible();
   });
 }
+
+for (const width of [1440, 393, 280]) {
+  test(`source ratings are honest and hideable at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.route("**/api/recent", (route) =>
+      route.fulfill({
+        json: {
+          items: [
+            {
+              id: "fictional",
+              title: "North of Nowhere",
+              subtitle: "Season 1 · Episode 4",
+              art: "north",
+              rating: { value: 8.2, source: "Jellyfin community" },
+              detail: {
+                rating: { value: 8.2, source: "Jellyfin community" },
+                genres: ["Drama"],
+                runtime: 42,
+              },
+            },
+          ],
+        },
+      }),
+    );
+    await page.goto("/");
+    await page.getByRole("button", { name: "Explore demo" }).click();
+    await expect(page.locator("#recent .media-rating")).toHaveText(
+      "★ 8.2/10 · Jellyfin community",
+    );
+    await page
+      .locator("#recent-section")
+      .screenshot({ path: `${shots}/marquee-ratings-card-${width}.png` });
+    await page.locator(".recent-detail").click();
+    await expect(page.locator("#episode-rating")).toHaveText(
+      "★ 8.2/10 · Jellyfin community",
+    );
+    await page
+      .locator("#episode-detail")
+      .screenshot({ path: `${shots}/marquee-ratings-popup-${width}.png` });
+    await page.locator("#episode-close").click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[data-pref="ratings"]').uncheck();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#recent .media-rating")).toBeHidden();
+    await page.locator(".recent-detail").click();
+    await expect(page.locator("#episode-rating")).toBeHidden();
+    await page.evaluate(() =>
+      showDetail({ title: "No score", subtitle: "Movie" }),
+    );
+    await expect(page.locator("#episode-rating")).toHaveText("");
+  });
+}
+
+for (const width of [1440, 393, 280]) {
+  test(`all shelf arrows follow desktop-only policy ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await login(page);
+    for (const selector of [".recent-controls", ".shelf-controls"]) {
+      for (const el of await page.locator(selector).all())
+        await expect(el)[width > 600 ? "toBeVisible" : "toBeHidden"]();
+    }
+    await page
+      .locator("#popular-section")
+      .screenshot({ path: `${shots}/marquee-shelf-arrows-${width}.png` });
+    if (width > 600) {
+      await page
+        .getByRole("button", { name: "Next popular movies", exact: true })
+        .click();
+      await expect
+        .poll(() =>
+          page.locator("#popular-movies").evaluate((el) => el.scrollLeft),
+        )
+        .toBeGreaterThan(0);
+      await page
+        .getByRole("button", { name: "Previous popular movies", exact: true })
+        .click();
+      await expect
+        .poll(() =>
+          page.locator("#popular-movies").evaluate((el) => el.scrollLeft),
+        )
+        .toBe(0);
+    }
+  });
+}

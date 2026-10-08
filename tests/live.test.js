@@ -300,6 +300,8 @@ const service = http.createServer(async (req, res) => {
     return res.end(
       JSON.stringify({
         title: "Requested Film",
+        voteAverage: 8.4,
+        voteCount: 50,
         posterPath: "/abc.jpg",
         genres: [{ name: "Drama" }],
         productionCompanies: [{ name: "Sample Studio" }],
@@ -902,6 +904,7 @@ try {
     ).json();
     assert.equal(data.title, "Requested Film");
     assert.equal(data.subtitle, "Movie");
+    assert.deepEqual(data.rating, { value: 8.4, source: "TMDB" });
     assert.deepEqual(data.genres, ["Drama"]);
     assert.equal(data.network, "Sample Studio");
     assert.equal(data.backdrop, "/api/seerr/image?path=%2Fabc.jpg");

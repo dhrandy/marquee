@@ -119,7 +119,7 @@
           </form>
           <p id="search-status" role="status"></p>
           <div id="search-results" class="search-results"></div>
-          <div id="popular-section" class="popular-section"><div class="popular-heading"><div class="popular-title"><span class="eyebrow">POPULAR RIGHT NOW</span><button id="popular-collapse" aria-expanded="true" aria-controls="popular-content" aria-label="Collapse popular titles" title="Collapse"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><p>Top 10 from Seerr · availability follows its latest library scan</p></div><p id="popular-status" role="status"></p><div id="popular-content"><h3>Top 10 movies</h3><div id="popular-movies" class="popular-row"></div><h3>Top 10 TV shows</h3><div id="popular-tv" class="popular-row"></div></div></div>
+          <div id="popular-section" class="popular-section"><div class="popular-heading"><div class="popular-title"><span class="eyebrow">POPULAR RIGHT NOW</span><button id="popular-collapse" aria-expanded="true" aria-controls="popular-content" aria-label="Collapse popular titles" title="Collapse"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><p>Top 10 from Seerr · availability follows its latest library scan</p></div><p id="popular-status" role="status"></p><div id="popular-content"><div class="shelf-heading"><h3>Top 10 movies</h3><div class="shelf-controls"><button data-shelf="popular-movies" data-direction="-1" aria-label="Previous popular movies">←</button><button data-shelf="popular-movies" data-direction="1" aria-label="Next popular movies">→</button></div></div><div id="popular-movies" class="popular-row"></div><div class="shelf-heading"><h3>Top 10 TV shows</h3><div class="shelf-controls"><button data-shelf="popular-tv" data-direction="-1" aria-label="Previous popular TV shows">←</button><button data-shelf="popular-tv" data-direction="1" aria-label="Next popular TV shows">→</button></div></div><div id="popular-tv" class="popular-row"></div></div></div>
         </section>
         <section id="requests-section">
           <div class="section-heading">
@@ -183,7 +183,7 @@
     </dialog>
     <dialog id="episode-detail" aria-labelledby="episode-title">
       <div class="episode-hero"><img id="episode-backdrop" alt="" hidden /><img id="episode-poster" alt="" hidden /><div class="episode-heading"><h2 id="episode-title"></h2><p id="episode-subtitle"></p></div><button id="episode-close" aria-label="Close episode details">×</button></div>
-      <div class="episode-body"><div id="episode-genres"></div><p id="episode-meta" class="episode-meta"></p><p id="episode-overview"></p><a id="episode-play" target="_blank" rel="noopener noreferrer" hidden>Play in Jellyfin ↗</a><a id="episode-trailer" target="_blank" rel="noopener noreferrer">Find trailer on YouTube ↗</a></div>
+      <div class="episode-body"><div id="episode-genres"></div><p id="episode-meta" class="episode-meta"></p><p id="episode-rating" class="media-rating" hidden></p><p id="episode-overview"></p><a id="episode-play" target="_blank" rel="noopener noreferrer" hidden>Play in Jellyfin ↗</a><a id="episode-trailer" target="_blank" rel="noopener noreferrer">Find trailer on YouTube ↗</a></div>
     </dialog>
   </body>
 </html>

@@ -26,6 +26,7 @@ const defaults = {
   hideUnmonitored: false,
   requests: true,
   popular: true,
+  ratings: true,
   popularCollapsed: false,
   defaultView: "auto",
 };
@@ -110,6 +111,9 @@ function saveWeather() {
   return weatherWrites;
 }
 function applyPrefs() {
+  all(".media-rating").forEach((el) => {
+    el.hidden = !state.prefs.ratings || !el.textContent;
+  });
   $("#recent-section").hidden = !state.prefs.recent;
   $("#calendar-section").hidden = !state.prefs.calendar;
   $("#search-section").hidden = !state.prefs.search;
@@ -131,6 +135,9 @@ function applyPrefs() {
   $("#requests-section").hidden = !state.prefs.requests;
   $("#legend").hidden = !state.prefs.legend;
   $(".recent-controls").hidden = !state.prefs.shelfNavigation;
+  all(".shelf-controls").forEach((el) => {
+    el.hidden = !state.prefs.shelfNavigation;
+  });
   all(".poster-card time").forEach((el) => {
     el.hidden = !state.prefs.addedDates;
   });
@@ -146,6 +153,7 @@ function buildSettings() {
     search: "Search and requests",
     requests: "Request status list",
     popular: "Top 10 movies and TV",
+    ratings: "Show source ratings",
     legend: "Calendar status legend",
     addedDates: "Poster added dates",
     shelfNavigation: "Poster navigation arrows",
@@ -218,6 +226,22 @@ function fixBrokenPosters() {
     ),
   );
 }
+function ratingText(rating) {
+  return rating &&
+    typeof rating.value === "number" &&
+    Number.isFinite(rating.value) &&
+    rating.value > 0 &&
+    rating.value <= 10 &&
+    ["TMDB", "IMDb", "Jellyfin community"].includes(rating.source)
+    ? `★ ${rating.value.toFixed(1)}/10 · ${rating.source}`
+    : "";
+}
+function ratingHtml(rating) {
+  const text = ratingText(rating);
+  return text
+    ? `<p class="media-rating" ${state.prefs.ratings ? "" : "hidden"}>${escape(text)}</p>`
+    : "";
+}
 async function loadRecent() {
   try {
     const { items } = await api("/api/recent");
@@ -229,7 +253,7 @@ async function loadRecent() {
             const time = `<time ${!state.prefs.addedDates ? "hidden" : ""}>${item.added ? escape(new Date(item.added).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })) : "Added date not provided"}</time>`;
             const title = `<h3>${escape(item.title)}</h3>`;
             const head = `<button class="poster-link recent-detail" data-recent-index="${items.indexOf(item)}" aria-label="Details for ${escape(item.title)}">${art}${title}</button>`;
-            return `<article class="poster-card">${head}${time}<p>${escape(item.subtitle)}</p></article>`;
+            return `<article class="poster-card">${head}${time}<p>${escape(item.subtitle)}</p>${ratingHtml(item.rating)}</article>`;
           })
           .join("")
       : '<p class="empty">No recent titles in your Jellyfin library.</p>';
@@ -354,6 +378,9 @@ function showDetail(event) {
   $("#episode-genres").innerHTML = (event.genres || [])
     .map((genre) => `<span>${escape(genre)}</span>`)
     .join("");
+  $("#episode-rating").textContent = ratingText(event.rating);
+  $("#episode-rating").hidden =
+    !state.prefs.ratings || !ratingText(event.rating);
   const image = $("#episode-backdrop");
   const poster = $("#episode-poster");
   const hero = $(".episode-hero");
@@ -533,7 +560,7 @@ function resultCardHtml(r) {
         : state.requestAccess[r.mediaType]
           ? `<button class="request-btn" data-request data-media-type="${r.mediaType}" data-media-id="${r.id}" data-title="${escape(r.title)}">Request</button>`
           : `<span class="request-unavailable">${escape(state.requestAccess.reason || state.requestAccess[`${r.mediaType}Reason`] || "Requests disabled in Seerr")}</span>`;
-  return `<article class="result-card"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy"></div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${availabilityText(r.availability) ? ` · ${availabilityText(r.availability)}` : ""}</p>${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
+  return `<article class="result-card"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy"></div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${availabilityText(r.availability) ? ` · ${availabilityText(r.availability)}` : ""}</p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
 }
 function renderSearch(results) {
   $("#search-results").innerHTML = results.length
@@ -858,3 +885,14 @@ if ("serviceWorker" in navigator)
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   });
+
+all("[data-shelf]").forEach((button) =>
+  button.addEventListener("click", () => {
+    const shelf = document.getElementById(button.dataset.shelf);
+    if (shelf)
+      shelf.scrollBy({
+        left: Number(button.dataset.direction) * shelf.clientWidth * 0.8,
+        behavior: "smooth",
+      });
+  }),
+);

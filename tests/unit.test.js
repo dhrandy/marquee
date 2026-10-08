@@ -213,3 +213,14 @@ test("episode detail metadata and premiere flag preserve availability", () => {
   assert.equal(episode.year, 2026);
   assert.deepEqual(episode.genres, ["Drama"]);
 });
+
+test("ratings reject absent, zero, invalid and unrated scores", async () => {
+  const { normalizedRating } = await import("../src/model.js");
+  for (const value of [null, undefined, 0, -1, 11, NaN, Infinity, "8.2"])
+    assert.equal(normalizedRating(value, "TMDB"), null);
+  assert.equal(normalizedRating(8.2, "TMDB", 0), null);
+  assert.deepEqual(normalizedRating(8.2, "TMDB", 20), {
+    value: 8.2,
+    source: "TMDB",
+  });
+});

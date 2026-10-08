@@ -1,3 +1,13 @@
+export function normalizedRating(value, source, votes) {
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    value > 0 &&
+    value <= 10 &&
+    votes !== 0
+    ? { value, source }
+    : null;
+}
+
 export function episodeStatus(episode, now = new Date()) {
   if (episode.hasFile) return "available";
   if (!episode.airDateUtc || new Date(episode.airDateUtc) > now)
@@ -24,6 +34,17 @@ export function normalizeEpisodes(rows, now = new Date()) {
       monitored: Boolean(row.monitored && (row.series?.monitored ?? true)),
       premiere: row.episodeNumber === 1 && row.seasonNumber > 0,
       year: row.series?.year || null,
+      rating:
+        normalizedRating(
+          row.series?.ratings?.tmdb?.value,
+          "TMDB",
+          row.series?.ratings?.tmdb?.votes,
+        ) ||
+        normalizedRating(
+          row.series?.ratings?.imdb?.value,
+          "IMDb",
+          row.series?.ratings?.imdb?.votes,
+        ),
       network:
         typeof row.series?.network === "string" ? row.series.network : null,
       runtime: row.runtime || row.series?.runtime || null,
@@ -107,6 +128,7 @@ export function normalizeSeerrResults(data) {
         /^\/[A-Za-z0-9]+\.(jpg|jpeg|png|webp)$/.test(r.posterPath)
           ? r.posterPath
           : null,
+      rating: normalizedRating(r.voteAverage, "TMDB", r.voteCount),
       overview: typeof r.overview === "string" ? r.overview.slice(0, 300) : "",
       availability: Number.isInteger(r.mediaInfo?.status)
         ? r.mediaInfo.status
