@@ -10,6 +10,7 @@ import {
   calendar,
   jellyfinHeaders,
   seerrSearch,
+  seerrIdentity,
   seerrRequest,
   seerrRequests,
   testService,
@@ -153,25 +154,47 @@ app.post("/api/logout", requireUser, (req, res) => {
   cookie(res, "", 0);
   res.json({ ok: true });
 });
-const seerrAllowlist = () =>
-  (process.env.SEERR_REQUEST_ALLOWLIST || "")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
-app.get("/api/me", requireUser, (req, res) =>
+async function requestAccess(user) {
+  if (demo) return { id: 1, movie: true, tv: true };
+  try {
+    return await seerrIdentity(user.id);
+  } catch (error) {
+    const known =
+      /^(No linked Seerr user|Multiple Seerr users|Connect Seerr|Seerr permissions|Seerr user list)/.test(
+        error.message,
+      );
+    return {
+      movie: false,
+      tv: false,
+      error: known
+        ? error.message
+        : "Seerr user permissions could not be checked. Ask your admin to check the connection and API key.",
+    };
+  }
+}
+function publicAccess(access) {
+  return {
+    movie: access.movie,
+    tv: access.tv,
+    reason: access.error || "",
+    movieReason: access.movieReason || "",
+    tvReason: access.tvReason || "",
+  };
+}
+app.get("/api/me", requireUser, async (req, res) => {
+  const access = await requestAccess(req.user);
   res.json({
     name: req.user.name,
     isAdmin: req.user.isAdmin === true,
-    canRequest: demo || seerrAllowlist().includes(req.user.id),
-  }),
-);
+    canRequest: access.movie || access.tv,
+    requestAccess: publicAccess(access),
+  });
+});
 app.post("/api/display-name", requireUser, async (req, res) => {
   if (!req.user.isAdmin)
-    return res
-      .status(403)
-      .json({
-        error: "Only a Jellyfin administrator can change the display name.",
-      });
+    return res.status(403).json({
+      error: "Only a Jellyfin administrator can change the display name.",
+    });
   const name = req.body?.name;
   if (
     typeof name !== "string" ||
@@ -179,12 +202,10 @@ app.post("/api/display-name", requireUser, async (req, res) => {
     name.trim().length > 40 ||
     /[<>\x00-\x1f\x7f]/.test(name)
   )
-    return res
-      .status(400)
-      .json({
-        error:
-          "Enter a display name of 1 to 40 characters, without markup or control characters.",
-      });
+    return res.status(400).json({
+      error:
+        "Enter a display name of 1 to 40 characters, without markup or control characters.",
+    });
   try {
     if (!demo) {
       await fs.mkdir(path.dirname(settingsPath), {
@@ -201,12 +222,10 @@ app.post("/api/display-name", requireUser, async (req, res) => {
     displayName = name.trim();
     res.json({ name: displayName });
   } catch {
-    res
-      .status(500)
-      .json({
-        error:
-          "Could not save the display name. Check the settings volume is writable.",
-      });
+    res.status(500).json({
+      error:
+        "Could not save the display name. Check the settings volume is writable.",
+    });
   }
 });
 app.get("/api/seerr/search", requireUser, async (req, res) => {
@@ -228,7 +247,12 @@ app.get("/api/seerr/search", requireUser, async (req, res) => {
       .status(503)
       .json({ error: "Connect Seerr in the server settings to search." });
   try {
-    res.json({ results: await seerrSearch(query, page) });
+    const access = await requestAccess(req.user);
+    if (access.error) return res.status(403).json({ error: access.error });
+    res.json({
+      results: await seerrSearch(query, page, access.id),
+      requestAccess: publicAccess(access),
+    });
   } catch {
     res.status(502).json({ error: "Seerr could not be reached." });
   }
@@ -247,16 +271,14 @@ app.get("/api/seerr/requests", requireUser, async (req, res) => {
       .status(503)
       .json({ error: "Connect Seerr in the server settings to see requests." });
   try {
-    res.json({ requests: await seerrRequests() });
+    const access = await requestAccess(req.user);
+    if (access.error) return res.status(403).json({ error: access.error });
+    res.json({ requests: await seerrRequests(access.id) });
   } catch {
     res.status(502).json({ error: "Seerr could not be reached." });
   }
 });
 app.post("/api/seerr/request", requireUser, async (req, res) => {
-  if (!demo && !seerrAllowlist().includes(req.user.id))
-    return res
-      .status(403)
-      .json({ error: "Requesting is not enabled for this Jellyfin account." });
   const { mediaType, mediaId } = req.body || {};
   if (
     !["movie", "tv"].includes(mediaType) ||
@@ -267,10 +289,22 @@ app.post("/api/seerr/request", requireUser, async (req, res) => {
     return res.status(400).json({ error: "Invalid request." });
   if (demo) return res.json({ ok: true });
   try {
-    const result = await seerrRequest(mediaType, mediaId);
+    const access = await requestAccess(req.user);
+    if (!access[mediaType])
+      return res
+        .status(403)
+        .json({ error: access.error || access[`${mediaType}Reason`] });
+    const result = await seerrRequest(mediaType, mediaId, access.id);
     res.json({ ok: true, status: result.status ?? null });
-  } catch {
-    res.status(502).json({ error: "Seerr could not complete the request." });
+  } catch (error) {
+    const denied = /Service returned (403|409)/.test(error.message);
+    res
+      .status(denied ? 403 : 502)
+      .json({
+        error: denied
+          ? "Seerr declined this request. Check your permissions, remaining quota, or whether it was already requested."
+          : "Seerr could not complete the request.",
+      });
   }
 });
 app.get("/api/seerr/image", requireUser, async (req, res) => {

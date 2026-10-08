@@ -1010,3 +1010,5 @@ dialog select { min-width: 0; max-width: 100%; }
 @media (max-width: 330px) {
   .setting select { max-width: 100%; width: 100%; }
 }
+
+.request-unavailable { color: var(--muted); font-size: 11px; line-height: 1.5; }

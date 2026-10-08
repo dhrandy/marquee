@@ -437,3 +437,12 @@ for (const width of [1440, 393, 320, 280]) {
     await expect(page.locator('#display-name-status')).toHaveText('Saved for everyone.');
   });
 }
+
+test("Seerr request buttons reflect movie/TV access and escape denial text", async ({ page }) => {
+  await page.route("**/api/me", route => route.fulfill({ json: { name: "Demo viewer", canRequest: true, isAdmin: false, requestAccess: { movie: true, tv: false, tvReason: "TV requests are not permitted by Seerr." } } }));
+  await login(page);
+  await page.getByPlaceholder("Search movies and shows").fill("o");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.locator(".request-btn")).toHaveCount(1);
+  await expect(page.locator(".request-unavailable")).toHaveText("TV requests are not permitted by Seerr.");
+});

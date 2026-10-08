@@ -162,31 +162,114 @@ const jellyfinLink = (id) => {
     : null;
 };
 
-export async function seerrSearch(query, page) {
+export async function seerrIdentity(jellyfinId) {
+  if (!process.env.SEERR_URL || !process.env.SEERR_API_KEY)
+    throw new Error("Connect Seerr in the server settings.");
+  const normalize = (id) =>
+    String(id || "")
+      .replace(/-/g, "")
+      .toLowerCase();
+  const matches = [];
+  for (let page = 0; page < 100; page++) {
+    const data = await upstream(
+      process.env.SEERR_URL,
+      `/api/v1/user?take=100&skip=${page * 100}`,
+      { headers: { "X-Api-Key": process.env.SEERR_API_KEY } },
+    );
+    if (!Array.isArray(data.results))
+      throw new Error("Seerr user lookup failed.");
+    matches.push(
+      ...data.results.filter(
+        (user) =>
+          user.jellyfinUserId &&
+          normalize(user.jellyfinUserId) === normalize(jellyfinId),
+      ),
+    );
+    const total = Number(data.pageInfo?.results);
+    if (
+      data.results.length < 100 ||
+      (Number.isFinite(total) && (page + 1) * 100 >= total)
+    )
+      break;
+    if (page === 99)
+      throw new Error("Seerr user list is too large to verify safely.");
+  }
+  if (
+    matches.length !== 1 ||
+    !Number.isSafeInteger(matches[0].id) ||
+    matches[0].id < 1
+  )
+    throw new Error(
+      matches.length > 1
+        ? "Multiple Seerr users match this Jellyfin account. Ask your admin to fix the linked accounts."
+        : "No linked Seerr user found. Ask your admin to import your Jellyfin account into Seerr.",
+    );
+  const user = matches[0];
+  const quota = await upstream(
+    process.env.SEERR_URL,
+    `/api/v1/user/${user.id}/quota`,
+    {
+      headers: {
+        "X-Api-Key": process.env.SEERR_API_KEY,
+        "X-API-User": String(user.id),
+      },
+    },
+  );
+  if (!quota.movie || !quota.tv || typeof quota.movie.restricted !== "boolean" || typeof quota.tv.restricted !== "boolean" || !Number.isSafeInteger(user.permissions))
+    throw new Error("Seerr permissions could not be verified.");
+  const permitted = (bit) =>
+    user.id === 1 || Boolean(user.permissions & (2 | 32 | bit));
+  return {
+    id: user.id,
+    movie: permitted(262144) && !quota.movie.restricted,
+    tv: permitted(524288) && !quota.tv.restricted,
+    movieReason: quota.movie.restricted
+      ? "Movie request quota reached in Seerr."
+      : "Movie requests are not permitted by Seerr.",
+    tvReason: quota.tv.restricted
+      ? "TV request quota reached in Seerr."
+      : "TV requests are not permitted by Seerr.",
+  };
+}
+
+export async function seerrSearch(query, page, userId) {
   const params = new URLSearchParams({ query, page: String(page) });
   const data = await upstream(
     process.env.SEERR_URL,
     `/api/v1/search?${params}`,
     {
-      headers: { "X-Api-Key": process.env.SEERR_API_KEY },
+      headers: {
+        "X-Api-Key": process.env.SEERR_API_KEY,
+        "X-API-User": String(userId),
+      },
     },
   );
   return normalizeSeerrResults(data);
 }
 
-export async function seerrRequest(mediaType, mediaId) {
+export async function seerrRequest(mediaType, mediaId, userId) {
   return upstream(process.env.SEERR_URL, "/api/v1/request", {
     method: "POST",
     headers: { "X-Api-Key": process.env.SEERR_API_KEY },
-    body: { mediaType, mediaId },
+    body: {
+      mediaType,
+      mediaId,
+      userId,
+      ...(mediaType === "tv" ? { seasons: "all" } : {}),
+    },
   });
 }
 
-export async function seerrRequests() {
+export async function seerrRequests(userId) {
   const data = await upstream(
     process.env.SEERR_URL,
-    "/api/v1/request?take=10&skip=0&sort=added&filter=all",
-    { headers: { "X-Api-Key": process.env.SEERR_API_KEY } },
+    `/api/v1/request?take=10&skip=0&sort=added&filter=all&requestedBy=${userId}`,
+    {
+      headers: {
+        "X-Api-Key": process.env.SEERR_API_KEY,
+        "X-API-User": String(userId),
+      },
+    },
   );
   return normalizeSeerrRequests(data);
 }

@@ -23,7 +23,6 @@ services:
       RADARR_API_KEY: ${RADARR_API_KEY}
       SEERR_URL: ${SEERR_URL}
       SEERR_API_KEY: ${SEERR_API_KEY}
-      SEERR_REQUEST_ALLOWLIST: ${SEERR_REQUEST_ALLOWLIST}
       JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
     volumes:
       - ./:/source:ro

@@ -8,6 +8,7 @@ const state = {
   key: "",
   demo: false,
   canRequest: false,
+  requestAccess: { movie: false, tv: false },
   name: "Marquee",
   cityResults: [],
 };
@@ -151,6 +152,10 @@ async function enter(name) {
   applyPrefs();
   const me = await api("/api/me");
   state.canRequest = me.canRequest;
+  state.requestAccess = me.requestAccess || {
+    movie: me.canRequest,
+    tv: me.canRequest,
+  };
   $("#display-name-settings").hidden = !me.isAdmin;
   await Promise.all([loadRecent(), loadCalendar(), loadRequests()]);
 }
@@ -366,9 +371,9 @@ function resultCardHtml(r) {
       ? '<span class="owned">In your library</span>'
       : r.requested || r.availability === 2
         ? '<span class="requested-label">Requested</span>'
-        : state.canRequest
+        : state.requestAccess[r.mediaType]
           ? `<button class="request-btn" data-request data-media-type="${r.mediaType}" data-media-id="${r.id}" data-title="${escape(r.title)}">Request</button>`
-          : "";
+          : `<span class="request-unavailable">${escape(state.requestAccess.reason || state.requestAccess[`${r.mediaType}Reason`] || "Requests disabled in Seerr")}</span>`;
   return `<article class="result-card"><div class="poster-art"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy"></div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${availabilityText(r.availability) ? ` · ${availabilityText(r.availability)}` : ""}</p>${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
 }
 function renderSearch(results) {
@@ -580,10 +585,11 @@ $("#search-form").addEventListener("submit", async (event) => {
   const query = new FormData(event.target).get("query");
   $("#search-status").textContent = "Searching…";
   try {
-    const { results } = await api(
+    const { results, requestAccess } = await api(
       `/api/seerr/search?${new URLSearchParams({ query })}`,
     );
     $("#search-status").textContent = "";
+    if (requestAccess) state.requestAccess = requestAccess;
     renderSearch(results);
   } catch (error) {
     $("#search-status").textContent = error.message;

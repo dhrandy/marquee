@@ -1,4 +1,4 @@
-const VERSION = "marquee-v2";
+const VERSION = "marquee-v3";
 const SHELL = [
   "/",
   "/style.css",

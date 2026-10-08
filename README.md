@@ -25,6 +25,8 @@ This is a local beta. No application image or public release has been published 
 
 ## Features
 
+- Seerr access matches the signed-in Jellyfin ID to an imported Seerr user. Movie/TV permissions and quotas come from Seerr. No allowlist. Requests use the server API key with the verified user ID override; TV requests include all requestable seasons. Ask a Seerr admin to import your Jellyfin user if no match exists. Names and email addresses are never used for matching.
+
 - Jellyfin username and password login gates all media APIs.
 - Horizontal poster shelf with added date/time, title, and TV season episode counts.
 - Sonarr TV episodes and Radarr movie releases in month, week, day, agenda (next 14 days), or list views. The app remembers the last view used on each device.
@@ -32,14 +34,13 @@ This is a local beta. No application image or public release has been published 
 - Green: available file. Red: release has passed but the file is missing. Yellow: upcoming TV. Gray: unreleased movie.
 - Optional current weather and three-day forecast, off by default. Choose a city and Fahrenheit/Celsius in Settings, per viewer and device. Open-Meteo weather and city search are free for non-commercial use, with no API key or account.
 - Jellyfin administrators can change the shared display name in Settings. It defaults to Marquee and survives container restarts.
-- Search Seerr (Jellyseerr or Overseerr) for movies and shows with posters, availability, and request buttons. Requesting is restricted to Jellyfin user IDs listed in `SEERR_REQUEST_ALLOWLIST`; an empty list disables requesting for everyone.
 - A quiet "Your requests" section lists recent request status. No badges, no counts.
 - Poster and title taps deep-link into Jellyfin's web player through the external URL setting.
 - Settings includes per-service connection tests with real error messages (DNS failure, connection refused, timeout, or HTTP status).
 - Installable as a PWA (manifest and service worker). Only static assets are cached; media API responses are never cached.
 - Settings can hide either main section, weather, the status legend, added dates, and poster navigation arrows.
 - Mobile defaults to a readable list. Month/week remain available with horizontal scrolling instead of squeezed columns.
-- Settings are stored per account on the current device. No shared settings across users.
+- Settings are stored per account on the current device. The display name is shared; other display/weather preferences are per viewer/device.
 - Demo mode with fictional titles and original sample poster art. No external credentials required.
 
 ## Run with Docker Compose
@@ -87,7 +88,6 @@ services:
       RADARR_API_KEY: ${RADARR_API_KEY}
       SEERR_URL: ${SEERR_URL}
       SEERR_API_KEY: ${SEERR_API_KEY}
-      SEERR_REQUEST_ALLOWLIST: ${SEERR_REQUEST_ALLOWLIST}
       JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
     volumes:
       - ./:/source:ro
@@ -152,9 +152,6 @@ RADARR_API_KEY=replace-with-your-radarr-api-key
 # Seerr (Jellyseerr or Overseerr): base URL + API key (Settings > General).
 SEERR_URL=http://seerr:5055
 SEERR_API_KEY=replace-with-your-seerr-api-key
-# Jellyfin user IDs allowed to request titles, comma-separated. Empty = nobody can request.
-# Find a user's ID in Jellyfin under Dashboard > Users (it is in the URL when you open the user).
-SEERR_REQUEST_ALLOWLIST=
 
 # Optional external URLs for the other services, reserved for future deep links (unused today):
 # SONARR_WEB_URL=https://sonarr.example.com
@@ -178,7 +175,6 @@ Terminate HTTPS at your preferred reverse proxy and forward to port 8739. Preser
 - `SONARR_URL` and `SONARR_API_KEY`: server base URL and API key. Requests use `/api/v3/calendar` with `includeSeries=true`.
 - `RADARR_URL` and `RADARR_API_KEY`: server base URL and API key. Requests use `/api/v3/calendar`.
 - `SEERR_URL` and `SEERR_API_KEY`: Jellyseerr or Overseerr base URL and API key. Search uses `/api/v1/search`; requests use `/api/v1/request`.
-- `SEERR_REQUEST_ALLOWLIST`: comma-separated Jellyfin user IDs allowed to request titles. Empty means nobody can request. Requests are submitted as the Seerr account that owns the API key. Find a Jellyfin user ID under Dashboard > Users (it is in the URL when you open the user).
 - Internal/external URL split: `JELLYFIN_URL`, `SONARR_URL`, `RADARR_URL`, and `SEERR_URL` are how the container reaches each service (Docker network or LAN). `JELLYFIN_WEB_URL` is the public address browsers open when someone taps a poster; it defaults to `JELLYFIN_URL`. Set both when containers use an internal address phones cannot open. `SONARR_WEB_URL`, `RADARR_WEB_URL`, and `SEERR_WEB_URL` are reserved for future deep links and unused today.
 - Weather: use Settings to find and pick a city, choose F/C units, and enable the widget. These choices are saved for that viewer on that device, not in `.env`.
 - Display name: Jellyfin administrators see a name field in Settings. The default is Marquee; the shared value is stored in the settings volume. This changes the dashboard header and browser tab. Installed PWA icons/name remain Marquee.
@@ -190,7 +186,7 @@ Movie dates prefer digital release, then physical release, then cinema release. 
 
 ## Privacy and permissions
 
-Only the recent Jellyfin shelf is per-user. **The Sonarr/Radarr calendar, Seerr search results, and the request list are shared among all signed-in viewers.** They may include titles a viewer cannot access in Jellyfin. Do not deploy for untrusted users without a calendar permission layer. Seerr requesting is gated by the allowlist above; the Seerr API key never reaches the browser. Request-list titles come from Seerr's response; if a title is missing there, the row falls back to its TMDB id.
+The recent Jellyfin shelf and Seerr request list are per-user. **The Sonarr/Radarr calendar is shared among all signed-in viewers.** Seerr search runs as the linked user and the request list shows only that user's requests. They may include titles a viewer cannot access in Jellyfin. Do not deploy for untrusted users without a calendar permission layer. Seerr requesting follows the linked user's own movie/TV permissions and quotas; the Seerr API key never reaches the browser. Request-list titles come from Seerr's response; if a title is missing there, the row falls back to its TMDB id.
 
 Passwords are sent to Jellyfin and are not stored or logged. Jellyfin access tokens and opaque sessions stay in server memory. Cookies are HttpOnly, SameSite Strict, secure by default, and expire after eight hours. Sign-out removes the local session. It does not revoke the Jellyfin access token upstream; server restarts drop stored tokens.
 
