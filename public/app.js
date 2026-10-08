@@ -2,7 +2,7 @@ const $ = (selector) => document.querySelector(selector);
 const all = (selector) => [...document.querySelectorAll(selector)];
 const state = {
   date: new Date(),
-  view: "month",
+  view: "agenda",
   events: [],
   prefs: {},
   key: "",
@@ -187,11 +187,7 @@ async function enter(name) {
   Object.assign(state.prefs, await api("/api/weather-settings"));
   state.view =
     state.prefs.lastView ||
-    (state.prefs.defaultView === "auto"
-      ? innerWidth <= 600
-        ? "list"
-        : "month"
-      : state.prefs.defaultView);
+    (state.prefs.defaultView === "auto" ? "agenda" : state.prefs.defaultView);
   $("#hide-unmonitored").checked = Boolean(state.prefs.hideUnmonitored);
   $("#login").hidden = true;
   $("#dashboard").hidden = false;
@@ -251,9 +247,12 @@ $("#recent").addEventListener("click", (event) => {
     title: item.title,
     subtitle: item.subtitle,
     ...item.detail,
-    backdrop: item.image
+    poster: item.image
       ? `/api/image/${encodeURIComponent(item.id)}`
       : `/art/${item.art || "placeholder"}.svg`,
+    backdrop: item.backdropId
+      ? `/api/image/${encodeURIComponent(item.backdropId)}?type=Backdrop`
+      : null,
     playLink: item.link,
   });
 });
@@ -356,12 +355,29 @@ function showDetail(event) {
     .map((genre) => `<span>${escape(genre)}</span>`)
     .join("");
   const image = $("#episode-backdrop");
-  image.hidden = !event.backdrop;
-  image.onerror = () => {
-    image.hidden = true;
-    image.removeAttribute("src");
+  const poster = $("#episode-poster");
+  const hero = $(".episode-hero");
+  const posterSource = event.poster || null;
+  const backdropSource = event.backdrop || posterSource;
+  hero.classList.toggle("has-poster", Boolean(posterSource));
+  poster.hidden = !posterSource;
+  poster.onerror = () => {
+    poster.hidden = true;
+    poster.removeAttribute("src");
+    hero.classList.remove("has-poster");
   };
-  if (event.backdrop) image.src = event.backdrop;
+  if (posterSource) poster.src = posterSource;
+  else poster.removeAttribute("src");
+  image.hidden = !backdropSource;
+  image.onerror = () => {
+    if (posterSource && image.getAttribute("src") !== posterSource) {
+      image.src = posterSource;
+    } else {
+      image.hidden = true;
+      image.removeAttribute("src");
+    }
+  };
+  if (backdropSource) image.src = backdropSource;
   else image.removeAttribute("src");
   const play = $("#episode-play");
   play.hidden = !event.playLink;

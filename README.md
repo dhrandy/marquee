@@ -15,6 +15,8 @@ A small self-hosted media home screen: recently added at the top, a release cale
 
 This is a local beta. No application image or public release has been published yet. The compose setup below runs the source using the official Node image, without a Dockerfile. Live-server compatibility and container deployment still need testing before a release.
 
+During beta, updates are manual. Pull the latest image yourself when updating an image-based installation; Marquee does not auto-update running containers. The CasaOS source-based stack below downloads current source only when you manually restart/recreate it. No version bump is required for each beta change.
+
 ## Contents
 
 - [Features](#features)
@@ -29,9 +31,9 @@ This is a local beta. No application image or public release has been published 
 
 - Jellyfin username and password login gates all media APIs.
 - Horizontal poster shelf with added date/time, title, and TV season episode counts.
-- Sonarr TV episodes and Radarr movie releases in month, week, day, agenda (next 14 days), or list views. The app remembers the last view used on each device.
+- Sonarr TV episodes and Radarr movie releases in month, week, day, agenda (next 14 days), or list views. Agenda is the default on desktop and mobile. The app remembers the last view used on each device.
 - Recently-added posters open a detail popup with a Play in Jellyfin button that opens the exact movie/episode the card represents. Desktop posters are modestly smaller; mobile sizing is unchanged.
-- Click a TV calendar entry for episode details: cached Sonarr backdrop artwork when supplied, with a solid-background fallback if unavailable, show/year, episode title, network, runtime, genres and overview. The trailer button opens a clearly labeled YouTube search, not an unverified video. Upcoming season premieres are yellow, regular upcoming episodes white, available green, missing red; cinemas remain blue.
+- Click a TV calendar entry for episode details: a complete poster beside the title with dimmed, softened backdrop artwork when supplied, a softened poster fallback, or a solid background if no artwork is available, show/year, episode title, network, runtime, genres and overview. The trailer button opens a clearly labeled YouTube search, not an unverified video. Upcoming season premieres are yellow, regular upcoming episodes white, available green, missing red; cinemas remain blue.
 - Monday-first calendar, today highlight, previous/next period, refresh, and type/status filters. An optional hide-unmonitored filter drops unmonitored Sonarr/Radarr entries. Movies can appear twice: cinema and digital/physical releases are separate entries.
 - Green: available file. Red: release has passed but the file is missing. Yellow: season premiere. White: upcoming TV. Gray: unreleased movie.
 - Optional current weather and three-day forecast, off by default. Choose a city and Fahrenheit/Celsius in Settings, saved server-side per Jellyfin account. Refreshes every 15 minutes while visible, catches up when a stale tab becomes visible, and joins the Refresh button. Open-Meteo weather and city search are free for non-commercial use, with no API key or account.

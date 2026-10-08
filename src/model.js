@@ -33,6 +33,12 @@ export function normalizeEpisodes(rows, now = new Date()) {
       overview:
         row.overview || row.series?.overview || "Overview not available yet.",
       seriesId: row.seriesId || row.series?.id || null,
+      localPoster:
+        row.series?.images?.find((image) => image.coverType === "poster")
+          ?.url || null,
+      poster:
+        row.series?.images?.find((image) => image.coverType === "poster")
+          ?.remoteUrl || null,
       localBackdrop:
         row.series?.images?.find((image) => image.coverType === "fanart")
           ?.url || null,

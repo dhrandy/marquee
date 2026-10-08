@@ -1016,11 +1016,12 @@ dialog select { min-width: 0; max-width: 100%; }
 .entry[role="button"] { cursor: pointer; }
 .entry[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 #episode-detail { padding: 0; width: min(900px, calc(100vw - 24px)); max-width: 900px; overflow: auto; }
-.episode-hero { min-height: 320px; position: relative; background: linear-gradient(135deg,#27334d,#141722); display: flex; align-items: flex-end; }
-.episode-hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.episode-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent, #10121ce8); pointer-events: none; }
-.episode-heading { position: relative; z-index: 1; padding: 28px; }
-.episode-heading h2 { font-size: clamp(24px,4vw,34px); margin: 0; }
+.episode-hero { min-height: 300px; position: relative; background: linear-gradient(135deg,#27334d,#141722); display: flex; align-items: center; gap: 26px; padding: 28px; isolation: isolate; overflow: hidden; }
+#episode-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; filter: blur(7px); transform: scale(1.08); opacity: .85; z-index: -2; }
+.episode-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg,rgba(12,15,24,.72),rgba(12,15,24,.35)),linear-gradient(0deg,#10121c,transparent 70%); pointer-events: none; z-index: -1; }
+#episode-poster { position: relative; width: 160px; height: 240px; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 30px #0006; flex-shrink: 0; }
+.episode-heading { position: relative; flex: 1; min-width: 0; padding: 0 18px 0 0; overflow-wrap: anywhere; }
+.episode-heading h2 { font-size: clamp(24px,4vw,32px); margin: 0; }
 #episode-subtitle { margin-bottom: 0; color: #e2e5ed; }
 #episode-close { position: absolute; z-index: 2; right: 14px; top: 14px; border-radius: 50%; font-size: 24px; width: 42px; height: 42px; padding: 0; background: #a991ee; color: #171322; }
 .episode-body { padding: 24px 28px; }
@@ -1028,7 +1029,8 @@ dialog select { min-width: 0; max-width: 100%; }
 #episode-genres span { border-radius: 15px; padding: 4px 10px; background: #a991ee; color: #171322; font-size: 12px; font-weight: 700; }
 #episode-overview { line-height: 1.6; color: #e2e5ed; }
 #episode-trailer { display: inline-block; padding: 10px 14px; border: 1px solid #736591; border-radius: 8px; color: #e2d5ff; text-decoration: none; }
-@media(max-width:600px) { .episode-hero { min-height: 240px; } .episode-heading,.episode-body { padding: 20px; } }
+@media(max-width:600px) { .episode-hero { min-height: 220px; gap: 16px; padding: 56px 20px 20px; } #episode-poster { width: 100px; height: 150px; } .episode-heading { padding-right: 0; } .episode-heading h2 { font-size: 23px; } .episode-body { padding: 20px; } }
+@media(max-width:340px) { .episode-hero { gap: 12px; padding-left: 16px; padding-right: 16px; } #episode-poster { width: 80px; height: 120px; } .episode-heading h2 { font-size: 20px; } }
 
 .popular-section { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 24px; }
 .popular-heading p { color: var(--muted); font-size: 12px; margin: 8px 0 20px; }

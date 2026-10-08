@@ -347,6 +347,7 @@ app.get("/api/seerr/details/:type/:id", requireUser, async (req, res) => {
       runtime: 48,
       overview:
         "A discovery draws old friends into a story that changes their lives.",
+      poster: "/art/north.svg",
       backdrop: "/art/north.svg",
     });
   try {
@@ -531,8 +532,10 @@ app.get("/api/seerr/image", requireUser, async (req, res) => {
 app.get("/api/recent", requireUser, async (req, res) => {
   try {
     const items = demo ? titles : await recentItems(req.user);
-    for (const item of items)
+    for (const item of items) {
       if (item.image) req.user.allowedImages.add(item.id);
+      if (item.backdropId) req.user.allowedImages.add(item.backdropId);
+    }
     res.json({ items });
   } catch {
     res
@@ -546,9 +549,11 @@ app.get("/api/image/:id", requireUser, async (req, res) => {
     !/^[a-zA-Z0-9-]+$/.test(req.params.id)
   )
     return res.sendStatus(404);
+  const type = req.query.type || "Primary";
+  if (!["Primary", "Backdrop"].includes(type)) return res.sendStatus(400);
   try {
     const response = await fetch(
-      `${process.env.JELLYFIN_URL.replace(/\/$/, "")}/Items/${req.params.id}/Images/Primary?maxWidth=420&quality=85`,
+      `${process.env.JELLYFIN_URL.replace(/\/$/, "")}/Items/${req.params.id}/Images/${type}?maxWidth=${type === "Backdrop" ? 900 : 420}&quality=85`,
       {
         headers: jellyfinHeaders(req.user.token),
         signal: AbortSignal.timeout(10000),
@@ -581,46 +586,47 @@ app.get("/api/calendar", requireUser, async (req, res) => {
   for (const event of data.events) {
     // Use Sonarr's cached cover when present instead of depending on its remote
     // artwork host. Only fixed MediaCover paths for this returned series qualify.
-    const local =
-      typeof event.localBackdrop === "string"
-        ? event.localBackdrop.match(
-            /(?:^|\/)MediaCover\/(\d+)\/(fanart|poster)\.(jpg|png)(?:\?[^#]*)?$/i,
-          )
-        : null;
-    if (local && Number(local[1]) === event.seriesId) {
-      req.user.calendarImages.set(event.id, {
-        url: serviceUrl(
-          process.env.SONARR_URL,
-          `/MediaCover/${local[1]}/${local[2]}.${local[3]}`,
-        ).href,
-        sonarr: true,
-      });
-    }
-    if (!req.user.calendarImages.has(event.id) && event.backdrop) {
-      try {
-        const url = new URL(event.backdrop);
-        if (
-          url.protocol === "https:" &&
-          ["artworks.thetvdb.com", "image.tmdb.org"].includes(url.hostname) &&
-          !url.username &&
-          !url.password &&
-          !url.port
-        )
-          req.user.calendarImages.set(event.id, {
-            url: url.href,
-            sonarr: false,
-          });
-      } catch {
-        /* Ignore invalid artwork URLs from upstream metadata. */
+    for (const kind of ["backdrop", "poster"]) {
+      const id = kind === "backdrop" ? event.id : `${event.id}-poster`;
+      const localField = kind === "backdrop" ? "localBackdrop" : "localPoster";
+      const local =
+        typeof event[localField] === "string"
+          ? event[localField].match(
+              /(?:^|\/)MediaCover\/(\d+)\/(fanart|poster)\.(jpg|png)(?:\?[^#]*)?$/i,
+            )
+          : null;
+      if (local && Number(local[1]) === event.seriesId) {
+        req.user.calendarImages.set(id, {
+          url: serviceUrl(
+            process.env.SONARR_URL,
+            `/MediaCover/${local[1]}/${local[2]}.${local[3]}`,
+          ).href,
+          sonarr: true,
+        });
       }
+      if (!req.user.calendarImages.has(id) && event[kind]) {
+        try {
+          const url = new URL(event[kind]);
+          if (
+            url.protocol === "https:" &&
+            ["artworks.thetvdb.com", "image.tmdb.org"].includes(url.hostname) &&
+            !url.username &&
+            !url.password &&
+            !url.port
+          )
+            req.user.calendarImages.set(id, { url: url.href, sonarr: false });
+        } catch {
+          /* Ignore invalid artwork URLs from upstream metadata. */
+        }
+      }
+      delete event[localField];
+      event[kind] = req.user.calendarImages.has(id)
+        ? `/api/calendar-image/${encodeURIComponent(id)}`
+        : demo && event.type === "tv"
+          ? "/art/north.svg"
+          : null;
     }
-    delete event.localBackdrop;
     delete event.seriesId;
-    event.backdrop = req.user.calendarImages.has(event.id)
-      ? `/api/calendar-image/${encodeURIComponent(event.id)}`
-      : demo && event.type === "tv"
-        ? "/art/north.svg"
-        : null;
   }
   res.json(data);
 });

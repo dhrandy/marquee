@@ -43,6 +43,11 @@ test("desktop navigation, status filters, settings, weather, and session invalid
 }) => {
   await page.setViewportSize({ width: 1440, height: 1100 });
   await login(page);
+  await expect(page.locator('[data-view="agenda"]')).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.getByRole("button", { name: "Month", exact: true }).click();
   await expect(page.locator(".weekday").first()).toHaveText("Mon");
   const original = await page.locator("#calendar-title").textContent();
   await page.getByRole("button", { name: "Next period" }).click();
@@ -87,7 +92,7 @@ for (const width of [393, 320, 280]) {
   }) => {
     await page.setViewportSize({ width, height: 852 });
     await login(page);
-    await expect(page.locator('[data-view="list"]')).toHaveAttribute(
+    await expect(page.locator('[data-view="agenda"]')).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -932,5 +937,55 @@ for (const width of [1440, 393, 280]) {
     await page.locator("#popular-movies [data-detail-id]").first().click();
     await expect(page.locator("#episode-play")).toBeHidden();
     await expect(page.locator("#episode-play")).not.toHaveAttribute("href");
+  });
+}
+
+for (const width of [1440, 393, 320, 280]) {
+  test(`atmosphere popup preserves poster and fallback at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await login(page);
+    await expect(page.locator('[data-view="agenda"]')).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await page
+      .locator("#calendar-section")
+      .screenshot({ path: `${shots}/marquee-agenda-default-${width}.png` });
+    await page.locator(".recent-detail").first().click();
+    await expect(page.locator("#episode-poster")).toBeVisible();
+    await expect(page.locator("#episode-backdrop")).toBeVisible();
+    await page.locator("#episode-poster").evaluate((img) => img.decode());
+    expect(
+      await page
+        .locator("#episode-poster")
+        .evaluate((img) => getComputedStyle(img).objectFit),
+    ).toBe("contain");
+    expect(
+      await page
+        .locator("#episode-detail")
+        .evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+    await page
+      .locator("#episode-detail")
+      .screenshot({ path: `${shots}/marquee-atmosphere-final-${width}.png` });
+    await page.locator("#episode-close").click();
+    await page.route("**/broken-backdrop", (route) =>
+      route.fulfill({ status: 404 }),
+    );
+    await page.evaluate(() =>
+      showDetail({
+        title: "Fictional landscape test",
+        subtitle: "Episode 4",
+        poster: "/art/north.svg",
+        backdrop: "/broken-backdrop",
+      }),
+    );
+    await expect(page.locator("#episode-backdrop")).toHaveAttribute(
+      "src",
+      "/art/north.svg",
+    );
+    await expect(page.locator("#episode-poster")).toBeVisible();
   });
 }

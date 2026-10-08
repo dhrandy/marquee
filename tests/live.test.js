@@ -179,6 +179,7 @@ const service = http.createServer(async (req, res) => {
             title: "Demo show",
             monitored: true,
             images: [
+              { coverType: "poster", url: "/MediaCover/17/poster.jpg" },
               {
                 coverType: "fanart",
                 url: "/MediaCover/17/fanart.jpg?lastWrite=123",
@@ -195,7 +196,11 @@ const service = http.createServer(async (req, res) => {
         },
       ]),
     );
-  if (url.pathname === "/MediaCover/17/fanart.jpg") {
+  if (
+    ["/MediaCover/17/fanart.jpg", "/MediaCover/17/poster.jpg"].includes(
+      url.pathname,
+    )
+  ) {
     assert.equal(req.headers["x-api-key"], "mock-key");
     res.setHeader("Content-Type", "image/png");
     return res.end(Buffer.from("89504e470d0a1a0a", "hex"));
@@ -815,6 +820,15 @@ try {
       })
     ).json();
     assert.equal(data.events[0].backdrop, "/api/calendar-image/tv-1");
+    assert.equal(data.events[0].poster, "/api/calendar-image/tv-1-poster");
+    assert.equal(
+      (
+        await fetch(`${base}${data.events[0].poster}`, {
+          headers: { Cookie: cookie },
+        })
+      ).status,
+      200,
+    );
     const image = await fetch(`${base}${data.events[0].backdrop}`, {
       headers: { Cookie: cookie },
     });

@@ -216,6 +216,9 @@ export async function recentItems(user) {
         link: jellyfinLink(item.Id),
         type: item.Type === "Episode" ? "tv" : "movie",
         image: Boolean(item.ImageTags?.Primary || item.SeriesId),
+        backdropId:
+          item.ParentBackdropItemId ||
+          (item.BackdropImageTags?.length ? item.Id : item.SeriesId || null),
         art: "placeholder",
         tagline: "",
         detail: {
@@ -414,6 +417,7 @@ export async function seerrDetails(type, id, userId) {
         .slice(0, 3)
         .join(", ") || null,
     runtime: data.runtime || data.episodeRunTime?.[0] || null,
+    poster: safeArt(data.posterPath),
     backdrop: safeArt(data.backdropPath) || safeArt(data.posterPath),
   };
 }
