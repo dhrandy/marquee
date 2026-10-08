@@ -1,10 +1,28 @@
 services:
+  marquee-init:
+    image: alpine:3.21
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 1000:1000 /settings"]
+    volumes:
+      - /DATA/AppData/marquee/settings:/settings
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
   marquee:
     image: node:22-alpine
     container_name: marquee
     working_dir: /app
     user: node
     init: true
+    depends_on:
+      marquee-init:
+        condition: service_completed_successfully
     command:
       - sh
       - -c
@@ -25,7 +43,7 @@ services:
       SEERR_API_KEY: ${SEERR_API_KEY}
       JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
     volumes:
-      - marquee-settings:/home/node
+      - /DATA/AppData/marquee/settings:/home/node
     tmpfs:
       - /app:uid=1000,gid=1000,mode=0700
       - /home/node/.npm:uid=1000,gid=1000,mode=0700
@@ -46,6 +64,3 @@ services:
       interval: 30s
       timeout: 5s
       start_period: 60s
-
-volumes:
-  marquee-settings:

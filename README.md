@@ -62,16 +62,34 @@ The initial beta copies the mounted source into a temporary writable container d
 
 ### CasaOS or standalone stack (no clone needed)
 
-Use `compose.casaos.yaml` when pasting a stack into CasaOS or a Docker manager without a source checkout. No source folder or `/source` mount is needed. Put the existing connection variables in the manager's Environment tab or `.env`. The container downloads this repository's `main` archive into temporary storage, installs locked production dependencies, and starts the app. Every restart downloads current main; recreate/restart to update. Startup needs HTTPS access to GitHub and npm. A failed download/install stops startup rather than running incomplete code. Settings stay in the named volume.
+Use `compose.casaos.yaml` when pasting a stack into CasaOS or a Docker manager without a source checkout. No source folder or `/source` mount is needed. Put the existing connection variables in the manager's Environment tab or `.env`. The container downloads this repository's `main` archive into temporary storage, installs locked production dependencies, and starts the app. Every restart downloads current main; recreate/restart to update. Startup needs HTTPS access to GitHub and npm. A failed download/install stops startup rather than running incomplete code. Settings stay in `/DATA/AppData/marquee/settings`, created automatically by the bind mount. The `marquee-init` service fixes this folder's ownership for the non-root app, then exits successfully. No host terminal commands needed. Docker Compose waits for init to complete before starting Marquee. CasaOS AppManagement currently uses Compose v2; older installations may behave differently. An init container showing `Exited (0)` is expected. If init fails, Marquee is blocked until init is recreated successfully.
 
 ```yaml
 services:
+  marquee-init:
+    image: alpine:3.21
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 1000:1000 /settings"]
+    volumes:
+      - /DATA/AppData/marquee/settings:/settings
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
   marquee:
     image: node:22-alpine
     container_name: marquee
     working_dir: /app
     user: node
     init: true
+    depends_on:
+      marquee-init:
+        condition: service_completed_successfully
     command:
       - sh
       - -c
@@ -92,7 +110,7 @@ services:
       SEERR_API_KEY: ${SEERR_API_KEY}
       JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
     volumes:
-      - marquee-settings:/home/node
+      - /DATA/AppData/marquee/settings:/home/node
     tmpfs:
       - /app:uid=1000,gid=1000,mode=0700
       - /home/node/.npm:uid=1000,gid=1000,mode=0700
@@ -113,9 +131,6 @@ services:
       interval: 30s
       timeout: 5s
       start_period: 60s
-
-volumes:
-  marquee-settings:
 ```
 
 The original `compose.yaml` below is for an existing local/git checkout. Do not use its source mount with an empty CasaOS folder.
