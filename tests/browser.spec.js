@@ -1137,3 +1137,74 @@ for (const width of [1440, 393, 320, 280]) {
     await expect(page.locator("body")).toHaveClass("colorblind");
   });
 }
+
+test("blue orange accessibility palette applies to every calendar view", async ({
+  page,
+}) => {
+  const events = [
+    ["cinema", "In cinemas"],
+    ["available", "Available"],
+    ["missing", "Missing"],
+    ["upcoming", "Upcoming"],
+    ["unreleased", "Unreleased"],
+    ["premiere", "Season premiere"],
+  ].map(([status, title], i) => ({
+    id: `palette-${i}`,
+    type: "tv",
+    title,
+    subtitle: "Sample episode",
+    date: "2026-10-08T20:00:00Z",
+    status: status === "premiere" ? "upcoming" : status,
+    premiere: status === "premiere",
+  }));
+  await page.clock.setFixedTime(new Date("2026-10-08T12:00:00Z"));
+  await page.route("**/api/calendar?**", (route) =>
+    route.fulfill({ json: { events, warnings: [] } }),
+  );
+  await login(page);
+  const normal = await page
+    .locator(".entry.available")
+    .evaluate((el) => getComputedStyle(el).color);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator('[data-pref="colorblind"]').check();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  const colors = {
+    cinema: "rgb(169, 199, 255)",
+    available: "rgb(36, 168, 255)",
+    missing: "rgb(255, 180, 91)",
+    upcoming: "rgb(244, 245, 247)",
+    unreleased: "rgb(150, 147, 139)",
+    premiere: "rgb(255, 230, 107)",
+  };
+  expect(normal).not.toBe(colors.available);
+  for (const view of ["Agenda", "Month", "Week", "Day", "List"]) {
+    await page.getByRole("button", { name: view, exact: true }).click();
+    for (const [status, color] of Object.entries(colors)) {
+      expect(
+        await page
+          .locator(
+            `#calendar .entry.${status}${status === "upcoming" ? ":not(.premiere)" : ""}`,
+          )
+          .first()
+          .evaluate((el) => getComputedStyle(el).color),
+      ).toBe(color);
+      expect(
+        await page
+          .locator(`#calendar-section .legend .${status}`)
+          .evaluate((el) => getComputedStyle(el).color),
+      ).toBe(color);
+    }
+    await page.locator("#calendar-section").screenshot({
+      path: `${shots}/marquee-deuteran-${view.toLowerCase()}.png`,
+    });
+  }
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator('[data-pref="colorblind"]').uncheck();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  expect(
+    await page
+      .locator(".entry.available")
+      .first()
+      .evaluate((el) => getComputedStyle(el).color),
+  ).toBe(normal);
+});

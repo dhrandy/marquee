@@ -32,7 +32,7 @@ During beta, updates are manual. Pull the latest image yourself when updating an
 - Jellyfin username and password login gates all media APIs.
 - Horizontal poster shelf with added date/time, title, and TV season episode counts.
 - Sonarr TV episodes and Radarr movie releases in month, week, day, agenda (next 14 days), or list views. Agenda is the default on desktop and mobile. The app remembers the last view used on each device.
-- Colorblind-friendly status colors are off by default and saved per Jellyfin account on the server. Status words remain visible in every theme, with different calendar border patterns in colorblind mode. Colors are based on the Okabe-Ito palette, with lighter green/vermillion for dark-background readability.
+- Colorblind-friendly status colors are off by default and saved per Jellyfin account on the server. Status words remain visible in every theme, with different calendar border patterns in colorblind mode. The optional theme uses blue, yellow, orange, white and gray instead of red/green status colors.
 - Requests open the shared detail popup using the exact TMDB movie/TV ID, without a Play button. A hideable Jellyfin header shortcut opens the configured public Jellyfin base in a new tab.
 - Source-labeled ratings appear on popups and poster cards when supplied by Jellyfin community scores or TMDB/IMDb metadata. Missing or unrated scores stay hidden. Ratings can be turned off in Settings.
 - Recently-added posters open a detail popup with a Play in Jellyfin button that opens the exact movie/episode the card represents. Desktop posters are modestly smaller; mobile sizing is unchanged.
@@ -356,3 +356,7 @@ npm test
 Tests live in `tests/`. They cover calendar status mapping, date ranges, API auth gates, same-origin protection, no-crawl/security headers, calendar navigation and filters, settings persistence, weather toggling, logout, and mobile overflow at 393, 320, and 280 pixels. Browser screenshot output goes to `/downloads` locally or the test output directory in CI. The workflow runs tests only. It does not publish anything.
 
 Integration adapters live separately from the UI so another feed can be added later.
+
+## Third-party artwork
+
+The Jellyfin shortcut uses the unmodified [official Jellyfin icon](https://raw.githubusercontent.com/jellyfin/jellyfin-ux/master/logos/SVG/jellyfin-icon--color-on-dark.svg) by the Jellyfin contributors, licensed under [CC BY-SA 4.0](public/licenses/jellyfin-CC-BY-SA-4.0.txt). It identifies the Jellyfin link, not Marquee. Marquee is an independent project.
