@@ -102,6 +102,7 @@ export async function recentItems(user) {
   // Limit cards after season grouping, not raw episodes. Large imports can
   // otherwise fill an entire Jellyfin page with only one or two seasons.
   const groups = new Map();
+  const seasonNumbers = new Map();
   const pageSize = 100;
   let startIndex = 0;
   while (groups.size < 18) {
@@ -122,6 +123,25 @@ export async function recentItems(user) {
     });
     const items = data.Items || [];
     for (const item of items) {
+      if (item.Type === "Episode") {
+        if (!Number.isInteger(item.ParentIndexNumber) && item.SeasonId) {
+          if (!seasonNumbers.has(item.SeasonId)) {
+            try {
+              const season = await upstream(
+                process.env.JELLYFIN_URL,
+                `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(item.SeasonId)}`,
+                { headers: jellyfinHeaders(user.token) },
+              );
+              seasonNumbers.set(item.SeasonId, season.IndexNumber);
+            } catch {
+              seasonNumbers.set(item.SeasonId, null);
+            }
+          }
+          item.ParentIndexNumber = seasonNumbers.get(item.SeasonId);
+        }
+        // Specials/podcasts do not take a regular season's shelf slot.
+        if (item.ParentIndexNumber === 0) continue;
+      }
       const key = item.Type === "Episode" ? item.SeasonId || item.Id : item.Id;
       if (!groups.has(key)) groups.set(key, item);
       if (groups.size === 18) break;

@@ -50,6 +50,18 @@ const service = http.createServer(async (req, res) => {
         ParentIndexNumber: 1,
         DateCreated: "2026-10-08T10:00:00Z",
       }));
+      allItems.unshift(
+        ...Array.from({ length: 120 }, (_, i) => ({
+          Id: `special-${i}`,
+          SeriesId: "bulk-series-0",
+          SeasonId: "special-season",
+          SeriesName: "Imported show 0",
+          Type: "Episode",
+          ParentIndexNumber: 0,
+          IndexNumber: i + 1,
+          Name: "Official podcast",
+        })),
+      );
       allItems.push(
         ...Array.from({ length: 25 }, (_, i) => ({
           Id: `older-${i}`,
@@ -608,7 +620,7 @@ try {
         c.query.get("UserId") === "bulk-viewer" &&
         !c.query.has("ParentId"),
     );
-    assert.equal(pages.length, 3);
+    assert.equal(pages.length, 4);
     for (const call of pages)
       assert.match(call.authorization, /token-bulk-viewer/);
   });
