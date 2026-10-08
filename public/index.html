@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#10121b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Marquee" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <title>Marquee · Media dashboard</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <section id="login" class="login" hidden>
+      <div class="login-card">
+        <div class="brand-mark">M</div>
+        <span class="eyebrow">YOUR LIBRARY, AT A GLANCE</span>
+        <h1 class="app-name">Marquee</h1>
+        <p>Fresh arrivals. The next episode. One place.</p>
+        <form id="login-form">
+          <label>Jellyfin username<input name="username" autocomplete="username" required maxlength="120" /></label>
+          <label>Password<input name="password" type="password" autocomplete="current-password" required maxlength="1000" /></label>
+          <button type="submit" class="primary">Sign in with Jellyfin</button>
+        </form>
+        <button id="demo-login" class="primary" hidden>Explore demo</button>
+        <p id="login-error" role="alert"></p>
+        <small id="login-note">Your Jellyfin account controls which recent titles you can see.</small>
+      </div>
+    </section>
+    <div id="dashboard" hidden>
+      <header class="masthead">
+        <div class="brand">
+          <div class="brand-mark">M</div>
+          <div><strong class="app-name">Marquee</strong><span>THE HOME SCREEN FOR YOUR MEDIA</span></div>
+        </div>
+        <div class="account">
+          <span id="demo-badge" class="demo-badge" hidden>DEMO DATA</span>
+          <button id="settings-button">Settings</button>
+          <button id="logout">Sign out</button>
+        </div>
+      </header>
+      <main>
+        <p id="global-error" role="alert" hidden></p>
+        <section id="weather" class="weather" hidden>
+          <div>
+            <span class="eyebrow">OUTSIDE YOUR WINDOW</span>
+            <h2 id="weather-content"></h2>
+            <p id="weather-forecast"></p>
+          </div>
+          <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather by Open-Meteo</a>
+        </section>
+        <section id="recent-section">
+          <div class="section-heading">
+            <div><span class="eyebrow">FRESH ON THE SHELF</span><h1>Recently added</h1></div>
+            <div class="recent-controls">
+              <button id="shelf-back" aria-label="Previous posters">←</button>
+              <button id="shelf-next" aria-label="Next posters">→</button>
+            </div>
+          </div>
+          <div id="recent" class="poster-row" tabindex="0" aria-label="Recently added titles"></div>
+        </section>
+        <section id="calendar-section">
+          <div class="section-heading calendar-heading">
+            <div><span class="eyebrow">WHAT'S ON THE HORIZON</span><h2>Release calendar</h2></div>
+            <div id="legend" class="legend">
+              <span class="available">● Available</span><span class="missing">● Missing</span>
+              <span class="upcoming">● Upcoming</span><span class="unreleased">○ Unreleased</span>
+            </div>
+          </div>
+          <div class="calendar-shell">
+            <div class="calendar-toolbar">
+              <div class="date-nav">
+                <button id="prev" aria-label="Previous period">‹</button>
+                <button id="next" aria-label="Next period">›</button>
+                <h3 id="calendar-title"></h3>
+                <button id="today">Today</button>
+              </div>
+              <div class="view-tools">
+                <button id="refresh">↻ Refresh</button>
+                <button id="filter-button" aria-expanded="false">Filter</button>
+                <div class="view-tabs" aria-label="Calendar views">
+                  <button data-view="month">Month</button>
+                  <button data-view="week">Week</button>
+                  <button data-view="day">Day</button>
+                  <button data-view="agenda">Agenda</button>
+                  <button data-view="list">List</button>
+                </div>
+              </div>
+            </div>
+            <div id="filters" class="filters" hidden>
+              <label><input type="checkbox" data-type="tv" checked />TV</label>
+              <label><input type="checkbox" data-type="movie" checked />Movies</label>
+              <label><input type="checkbox" data-status="available" checked />Available</label>
+              <label><input type="checkbox" data-status="missing" checked />Missing</label>
+              <label><input type="checkbox" data-status="upcoming" checked />Upcoming</label>
+              <label><input type="checkbox" data-status="unreleased" checked />Unreleased</label>
+              <label class="filter-separator"><input type="checkbox" id="hide-unmonitored" />Hide unmonitored</label>
+            </div>
+            <p id="calendar-warning" role="status" hidden></p>
+            <p id="scroll-hint" class="scroll-hint" hidden>Swipe across to see the full week, or choose List.</p>
+            <div id="calendar" aria-live="polite"></div>
+          </div>
+        </section>
+        <section id="search-section">
+          <div class="section-heading">
+            <div><span class="eyebrow">FIND SOMETHING TO WATCH</span><h2>Search and request</h2></div>
+          </div>
+          <form id="search-form" class="search-bar">
+            <input name="query" maxlength="120" placeholder="Search movies and shows" autocomplete="off" required />
+            <button type="submit" class="search-btn">Search</button>
+          </form>
+          <p id="search-status" role="status"></p>
+          <div id="search-results" class="search-results"></div>
+        </section>
+        <section id="requests-section">
+          <div class="section-heading">
+            <div><span class="eyebrow">THE QUIET QUEUE</span><h2>Your requests</h2></div>
+          </div>
+          <div id="requests" class="requests-list"></div>
+        </section>
+        <p id="nothing" hidden>Both sections are hidden. Open Settings to show them again.</p>
+        <footer><span>Your media. Your server.</span><span id="updated"></span></footer>
+      </main>
+    </div>
+    <dialog id="settings">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>Make it yours</h2>
+          <button aria-label="Close settings">×</button>
+        </div>
+      </form>
+      <p>Display preferences are saved on this device, for this Jellyfin account.</p>
+      <div id="feature-settings"></div>
+      <label class="setting">Default calendar view
+        <select id="default-view">
+          <option value="auto">Month on desktop, list on phones</option>
+          <option value="month">Month</option>
+          <option value="week">Week</option>
+          <option value="day">Day</option>
+          <option value="agenda">Agenda</option>
+          <option value="list">List</option>
+        </select>
+      </label>
+      <div class="connections">
+        <h3>Connections</h3>
+        <p>Test each service with the server's saved settings.</p>
+        <div class="connection-buttons">
+          <button data-test="jellyfin">Jellyfin</button>
+          <button data-test="sonarr">Sonarr</button>
+          <button data-test="radarr">Radarr</button>
+          <button data-test="seerr">Seerr</button>
+        </div>
+        <p id="connection-result" role="status"></p>
+      </div>
+      <small>Connection settings stay on the server, not in your browser.</small>
+    </dialog>
+  </body>
+</html>
