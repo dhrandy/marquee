@@ -117,7 +117,7 @@ export async function recentItems(user) {
       IsPlaceHolder: "false",
       Limit: String(pageSize),
       StartIndex: String(startIndex),
-      Fields: "DateCreated",
+      Fields: "DateCreated,Overview,Genres,Studios,RunTimeTicks",
       EnableUserData: "true",
       EnableTotalRecordCount: "true",
     });
@@ -218,6 +218,23 @@ export async function recentItems(user) {
         image: Boolean(item.ImageTags?.Primary || item.SeriesId),
         art: "placeholder",
         tagline: "",
+        detail: {
+          title: item.SeriesName || item.Name,
+          year: item.ProductionYear ? String(item.ProductionYear) : "",
+          subtitle:
+            item.Type === "Episode"
+              ? `${episode}${item.Name ? `: ${item.Name}` : ""}`
+              : "Movie",
+          overview: item.Overview || "Overview not available yet.",
+          genres: (item.Genres || []).slice(0, 8),
+          network: (item.Studios || [])
+            .slice(0, 3)
+            .map((studio) => studio.Name)
+            .join(", "),
+          runtime: item.RunTimeTicks
+            ? Math.round(item.RunTimeTicks / 600000000)
+            : null,
+        },
       };
     }),
   );

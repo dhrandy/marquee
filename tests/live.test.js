@@ -68,6 +68,11 @@ const service = http.createServer(async (req, res) => {
               ParentIndexNumber: 1,
               IndexNumber: 4,
               Name: "Actual new episode",
+              Overview: "Synthetic overview",
+              Genres: ["Adventure"],
+              Studios: [{ Name: "Example Network" }],
+              RunTimeTicks: 25200000000,
+              ProductionYear: 2026,
               LocationType: "FileSystem",
             },
           ],
@@ -825,6 +830,10 @@ try {
     assert.equal(data.items.length, 1);
     assert.match(data.items[0].subtitle, /Episode 4: Actual new episode/);
     assert.match(data.items[0].link, /id=physical-episode$/);
+    assert.equal(data.items[0].detail.overview, "Synthetic overview");
+    assert.equal(data.items[0].detail.runtime, 42);
+    assert.deepEqual(data.items[0].detail.genres, ["Adventure"]);
+    assert.equal(data.items[0].detail.network, "Example Network");
     assert.equal(JSON.stringify(data).includes("virtual-future"), false);
   });
   await test("calendar proxy rejects forged artwork hosts and isolates image maps by session", async () => {

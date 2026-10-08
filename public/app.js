@@ -11,6 +11,7 @@ const state = {
   requestAccess: { movie: false, tv: false },
   name: "Marquee",
   cityResults: [],
+  recentItems: [],
 };
 const defaults = {
   recent: true,
@@ -224,15 +225,14 @@ function fixBrokenPosters() {
 async function loadRecent() {
   try {
     const { items } = await api("/api/recent");
+    state.recentItems = items;
     $("#recent").innerHTML = items.length
       ? items
           .map((item) => {
             const art = `<div class="poster-art"><img src="${item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${escape(item.art)}.svg`}" alt="${escape(item.title)} poster" loading="lazy"></div>`;
             const time = `<time ${!state.prefs.addedDates ? "hidden" : ""}>${item.added ? escape(new Date(item.added).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })) : "Added date not provided"}</time>`;
             const title = `<h3>${escape(item.title)}</h3>`;
-            const head = item.link
-              ? `<a class="poster-link" href="${escape(item.link)}" target="_blank" rel="noopener noreferrer">${art}${title}</a>`
-              : art + title;
+            const head = `<button class="poster-link recent-detail" data-recent-index="${items.indexOf(item)}" aria-label="Details for ${escape(item.title)}">${art}${title}</button>`;
             return `<article class="poster-card">${head}${time}<p>${escape(item.subtitle)}</p></article>`;
           })
           .join("")
@@ -242,6 +242,21 @@ async function loadRecent() {
     $("#recent").innerHTML = `<p class="empty">${escape(error.message)}</p>`;
   }
 }
+$("#recent").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-recent-index]");
+  if (!button) return;
+  const item = state.recentItems[Number(button.dataset.recentIndex)];
+  if (!item) return;
+  showDetail({
+    title: item.title,
+    subtitle: item.subtitle,
+    ...item.detail,
+    backdrop: item.image
+      ? `/api/image/${encodeURIComponent(item.id)}`
+      : `/art/${item.art || "placeholder"}.svg`,
+    playLink: item.link,
+  });
+});
 function period() {
   let start, end;
   if (state.view === "month") {
@@ -348,6 +363,10 @@ function showDetail(event) {
   };
   if (event.backdrop) image.src = event.backdrop;
   else image.removeAttribute("src");
+  const play = $("#episode-play");
+  play.hidden = !event.playLink;
+  if (event.playLink) play.href = event.playLink;
+  else play.removeAttribute("href");
   $("#episode-trailer").href =
     `https://www.youtube.com/results?search_query=${encodeURIComponent(event.title + " official trailer")}`;
   $("#episode-detail").showModal();

@@ -1057,3 +1057,15 @@ dialog select { min-width: 0; max-width: 100%; }
 
 .poster-art[data-detail-id] { cursor: pointer; }
 .poster-art[data-detail-id]:focus-visible { outline: 2px solid var(--purple); outline-offset: -2px; }
+
+/* A modest desktop size reduction; mobile card sizing is unchanged. */
+@media (min-width: 1200px) {
+  .poster-row, .popular-row { gap: 16px; }
+  .poster-card { flex: 0 0 calc((100% - 96px) / 7); min-width: 0; }
+  .ranked-poster { flex-basis: 160px; }
+  .search-results { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 18px; }
+}
+
+.recent-detail { width: 100%; padding: 0; border: 0; text-align: left; background: transparent; }
+.recent-detail:hover { background: transparent; }
+#episode-play { display: inline-block; padding: 10px 14px; margin: 0 10px 8px 0; border-radius: 8px; background: var(--purple); color: #1b1730; text-decoration: none; }

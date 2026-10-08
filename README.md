@@ -30,6 +30,7 @@ This is a local beta. No application image or public release has been published 
 - Jellyfin username and password login gates all media APIs.
 - Horizontal poster shelf with added date/time, title, and TV season episode counts.
 - Sonarr TV episodes and Radarr movie releases in month, week, day, agenda (next 14 days), or list views. The app remembers the last view used on each device.
+- Recently-added posters open a detail popup with a Play in Jellyfin button that opens the exact movie/episode the card represents. Desktop posters are modestly smaller; mobile sizing is unchanged.
 - Click a TV calendar entry for episode details: cached Sonarr backdrop artwork when supplied, with a solid-background fallback if unavailable, show/year, episode title, network, runtime, genres and overview. The trailer button opens a clearly labeled YouTube search, not an unverified video. Upcoming season premieres are yellow, regular upcoming episodes white, available green, missing red; cinemas remain blue.
 - Monday-first calendar, today highlight, previous/next period, refresh, and type/status filters. An optional hide-unmonitored filter drops unmonitored Sonarr/Radarr entries. Movies can appear twice: cinema and digital/physical releases are separate entries.
 - Green: available file. Red: release has passed but the file is missing. Yellow: season premiere. White: upcoming TV. Gray: unreleased movie.

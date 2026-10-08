@@ -862,3 +862,75 @@ for (const width of [1440, 393, 280]) {
     await expect(page.locator("#episode-detail")).toBeVisible();
   });
 }
+
+for (const width of [1440, 1660, 393, 280]) {
+  test(`denser poster preview at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.route("**/api/recent", async (route) => {
+      const data = await (await route.fetch()).json();
+      const original = data.items;
+      data.items = Array.from({ length: 18 }, (_, i) => ({
+        ...original[i % original.length],
+        id: `synthetic-${i}`,
+      }));
+      await route.fulfill({ json: data });
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Explore demo" }).click();
+    await expect(page.locator(".poster-card")).toHaveCount(18);
+    const count = await page.locator(".poster-card").evaluateAll((cards) => {
+      const right = document
+        .querySelector(".poster-row")
+        .getBoundingClientRect().right;
+      return cards.filter(
+        (card) => card.getBoundingClientRect().right <= right + 1,
+      ).length;
+    });
+    if (width >= 1200) expect(count).toBe(7);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width);
+    await page
+      .locator("#recent-section")
+      .screenshot({ path: `${shots}/marquee-density-recent-${width}.png` });
+    await page
+      .locator("#popular-section")
+      .screenshot({ path: `${shots}/marquee-density-popular-${width}.png` });
+  });
+}
+
+for (const width of [1440, 393, 280]) {
+  test(`recent popup uses exact media deep link at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.route("**/api/recent", async (route) => {
+      const data = await (await route.fetch()).json();
+      data.items[0].link =
+        "https://media.example.test/web/index.html#!/details?id=actual-episode";
+      data.items[0].detail = {
+        title: "The Last Signal",
+        year: "2026",
+        subtitle: "Episode 4: Arrival",
+        overview: "A fictional journey begins.",
+        genres: ["Adventure"],
+        runtime: 42,
+      };
+      await route.fulfill({ json: data });
+    });
+    await login(page);
+    await page.locator(".recent-detail").first().click();
+    await expect(page.locator("#episode-detail")).toBeVisible();
+    await expect(page.locator("#episode-play")).toHaveAttribute(
+      "href",
+      "https://media.example.test/web/index.html#!/details?id=actual-episode",
+    );
+    await page
+      .locator("#episode-detail")
+      .screenshot({ path: `${shots}/marquee-recent-popup-${width}.png` });
+    await page.keyboard.press("Escape");
+    await page.locator("#popular-movies [data-detail-id]").first().click();
+    await expect(page.locator("#episode-play")).toBeHidden();
+    await expect(page.locator("#episode-play")).not.toHaveAttribute("href");
+  });
+}
