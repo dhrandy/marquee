@@ -40,6 +40,39 @@ const service = http.createServer(async (req, res) => {
     }
     if (url.searchParams.has("ParentId"))
       return res.end(JSON.stringify({ TotalRecordCount: 4 }));
+    if (user === "physical-viewer") {
+      assert.equal(url.searchParams.get("ExcludeLocationTypes"), "Virtual");
+      assert.equal(url.searchParams.get("IsMissing"), "false");
+      assert.equal(url.searchParams.get("IsPlaceHolder"), "false");
+      return res.end(
+        JSON.stringify({
+          Items: [
+            {
+              Id: "virtual-future",
+              Type: "Episode",
+              SeasonId: "s1",
+              SeriesId: "series1",
+              SeriesName: "Example show",
+              ParentIndexNumber: 1,
+              IndexNumber: 8,
+              IsMissing: true,
+              LocationType: "Virtual",
+            },
+            {
+              Id: "physical-episode",
+              Type: "Episode",
+              SeasonId: "s1",
+              SeriesId: "series1",
+              SeriesName: "Example show",
+              ParentIndexNumber: 1,
+              IndexNumber: 4,
+              Name: "Actual new episode",
+              LocationType: "FileSystem",
+            },
+          ],
+        }),
+      );
+    }
     if (user === "bulk-viewer") {
       const allItems = Array.from({ length: 220 }, (_, i) => ({
         Id: `bulk-${i}`,
@@ -734,6 +767,17 @@ try {
     });
     assert.equal(image.status, 200);
     assert.match(image.headers.get("content-type"), /image/);
+  });
+  await test("recent card and deep link use the same physical episode, never missing metadata", async () => {
+    const login = await signin("physical-viewer");
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const data = await (
+      await fetch(`${base}/api/recent`, { headers: { Cookie: cookie } })
+    ).json();
+    assert.equal(data.items.length, 1);
+    assert.match(data.items[0].subtitle, /Episode 4: Actual new episode/);
+    assert.match(data.items[0].link, /id=physical-episode$/);
+    assert.equal(JSON.stringify(data).includes("virtual-future"), false);
   });
   await test("bad passwords are rejected, repeated attempts are limited", async () => {
     for (let i = 0; i < 10; i++)

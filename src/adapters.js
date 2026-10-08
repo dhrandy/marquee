@@ -112,6 +112,9 @@ export async function recentItems(user) {
       SortOrder: "Descending",
       Recursive: "true",
       IncludeItemTypes: "Movie,Episode",
+      ExcludeLocationTypes: "Virtual",
+      IsMissing: "false",
+      IsPlaceHolder: "false",
       Limit: String(pageSize),
       StartIndex: String(startIndex),
       Fields: "DateCreated",
@@ -123,6 +126,12 @@ export async function recentItems(user) {
     });
     const items = data.Items || [];
     for (const item of items) {
+      if (
+        item.LocationType === "Virtual" ||
+        item.IsMissing === true ||
+        item.IsPlaceHolder === true
+      )
+        continue;
       if (item.Type === "Episode") {
         if (!Number.isInteger(item.ParentIndexNumber) && item.SeasonId) {
           if (!seasonNumbers.has(item.SeasonId)) {
@@ -166,6 +175,9 @@ export async function recentItems(user) {
           UserId: user.id,
           ParentId: item.SeasonId,
           IncludeItemTypes: "Episode",
+          ExcludeLocationTypes: "Virtual",
+          IsMissing: "false",
+          IsPlaceHolder: "false",
           Limit: "0",
           EnableTotalRecordCount: "true",
         });
