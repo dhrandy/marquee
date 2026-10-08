@@ -60,6 +60,66 @@ Open the configured port through an HTTPS reverse proxy. `COOKIE_SECURE=true` re
 
 The initial beta copies the mounted source into a temporary writable container directory and installs the locked production dependencies at startup. This needs internet access to the package registry. Sessions live in memory, so a restart signs users out. The `marquee-settings` volume keeps the administrator-set display name across container restarts. Display and weather preferences remain per account in the browser. Do not delete the settings volume when upgrading.
 
+### CasaOS or standalone stack (no clone needed)
+
+Use `compose.casaos.yaml` when pasting a stack into CasaOS or a Docker manager without a source checkout. No source folder or `/source` mount is needed. Put the existing connection variables in the manager's Environment tab or `.env`. The container downloads this repository's `main` archive into temporary storage, installs locked production dependencies, and starts the app. Every restart downloads current main; recreate/restart to update. Startup needs HTTPS access to GitHub and npm. A failed download/install stops startup rather than running incomplete code. Settings stay in the named volume.
+
+```yaml
+services:
+  marquee:
+    image: node:22-alpine
+    container_name: marquee
+    working_dir: /app
+    user: node
+    init: true
+    command:
+      - sh
+      - -c
+      - set -eu; wget -O /app/source.tar.gz https://codeload.github.com/dhrandy/marquee/tar.gz/refs/heads/main; tar -xzf /app/source.tar.gz -C /app --strip-components=1; rm /app/source.tar.gz; npm ci --omit=dev --ignore-scripts --no-audit --no-fund; exec node src/server.js
+    ports:
+      - "${MARQUEE_PORT}:8739"
+    environment:
+      PORT: "8739"
+      TZ: ${TZ}
+      DEMO_MODE: ${DEMO_MODE}
+      COOKIE_SECURE: ${COOKIE_SECURE}
+      JELLYFIN_URL: ${JELLYFIN_URL}
+      SONARR_URL: ${SONARR_URL}
+      SONARR_API_KEY: ${SONARR_API_KEY}
+      RADARR_URL: ${RADARR_URL}
+      RADARR_API_KEY: ${RADARR_API_KEY}
+      SEERR_URL: ${SEERR_URL}
+      SEERR_API_KEY: ${SEERR_API_KEY}
+      JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
+    volumes:
+      - marquee-settings:/home/node
+    tmpfs:
+      - /app:uid=1000,gid=1000,mode=0700
+      - /home/node/.npm:uid=1000,gid=1000,mode=0700
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8739/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+
+volumes:
+  marquee-settings:
+```
+
+The original `compose.yaml` below is for an existing local/git checkout. Do not use its source mount with an empty CasaOS folder.
+
 ### Copy-paste compose
 
 ```yaml
