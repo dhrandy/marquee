@@ -19,6 +19,8 @@ test("private APIs require login, writes reject cross-origin, and headers preven
     "/api/calendar",
     "/api/weather",
     "/api/me",
+    "/api/seerr/popular",
+    "/api/calendar-image/anything",
   ]) {
     expect((await request.get(path)).status()).toBe(401);
   }
@@ -198,10 +200,10 @@ test("demo search, request flow, requests list, and settings toggles", async ({
   await expect(page.locator("#requests-section .request-row")).toHaveCount(3);
   await page.getByPlaceholder("Search movies and shows").fill("orbit");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.locator(".result-card h3")).toHaveText(["Orbit Nine"]);
+  await expect(page.locator("#search-results .result-card h3")).toHaveText(["Orbit Nine"]);
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Request", exact: true }).click();
-  await expect(page.locator(".result-card .requested-label")).toHaveText(
+  await page.locator("#search-results").getByRole("button", { name: "Request", exact: true }).click();
+  await expect(page.locator("#search-results .result-card .requested-label")).toHaveText(
     "Requested",
   );
   await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -242,10 +244,10 @@ test("seerr titles are rendered as text, not executable markup", async ({
   await login(page);
   await page.getByPlaceholder("Search movies and shows").fill("anything");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.locator(".result-card h3")).toHaveText(
+  await expect(page.locator("#search-results .result-card h3")).toHaveText(
     "<img src=x onerror=alert(1)>",
   );
-  await expect(page.locator(".result-card h3 img")).toHaveCount(0);
+  await expect(page.locator("#search-results .result-card h3 img")).toHaveCount(0);
   await expect(page.locator(".result-overview script")).toHaveCount(0);
 });
 
@@ -275,7 +277,7 @@ test("search section screenshot for review", async ({ page }) => {
   await login(page);
   await page.getByPlaceholder("Search movies and shows").fill("o");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.locator(".result-card")).toHaveCount(3);
+  await expect(page.locator("#search-results .result-card")).toHaveCount(3);
   await page.mouse.move(0, 0);
   const section = page.locator("#search-section");
   await section.scrollIntoViewIfNeeded();
@@ -359,13 +361,13 @@ for (const width of [1440, 393, 320, 280]) {
     await login(page);
     await page.getByPlaceholder("Search movies and shows").fill("o");
     await page.getByRole("button", { name: "Search", exact: true }).click();
-    await expect(page.locator(".result-card")).toHaveCount(3);
+    await expect(page.locator("#search-results .result-card")).toHaveCount(3);
     const section = page.locator("#search-section");
     await section.scrollIntoViewIfNeeded();
     await page.mouse.move(0, 0);
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(300);
-    const geometry = await page.locator(".result-card").evaluateAll(cards => cards.map(card => {
+    const geometry = await page.locator("#search-results .result-card").evaluateAll(cards => cards.map(card => {
       const box = card.getBoundingClientRect();
       const footer = card.querySelector(".result-action").getBoundingClientRect();
       const action = card.querySelector(".result-action > *").getBoundingClientRect();
@@ -393,16 +395,16 @@ test("search footers stay aligned with long titles, missing overviews, and after
   await login(page);
   await page.getByPlaceholder("Search movies and shows").fill("test");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.locator(".result-card")).toHaveCount(3);
-  const centers = () => page.locator(".result-action > *").evaluateAll(actions => actions.map(action => {
+  await expect(page.locator("#search-results .result-card")).toHaveCount(3);
+  const centers = () => page.locator("#search-results .result-action > *").evaluateAll(actions => actions.map(action => {
     const box = action.getBoundingClientRect();
     return box.top + box.height / 2;
   }));
   let values = await centers();
   expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1);
   page.once("dialog", dialog => dialog.accept());
-  await page.getByRole("button", { name: "Request", exact: true }).click();
-  await expect(page.locator(".result-card .requested-label")).toHaveCount(2);
+  await page.locator("#search-results").getByRole("button", { name: "Request", exact: true }).click();
+  await expect(page.locator("#search-results .result-card .requested-label")).toHaveCount(2);
   values = await centers();
   expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1);
 });
@@ -445,8 +447,8 @@ test("Seerr request buttons reflect movie/TV access and escape denial text", asy
   await login(page);
   await page.getByPlaceholder("Search movies and shows").fill("o");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.locator(".request-btn")).toHaveCount(1);
-  await expect(page.locator(".request-unavailable")).toHaveText("TV requests are not permitted by Seerr.");
+  await expect(page.locator("#search-results .request-btn")).toHaveCount(1);
+  await expect(page.locator("#search-results .request-unavailable")).toHaveText("TV requests are not permitted by Seerr.");
 });
 
 for (const width of [1440, 393, 320, 280]) {
@@ -462,5 +464,48 @@ for (const width of [1440, 393, 320, 280]) {
     expect((await request.get('/favicon.ico')).status()).toBe(200);
     await page.goto('/favicon.png');
     await page.screenshot({ path: `${shots}/marquee-favicon-${width}.png` });
+  });
+}
+
+for (const width of [1440, 393, 320, 280]) {
+  test(`episode details and premiere colors at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await login(page);
+    await page.getByRole('button', { name: 'Agenda', exact: true }).click();
+    const premiere = page.locator('.entry.premiere').first();
+    await expect(premiere).toBeVisible();
+    await expect(premiere.locator('.entry-status')).toContainText('Season premiere');
+    expect(await premiere.evaluate(el => getComputedStyle(el).color)).toBe('rgb(239, 207, 114)');
+    const episode = page.locator('.entry[data-event]').first();
+    await episode.click();
+    const modal = page.locator('#episode-detail');
+    await expect(modal).toBeVisible();
+    await expect(page.locator('#episode-title')).toContainText('(2026)');
+    await expect(page.locator('#episode-subtitle')).toContainText('S');
+    await expect(page.locator('#episode-genres')).toContainText('Adventure');
+    await expect(page.locator('#episode-meta')).toContainText('Sample Network · 48 min');
+    await expect(page.locator('#episode-trailer')).toHaveAttribute('href', /youtube.com\/results\?search_query=/);
+    expect(await modal.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await modal.screenshot({ path: `${shots}/marquee-episode-${width}.png` });
+    await page.getByRole('button', { name: 'Close episode details' }).click();
+    await expect(modal).not.toBeVisible();
+    await episode.focus();
+    await page.keyboard.press('Enter');
+    await expect(modal).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(modal).not.toBeVisible();
+  });
+}
+
+for (const width of [1440, 393, 320, 280]) {
+  test(`popular poster rows at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await login(page);
+    await expect(page.locator('#popular-movies .result-card')).toHaveCount(10);
+    await expect(page.locator('#popular-tv .result-card')).toHaveCount(10);
+    await expect(page.locator('#popular-movies')).toContainText('Available');
+    await expect(page.locator('#popular-movies')).toContainText('Requested');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.locator('#popular-section').screenshot({ path: `${shots}/marquee-popular-${width}.png` });
   });
 }

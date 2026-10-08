@@ -24,6 +24,7 @@ const defaults = {
   search: true,
   hideUnmonitored: false,
   requests: true,
+  popular: true,
   defaultView: "auto",
 };
 const statusLabel = {
@@ -110,6 +111,7 @@ function applyPrefs() {
   $("#recent-section").hidden = !state.prefs.recent;
   $("#calendar-section").hidden = !state.prefs.calendar;
   $("#search-section").hidden = !state.prefs.search;
+  $("#popular-section").hidden = !state.prefs.popular;
   $("#requests-section").hidden = !state.prefs.requests;
   $("#legend").hidden = !state.prefs.legend;
   $(".recent-controls").hidden = !state.prefs.shelfNavigation;
@@ -126,6 +128,7 @@ function buildSettings() {
     calendar: "Release calendar",
     search: "Search and requests",
     requests: "Request status list",
+    popular: "Top 10 movies and TV",
     legend: "Calendar status legend",
     addedDates: "Poster added dates",
     shelfNavigation: "Poster navigation arrows",
@@ -142,6 +145,7 @@ function buildSettings() {
       state.prefs[el.dataset.pref] = el.checked;
       persist();
       if (el.dataset.pref === "weather") saveWeather();
+      if (el.dataset.pref === "popular" && el.checked) loadPopular();
       if (el.dataset.pref === "requests" && el.checked) loadRequests();
     }),
   );
@@ -183,7 +187,12 @@ async function enter(name) {
     tv: me.canRequest,
   };
   $("#display-name-settings").hidden = !me.isAdmin;
-  await Promise.all([loadRecent(), loadCalendar(), loadRequests()]);
+  await Promise.all([
+    loadRecent(),
+    loadCalendar(),
+    loadRequests(),
+    loadPopular(),
+  ]);
 }
 function fixBrokenPosters() {
   all(".poster-art img").forEach((image) =>
@@ -288,8 +297,51 @@ function eventHtml(event) {
     hour: "numeric",
     minute: "2-digit",
   });
-  return `<article class="entry ${escape(event.status)}"><span class="entry-status">${icon}${escape(event.type === "movie" ? statusLabel[event.status] : `${time} · ${statusLabel[event.status]}`)}</span><h4>${escape(event.title)}</h4><p>${escape(event.subtitle)}</p></article>`;
+  const premiere =
+    event.premiere && !["available", "missing"].includes(event.status);
+  return `<article class="entry ${escape(event.status)}${premiere ? " premiere" : ""}"${event.type === "tv" ? ` role="button" tabindex="0" data-event="${escape(event.id)}" aria-label="Details for ${escape(event.title)}"` : ""}><span class="entry-status">${icon}${escape(event.type === "movie" ? statusLabel[event.status] : `${time} · ${premiere ? "Season premiere" : statusLabel[event.status]}`)}</span><h4>${escape(event.title)}</h4><p>${escape(event.subtitle)}</p></article>`;
 }
+function openEpisode(id) {
+  const event = state.events.find(
+    (event) => event.id === id && event.type === "tv",
+  );
+  if (!event) return;
+  $("#episode-title").textContent =
+    `${event.title}${event.year ? ` (${event.year})` : ""}`;
+  $("#episode-subtitle").textContent = event.subtitle;
+  $("#episode-meta").textContent = [
+    event.network,
+    event.runtime ? `${event.runtime} min` : null,
+    statusLabel[event.status],
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  $("#episode-overview").textContent =
+    event.overview || "Overview not available yet.";
+  $("#episode-genres").innerHTML = (event.genres || [])
+    .map((genre) => `<span>${escape(genre)}</span>`)
+    .join("");
+  const image = $("#episode-backdrop");
+  image.hidden = !event.backdrop;
+  if (event.backdrop) image.src = event.backdrop;
+  $("#episode-trailer").href =
+    `https://www.youtube.com/results?search_query=${encodeURIComponent(event.title + " official trailer")}`;
+  $("#episode-detail").showModal();
+}
+$("#calendar").addEventListener("click", (event) => {
+  const card = event.target.closest("[data-event]");
+  if (card) openEpisode(card.dataset.event);
+});
+$("#calendar").addEventListener("keydown", (event) => {
+  const card = event.target.closest("[data-event]");
+  if (card && ["Enter", " "].includes(event.key)) {
+    event.preventDefault();
+    openEpisode(card.dataset.event);
+  }
+});
+$("#episode-close").addEventListener("click", () =>
+  $("#episode-detail").close(),
+);
 function renderCalendar() {
   const { start, end } = period();
   const events = visibleEvents();
@@ -408,6 +460,24 @@ function renderSearch(results) {
     : '<p class="empty">Nothing found. Try another title.</p>';
   fixBrokenPosters();
 }
+async function loadPopular() {
+  if (!state.prefs.popular) return;
+  try {
+    const data = await api("/api/seerr/popular");
+    for (const type of ["movies", "tv"]) {
+      $("#popular-" + type).innerHTML = data[type]
+        .map(
+          (item, i) =>
+            `<div class="ranked-poster"><span class="popular-rank">${i + 1}</span>${resultCardHtml(item)}</div>`,
+        )
+        .join("");
+    }
+    $("#popular-status").textContent = "";
+    fixBrokenPosters();
+  } catch (error) {
+    $("#popular-status").textContent = error.message;
+  }
+}
 function requestStatus(r) {
   if (r.availability === 5) return ["Available", "available"];
   if (r.status === 2) return ["Approved", "upcoming"];
@@ -419,7 +489,7 @@ function renderRequests(requests) {
     ? requests
         .map((r) => {
           const [label, cls] = requestStatus(r);
-          return `<div class="request-row"><span class="status-dot ${cls}"></span><div class="grow"><strong>${escape(r.title)}</strong><small>${r.mediaType === "movie" ? "Movie" : "TV"}${r.createdAt ? ` · requested ${escape(new Date(r.createdAt).toLocaleDateString([], { month: "short", day: "numeric" }))}` : ""}</small></div><span class="request-status-label">${label}</span></div>`;
+          return `<div class="request-row"><span class="status-dot ${cls}"></span><div class="grow"><strong>${escape(r.title)}</strong><small>${r.mediaType === "movie" ? "Movie" : "TV"} · by ${escape(r.requestedBy || "Unknown requester")}${r.createdAt ? ` · requested ${escape(new Date(r.createdAt).toLocaleDateString([], { month: "short", day: "numeric" }))}` : ""}</small></div><span class="request-status-label">${label}</span></div>`;
         })
         .join("")
     : '<p class="empty">No requests yet.</p>';
@@ -623,7 +693,7 @@ $("#search-form").addEventListener("submit", async (event) => {
     $("#search-results").innerHTML = "";
   }
 });
-$("#search-results").addEventListener("click", async (event) => {
+$("#search-section").addEventListener("click", async (event) => {
   const button = event.target.closest("[data-request]");
   if (!button) return;
   const title = button.dataset.title;

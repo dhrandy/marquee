@@ -180,3 +180,36 @@ test("upstream distinguishes API failures without exposing private response bodi
     globalThis.fetch = original;
   }
 });
+
+test("episode detail metadata and premiere flag preserve availability", () => {
+  const [episode] = normalizeEpisodes(
+    [
+      {
+        id: 4,
+        seasonNumber: 2,
+        episodeNumber: 1,
+        title: "New beginning",
+        overview: "Episode overview",
+        airDateUtc: "2026-10-10",
+        hasFile: false,
+        series: {
+          title: "Sample",
+          year: 2026,
+          genres: ["Drama"],
+          images: [
+            {
+              coverType: "fanart",
+              remoteUrl: "https://artworks.thetvdb.com/example.jpg",
+            },
+          ],
+        },
+      },
+    ],
+    now,
+  );
+  assert.equal(episode.status, "upcoming");
+  assert.equal(episode.premiere, true);
+  assert.equal(episode.overview, "Episode overview");
+  assert.equal(episode.year, 2026);
+  assert.deepEqual(episode.genres, ["Drama"]);
+});

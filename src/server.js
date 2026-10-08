@@ -10,6 +10,7 @@ import {
   calendar,
   jellyfinHeaders,
   seerrSearch,
+  seerrPopular,
   seerrIdentity,
   seerrRequest,
   seerrRequests,
@@ -297,6 +298,62 @@ app.post("/api/display-name", requireUser, async (req, res) => {
     });
   }
 });
+app.get("/api/seerr/popular", requireUser, async (req, res) => {
+  if (demo) {
+    const sample = demoSearch("");
+    const movieNames = [
+      "The Last Signal",
+      "Orbit Nine",
+      "Faraway Station",
+      "Paper Skies",
+      "The Long Weekend",
+      "Quiet Water",
+      "City of Glass",
+      "Red Horizon",
+      "The Way Back",
+      "Second Sunrise",
+    ];
+    const tvNames = [
+      "North of Nowhere",
+      "After Hours",
+      "Wild Coast",
+      "Small Town Radio",
+      "A Season Apart",
+      "The Crossing",
+      "Night Lines",
+      "Open Roads",
+      "The Observatory",
+      "Silver Pines",
+    ];
+    const arts = ["signal", "orbit", "moons", "north", "hours", "coast"];
+    const list = (type) =>
+      Array.from({ length: 10 }, (_, i) => ({
+        ...sample.find((item) => item.mediaType === type),
+        id: 1000 + i + (type === "tv" ? 100 : 0),
+        title: (type === "tv" ? tvNames : movieNames)[i],
+        poster: i === 0 ? (type === "tv" ? "north" : "signal") : i === 1 ? (type === "tv" ? "hours" : "orbit") : "placeholder",
+        availability: i === 0 ? 5 : i === 1 ? 2 : null,
+        requested: i === 1,
+      }));
+    return res.json({
+      movies: list("movie"),
+      tv: list("tv"),
+      requestAccess: { movie: true, tv: true },
+    });
+  }
+  try {
+    const access = await requestAccess(req.user);
+    if (access.error) return res.status(403).json({ error: access.error });
+    res.json({
+      ...(await seerrPopular(access.id)),
+      requestAccess: publicAccess(access),
+    });
+  } catch {
+    res.status(502).json({
+      error: "Popular titles are temporarily unavailable from Seerr.",
+    });
+  }
+});
 app.get("/api/seerr/search", requireUser, async (req, res) => {
   const query = String(req.query.query ?? "");
   const page = Number(req.query.page || 1);
@@ -446,11 +503,58 @@ app.get("/api/calendar", requireUser, async (req, res) => {
   const { start, end } = req.query;
   if (!validateRange(start, end))
     return res.status(400).json({ error: "Invalid calendar range." });
-  res.json(
-    demo
-      ? { events: demoEvents(start, end), warnings: [] }
-      : await calendar(start, end),
-  );
+  const data = demo
+    ? { events: demoEvents(start, end), warnings: [] }
+    : await calendar(start, end);
+  req.user.calendarImages = new Map();
+  for (const event of data.events) {
+    if (event.backdrop) {
+      try {
+        const url = new URL(event.backdrop);
+        if (
+          url.protocol === "https:" &&
+          ["artworks.thetvdb.com", "image.tmdb.org"].includes(url.hostname) &&
+          !url.username &&
+          !url.password &&
+          !url.port
+        )
+          req.user.calendarImages.set(event.id, url.href);
+      } catch {
+        /* Ignore invalid artwork URLs from upstream metadata. */
+      }
+    }
+    event.backdrop = req.user.calendarImages.has(event.id)
+      ? `/api/calendar-image/${encodeURIComponent(event.id)}`
+      : demo && event.type === "tv"
+        ? "/art/north.svg"
+        : null;
+  }
+  res.json(data);
+});
+app.get("/api/calendar-image/:id", requireUser, async (req, res) => {
+  const url = req.user.calendarImages?.get(req.params.id);
+  if (!url) return res.sendStatus(404);
+  try {
+    const response = await fetch(url, {
+      redirect: "error",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (
+      !response.ok ||
+      !/^image\/(jpeg|png|webp)/.test(
+        response.headers.get("content-type") || "",
+      )
+    )
+      return res.sendStatus(502);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > 5 * 1024 * 1024) return res.sendStatus(502);
+    res
+      .type(response.headers.get("content-type"))
+      .set("Cache-Control", "private, max-age=3600")
+      .send(bytes);
+  } catch {
+    res.sendStatus(502);
+  }
 });
 const weatherCache = new Map();
 const weatherAttempts = new Map();

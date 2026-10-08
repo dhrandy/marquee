@@ -131,6 +131,28 @@ const service = http.createServer(async (req, res) => {
         tv: { restricted: false },
       }),
     );
+  if (
+    ["/api/v1/discover/movies", "/api/v1/discover/tv"].includes(url.pathname)
+  ) {
+    assert.equal(req.headers["x-api-user"], "4");
+    assert.equal(req.headers["x-api-key"], "seerr-mock");
+    assert.equal(url.searchParams.get("sortBy"), "popularity.desc");
+    return res.end(
+      JSON.stringify({
+        results: Array.from({ length: 20 }, (_, i) => ({
+          id: 200 + i,
+          mediaType: url.pathname.endsWith("tv") ? "tv" : "movie",
+          title: `Popular ${i}`,
+          name: `Popular ${i}`,
+          posterPath: "/abc.jpg",
+          mediaInfo: {
+            status: i === 0 ? 5 : 2,
+            requests: i === 0 ? [] : [{ id: 8 }],
+          },
+        })),
+      }),
+    );
+  }
   if (url.pathname === "/api/v1/search")
     return res.end(
       JSON.stringify({
@@ -157,6 +179,10 @@ const service = http.createServer(async (req, res) => {
             status: 2,
             createdAt: "2026-10-06T10:00:00Z",
             type: "movie",
+            requestedBy: {
+              displayName: "Sample viewer",
+              email: "private@example.test",
+            },
             media: { mediaType: "movie", tmdbId: 9001, status: 3 },
           },
         ],
@@ -241,7 +267,10 @@ try {
     const data = JSON.parse(text);
     assert.equal(data.items.length, 1);
     assert.equal(data.items[0].title, "alice private series");
-    assert.equal(data.items[0].subtitle, "Season 2 / 4 Episodes · Episode 1: <script>alert(1)</script>");
+    assert.equal(
+      data.items[0].subtitle,
+      "Season 2 / 4 Episodes · Episode 1: <script>alert(1)</script>",
+    );
     assert.match(
       data.items[0].link,
       /^https:\/\/jellyfin\.example\.test\/web\/index\.html#!\/details\?id=episode-1/,
@@ -348,6 +377,11 @@ try {
     ).json();
     assert.equal(requests.requests[0].title, "Requested Film");
     assert.equal(requests.requests[0].status, 2);
+    assert.equal(requests.requests[0].requestedBy, "Sample viewer");
+    assert.equal(
+      JSON.stringify(requests).includes("private@example.test"),
+      false,
+    );
     const req = await fetch(`${base}/api/seerr/request`, {
       method: "POST",
       headers: {
@@ -635,6 +669,28 @@ try {
       ).readFile("/tmp/marquee-live-test-settings/settings.json", "utf8"),
     );
     assert.deepEqual(disk.weatherByUser.alice, value);
+  });
+  await test("popular lists use linked Seerr user and return ten titles per type with availability", async () => {
+    const login = await signin("alice");
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const response = await fetch(`${base}/api/seerr/popular`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.equal(data.movies.length, 10);
+    assert.equal(data.tv.length, 10);
+    assert.equal(data.movies[0].availability, 5);
+    assert.equal(data.tv[1].requested, true);
+    assert.equal(data.tv[0].mediaType, "tv");
+    assert.equal(
+      (
+        await fetch(`${base}/api/calendar-image/arbitrary`, {
+          headers: { Cookie: cookie },
+        })
+      ).status,
+      404,
+    );
   });
   await test("bad passwords are rejected, repeated attempts are limited", async () => {
     for (let i = 0; i < 10; i++)

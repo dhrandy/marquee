@@ -30,11 +30,13 @@ This is a local beta. No application image or public release has been published 
 - Jellyfin username and password login gates all media APIs.
 - Horizontal poster shelf with added date/time, title, and TV season episode counts.
 - Sonarr TV episodes and Radarr movie releases in month, week, day, agenda (next 14 days), or list views. The app remembers the last view used on each device.
+- Click a TV calendar entry for episode details: backdrop artwork when supplied by Sonarr, show/year, episode title, network, runtime, genres and overview. The trailer button opens a clearly labeled YouTube search, not an unverified video. Upcoming season premieres are yellow, regular upcoming episodes white, available green, missing red; cinemas remain blue.
 - Monday-first calendar, today highlight, previous/next period, refresh, and type/status filters. An optional hide-unmonitored filter drops unmonitored Sonarr/Radarr entries. Movies can appear twice: cinema and digital/physical releases are separate entries.
-- Green: available file. Red: release has passed but the file is missing. Yellow: upcoming TV. Gray: unreleased movie.
+- Green: available file. Red: release has passed but the file is missing. Yellow: season premiere. White: upcoming TV. Gray: unreleased movie.
 - Optional current weather and three-day forecast, off by default. Choose a city and Fahrenheit/Celsius in Settings, saved server-side per Jellyfin account. Open-Meteo weather and city search are free for non-commercial use, with no API key or account.
 - Jellyfin administrators can change the shared display name in Settings. It defaults to Marquee and survives container restarts.
-- A quiet "Your requests" section lists recent request status. No badges, no counts.
+- Top 10 popular movies and TV shows come from Seerr, with request/availability indicators based on its latest library scan. Both poster rows can be hidden in Settings.
+- A quiet "Your requests" section lists recent request status and requester display names. The list remains scoped to the signed-in user. No badges, no counts.
 - Poster and title taps deep-link into Jellyfin's web player through the external URL setting.
 - Settings includes per-service connection tests with real error messages (DNS failure, connection refused, timeout, or HTTP status).
 - Installable as a PWA (manifest and service worker). Only static assets are cached; media API responses are never cached.

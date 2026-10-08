@@ -71,7 +71,7 @@
             <div><span class="eyebrow">WHAT'S ON THE HORIZON</span><h2>Release calendar</h2></div>
             <div id="legend" class="legend">
               <span class="cinema">● In cinemas</span><span class="available">● Available</span><span class="missing">● Missing</span>
-              <span class="upcoming">● Upcoming</span><span class="unreleased">○ Unreleased</span>
+              <span class="premiere">● Premiere</span><span class="upcoming">● Upcoming</span><span class="unreleased">○ Unreleased</span>
             </div>
           </div>
           <div class="calendar-shell">
@@ -119,6 +119,7 @@
           </form>
           <p id="search-status" role="status"></p>
           <div id="search-results" class="search-results"></div>
+          <div id="popular-section" class="popular-section"><div class="popular-heading"><span class="eyebrow">POPULAR RIGHT NOW</span><p>Top 10 from Seerr · availability follows its latest library scan</p></div><p id="popular-status" role="status"></p><h3>Top 10 movies</h3><div id="popular-movies" class="popular-row"></div><h3>Top 10 TV shows</h3><div id="popular-tv" class="popular-row"></div></div>
         </section>
         <section id="requests-section">
           <div class="section-heading">
@@ -179,6 +180,10 @@
         <p id="connection-result" role="status"></p>
       </div>
       <small>Connection settings stay on the server, not in your browser.</small>
+    </dialog>
+    <dialog id="episode-detail" aria-labelledby="episode-title">
+      <div class="episode-hero"><img id="episode-backdrop" alt="" hidden /><div class="episode-heading"><h2 id="episode-title"></h2><p id="episode-subtitle"></p></div><button id="episode-close" aria-label="Close episode details">×</button></div>
+      <div class="episode-body"><div id="episode-genres"></div><p id="episode-meta" class="episode-meta"></p><p id="episode-overview"></p><a id="episode-trailer" target="_blank" rel="noopener noreferrer">Find trailer on YouTube ↗</a></div>
     </dialog>
   </body>
 </html>

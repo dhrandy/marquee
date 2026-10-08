@@ -341,6 +341,25 @@ export async function seerrSearch(query, page, userId) {
   return normalizeSeerrResults(data);
 }
 
+export async function seerrPopular(userId) {
+  const [movies, tv] = await Promise.all(
+    ["movies", "tv"].map(async (type) => {
+      const data = await upstream(
+        process.env.SEERR_URL,
+        `/api/v1/discover/${type}?page=1&sortBy=popularity.desc`,
+        {
+          headers: {
+            "X-Api-Key": process.env.SEERR_API_KEY,
+            "X-API-User": String(userId),
+          },
+        },
+      );
+      return normalizeSeerrResults(data).slice(0, 10);
+    }),
+  );
+  return { movies, tv };
+}
+
 export async function seerrRequest(mediaType, mediaId, userId) {
   return upstream(process.env.SEERR_URL, "/api/v1/request", {
     method: "POST",

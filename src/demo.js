@@ -76,6 +76,12 @@ export function demoEvents(start, end) {
         date: `${date}T${time}:00`,
         demoLocal: true,
         monitored,
+        premiere: type === "tv" && /S[0-9]+E01/.test(subtitle),
+        year: 2026,
+        network: "Sample Network",
+        runtime: 48,
+        genres: type === "tv" ? ["Adventure", "Drama"] : [],
+        overview: "A quiet discovery changes everything for a small community. Old friendships are tested as the story unfolds.",
       });
     if ([2, 7, 14, 21, 28].includes(n)) {
       add(
@@ -177,6 +183,7 @@ export const demoRequests = [
     mediaType: "movie",
     status: 2,
     availability: 3,
+    requestedBy: "Demo viewer",
     createdAt: "2026-10-06T19:00:00Z",
   },
   {
@@ -185,6 +192,7 @@ export const demoRequests = [
     mediaType: "tv",
     status: 1,
     availability: 2,
+    requestedBy: "Demo viewer",
     createdAt: "2026-10-05T21:00:00Z",
   },
   {
@@ -193,6 +201,7 @@ export const demoRequests = [
     mediaType: "movie",
     status: 2,
     availability: 5,
+    requestedBy: "Demo viewer",
     createdAt: "2026-10-02T18:00:00Z",
   },
 ];

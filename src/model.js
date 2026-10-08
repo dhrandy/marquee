@@ -22,6 +22,19 @@ export function normalizeEpisodes(rows, now = new Date()) {
       date: row.airDateUtc,
       status: episodeStatus(row, now),
       monitored: Boolean(row.monitored && (row.series?.monitored ?? true)),
+      premiere: row.episodeNumber === 1 && row.seasonNumber > 0,
+      year: row.series?.year || null,
+      network:
+        typeof row.series?.network === "string" ? row.series.network : null,
+      runtime: row.runtime || row.series?.runtime || null,
+      genres: Array.isArray(row.series?.genres)
+        ? row.series.genres.slice(0, 8)
+        : [],
+      overview:
+        row.overview || row.series?.overview || "Overview not available yet.",
+      backdrop:
+        row.series?.images?.find((image) => image.coverType === "fanart")
+          ?.remoteUrl || null,
     }));
 }
 
@@ -111,6 +124,11 @@ export function normalizeSeerrRequests(data) {
       status: Number.isInteger(r.status) ? r.status : null,
       availability: Number.isInteger(r.media?.status) ? r.media.status : null,
       createdAt: typeof r.createdAt === "string" ? r.createdAt : null,
+      requestedBy: String(
+        r.requestedBy?.displayName ||
+          r.requestedBy?.username ||
+          "Unknown requester",
+      ),
     }))
     .slice(0, 10);
 }
