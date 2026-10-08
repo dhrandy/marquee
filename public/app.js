@@ -27,6 +27,8 @@ const defaults = {
   requests: true,
   popular: true,
   ratings: true,
+  colorblind: false,
+  jellyfinLink: true,
   popularCollapsed: false,
   defaultView: "auto",
 };
@@ -84,7 +86,8 @@ function report(error) {
   $("#global-error").hidden = false;
 }
 function persist() {
-  const { weather, weatherCity, weatherUnits, ...devicePrefs } = state.prefs;
+  const { weather, weatherCity, weatherUnits, colorblind, ...devicePrefs } =
+    state.prefs;
   localStorage.setItem(state.key, JSON.stringify(devicePrefs));
   applyPrefs();
 }
@@ -111,6 +114,9 @@ function saveWeather() {
   return weatherWrites;
 }
 function applyPrefs() {
+  document.body.classList.toggle("colorblind", Boolean(state.prefs.colorblind));
+  $("#jellyfin-home").hidden =
+    !state.prefs.jellyfinLink || !$("#jellyfin-home").hasAttribute("href");
   all(".media-rating").forEach((el) => {
     el.hidden = !state.prefs.ratings || !el.textContent;
   });
@@ -154,6 +160,8 @@ function buildSettings() {
     requests: "Request status list",
     popular: "Top 10 movies and TV",
     ratings: "Show source ratings",
+    colorblind: "Colorblind-friendly status colors",
+    jellyfinLink: "Jellyfin shortcut",
     legend: "Calendar status legend",
     addedDates: "Poster added dates",
     shelfNavigation: "Poster navigation arrows",
@@ -169,6 +177,11 @@ function buildSettings() {
     el.addEventListener("change", () => {
       state.prefs[el.dataset.pref] = el.checked;
       persist();
+      if (el.dataset.pref === "colorblind")
+        api("/api/accessibility-settings", {
+          method: "POST",
+          body: JSON.stringify({ colorblind: el.checked }),
+        }).catch(report);
       if (el.dataset.pref === "weather") saveWeather();
       if (el.dataset.pref === "popular" && el.checked) loadPopular();
       if (el.dataset.pref === "requests" && el.checked) loadRequests();
@@ -193,6 +206,7 @@ async function enter(name) {
     state.prefs = { ...defaults };
   }
   Object.assign(state.prefs, await api("/api/weather-settings"));
+  Object.assign(state.prefs, await api("/api/accessibility-settings"));
   state.view =
     state.prefs.lastView ||
     (state.prefs.defaultView === "auto" ? "agenda" : state.prefs.defaultView);
@@ -202,6 +216,20 @@ async function enter(name) {
   buildSettings();
   applyPrefs();
   const me = await api("/api/me");
+  const jellyfin = $("#jellyfin-home");
+  jellyfin.removeAttribute("href");
+  if (me.jellyfinWebUrl) {
+    try {
+      const url = new URL(me.jellyfinWebUrl);
+      if (
+        ["http:", "https:"].includes(url.protocol) &&
+        !url.username &&
+        !url.password
+      )
+        jellyfin.href = url.href;
+    } catch {}
+  }
+  jellyfin.hidden = !state.prefs.jellyfinLink || !jellyfin.hasAttribute("href");
   state.canRequest = me.canRequest;
   state.requestAccess = me.requestAccess || {
     movie: me.canRequest,
@@ -586,6 +614,7 @@ async function openMediaDetail(card, status) {
 for (const [container, status] of [
   ["#popular-section", "#popular-status"],
   ["#search-results", "#search-status"],
+  ["#requests", "#global-error"],
 ]) {
   $(container).addEventListener("click", (event) => {
     const card = event.target.closest("[data-detail-id]");
@@ -628,7 +657,7 @@ function renderRequests(requests) {
     ? requests
         .map((r) => {
           const [label, cls] = requestStatus(r);
-          return `<div class="request-row"><span class="status-dot ${cls}"></span><div class="grow"><strong>${escape(r.title)}</strong><small>${r.mediaType === "movie" ? "Movie" : "TV"} · by ${escape(r.requestedBy || "Unknown requester")}${r.createdAt ? ` · requested ${escape(new Date(r.createdAt).toLocaleDateString([], { month: "short", day: "numeric" }))}` : ""}</small></div><span class="request-status-label">${label}</span></div>`;
+          return `<div class="request-row"${Number.isInteger(r.tmdbId) && r.tmdbId > 0 ? ` role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.tmdbId}" aria-label="Details for ${escape(r.title)}"` : ""}><span class="status-dot ${cls}"></span><div class="grow"><strong>${escape(r.title)}</strong><small>${r.mediaType === "movie" ? "Movie" : "TV"} · by ${escape(r.requestedBy || "Unknown requester")}${r.createdAt ? ` · requested ${escape(new Date(r.createdAt).toLocaleDateString([], { month: "short", day: "numeric" }))}` : ""}</small></div><span class="request-status-label">${label}</span></div>`;
         })
         .join("")
     : '<p class="empty">No requests yet.</p>';

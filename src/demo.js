@@ -81,7 +81,8 @@ export function demoEvents(start, end) {
         network: "Sample Network",
         runtime: 48,
         genres: type === "tv" ? ["Adventure", "Drama"] : [],
-        overview: "A quiet discovery changes everything for a small community. Old friendships are tested as the story unfolds.",
+        overview:
+          "A quiet discovery changes everything for a small community. Old friendships are tested as the story unfolds.",
       });
     if ([2, 7, 14, 21, 28].includes(n)) {
       add(
@@ -107,12 +108,7 @@ export function demoEvents(start, end) {
         n === 6 ? "available" : "unreleased",
       );
     if ([8, 15, 22].includes(n)) {
-      add(
-        "movie",
-        "Orbit Nine",
-        "Meridian Studios",
-        "cinema",
-      );
+      add("movie", "Orbit Nine", "Meridian Studios", "cinema");
       add(
         "tv",
         "Small Town Radio",
@@ -205,3 +201,7 @@ export const demoRequests = [
     createdAt: "2026-10-02T18:00:00Z",
   },
 ];
+
+demoRequests.forEach((item, i) => {
+  item.tmdbId = 9000 + i;
+});

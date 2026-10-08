@@ -143,6 +143,12 @@ export function normalizeSeerrRequests(data) {
   return (data.results || [])
     .map((r) => ({
       id: r.id,
+      tmdbId:
+        Number.isSafeInteger(r.media?.tmdbId) &&
+        r.media.tmdbId > 0 &&
+        r.media.tmdbId <= 1e9
+          ? r.media.tmdbId
+          : null,
       title: String(
         r.media?.title ||
           r.media?.name ||

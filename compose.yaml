@@ -1,7 +1,6 @@
 services:
   marquee:
     image: node:22-alpine
-    container_name: marquee
     working_dir: /app
     user: node
     init: true
@@ -12,7 +11,6 @@ services:
     ports:
       - "${MARQUEE_PORT}:8739"
     environment:
-      PORT: "8739"
       TZ: ${TZ}
       DEMO_MODE: ${DEMO_MODE}
       COOKIE_SECURE: ${COOKIE_SECURE}

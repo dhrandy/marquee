@@ -1101,3 +1101,22 @@ dialog select { min-width: 0; max-width: 100%; }
   .request-row small { display:block; white-space:normal; overflow-wrap:anywhere; }
 }
 @media(max-width:600px) { .result-action { min-height:39px; } }
+
+body.colorblind .cinema { color:#56B4E9; }
+body.colorblind .available, body.colorblind .owned, body.colorblind .conn-ok { color:#7bd9bb; }
+body.colorblind .missing, body.colorblind .conn-fail { color:#ff9966; }
+body.colorblind .premiere { color:#F0E442; }
+body.colorblind .upcoming { color:#CC79A7; }
+body.colorblind .unreleased { color:#c6cbd5; }
+body.colorblind .entry { border-left-style:solid; }
+body.colorblind .entry.missing { border-left-style:dashed; }
+body.colorblind .entry.unreleased { border-left-style:dotted; }
+body.colorblind .entry.premiere { border-left-style:double; border-left-width:4px; }
+.request-row[role="button"] { cursor:pointer; }
+.request-row[role="button"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.jellyfin-shortcut { display:flex; align-items:center; justify-content:center; width:36px; height:36px; color:#b9afd1; border:1px solid #ffffff20; border-radius:8px; flex-shrink:0; }
+.jellyfin-shortcut svg { width:22px; height:22px; }
+.jellyfin-shortcut:hover { color:#e2d5ff; border-color:#a991ee; }
+@media(max-width:600px) { .masthead { flex-wrap:wrap; gap:12px; } .account { flex-wrap:wrap; } footer { flex-wrap:wrap; row-gap:8px; } }
+
+body.colorblind .entry.premiere, body.colorblind .legend .premiere { color:#F0E442; }

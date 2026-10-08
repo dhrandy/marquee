@@ -1077,3 +1077,63 @@ for (const width of [1440, 393, 280]) {
     }
   });
 }
+for (const width of [1440, 393, 320, 280]) {
+  test(`accessibility requests footer and shortcut at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.route("**/api/me", (route) =>
+      route.fulfill({
+        json: {
+          name: "Demo",
+          isAdmin: true,
+          canRequest: true,
+          requestAccess: { movie: true, tv: true },
+          jellyfinWebUrl: "https://media.example.test/",
+        },
+      }),
+    );
+    await login(page);
+    await expect(page.locator("#jellyfin-home")).toHaveAttribute(
+      "href",
+      "https://media.example.test/",
+    );
+    await expect(page.locator("#jellyfin-home")).toHaveAttribute(
+      "target",
+      "_blank",
+    );
+    await page
+      .locator(".masthead")
+      .screenshot({ path: `${shots}/marquee-shortcut-${width}.png` });
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.locator('[data-pref="colorblind"]')).not.toBeChecked();
+    await page.locator('[data-pref="colorblind"]').check();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("body")).toHaveClass("colorblind");
+    await page
+      .locator("#calendar-section")
+      .screenshot({ path: `${shots}/marquee-colorblind-${width}.png` });
+    await page.locator("#requests [data-detail-id]").first().focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#episode-detail")).toBeVisible();
+    await expect(page.locator("#episode-poster")).toBeVisible();
+    await expect(page.locator("#episode-play")).toBeHidden();
+    await page
+      .locator("#episode-detail")
+      .screenshot({ path: `${shots}/marquee-request-popup-${width}.png` });
+    await page.locator("#episode-close").click();
+    await expect(page.locator("footer")).toContainText(
+      "your media, your server, your way",
+    );
+    await page
+      .locator("footer")
+      .screenshot({ path: `${shots}/marquee-footer-${width}.png` });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.reload();
+    await expect(page.locator("body")).toHaveClass("colorblind");
+  });
+}

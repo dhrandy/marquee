@@ -909,6 +909,51 @@ try {
     assert.equal(data.network, "Sample Studio");
     assert.equal(data.backdrop, "/api/seerr/image?path=%2Fabc.jpg");
   });
+  await test("accessibility preference is isolated by user and validates writes", async () => {
+    const alice = (await signin("alice")).headers.get("set-cookie");
+    const bob = (await signin("bob")).headers.get("set-cookie");
+    const read = async (cookie) =>
+      (
+        await fetch(`${base}/api/accessibility-settings`, {
+          headers: { Cookie: cookie },
+        })
+      ).json();
+    assert.deepEqual(await read(alice), { colorblind: false });
+    assert.equal(
+      (
+        await fetch(`${base}/api/accessibility-settings`, {
+          method: "POST",
+          headers: {
+            Origin: base,
+            Cookie: alice,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ colorblind: true }),
+        })
+      ).status,
+      200,
+    );
+    assert.deepEqual(await read(alice), { colorblind: true });
+    assert.deepEqual(await read(bob), { colorblind: false });
+    assert.deepEqual(
+      await read((await signin("alice")).headers.get("set-cookie")),
+      { colorblind: true },
+    );
+    assert.equal(
+      (
+        await fetch(`${base}/api/accessibility-settings`, {
+          method: "POST",
+          headers: {
+            Origin: base,
+            Cookie: bob,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ colorblind: "true" }),
+        })
+      ).status,
+      400,
+    );
+  });
   await test("bad passwords are rejected, repeated attempts are limited", async () => {
     for (let i = 0; i < 10; i++)
       assert.equal((await signin("alice", "wrong")).status, 401);

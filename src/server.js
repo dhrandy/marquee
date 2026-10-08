@@ -254,6 +254,49 @@ function publicAccess(access) {
     tvReason: access.tvReason || "",
   };
 }
+function safeWebUrl(value) {
+  try {
+    const url = new URL(value);
+    return ["https:", "http:"].includes(url.protocol) &&
+      !url.username &&
+      !url.password
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+app.get("/api/accessibility-settings", requireUser, (req, res) => {
+  res.json({
+    colorblind:
+      savedSettings.accessibilityByUser?.[demo ? req.user.sid : req.user.id]
+        ?.colorblind === true,
+  });
+});
+app.post("/api/accessibility-settings", requireUser, async (req, res) => {
+  if (typeof req.body.colorblind !== "boolean")
+    return res
+      .status(400)
+      .json({ error: "Choose a valid colorblind setting." });
+  try {
+    const value = { colorblind: req.body.colorblind };
+    await saveSettings((current) => ({
+      ...current,
+      accessibilityByUser: {
+        ...current.accessibilityByUser,
+        [demo ? req.user.sid : req.user.id]: value,
+      },
+    }));
+    res.json(value);
+  } catch {
+    res
+      .status(500)
+      .json({
+        error:
+          "Could not save accessibility settings. Check the settings volume is writable.",
+      });
+  }
+});
 app.get("/api/me", requireUser, async (req, res) => {
   const access = await requestAccess(req.user);
   res.json({
@@ -261,6 +304,9 @@ app.get("/api/me", requireUser, async (req, res) => {
     isAdmin: req.user.isAdmin === true,
     canRequest: access.movie || access.tv,
     requestAccess: publicAccess(access),
+    jellyfinWebUrl: demo
+      ? null
+      : safeWebUrl(process.env.JELLYFIN_WEB_URL || process.env.JELLYFIN_URL),
   });
 });
 app.get("/api/weather-settings", requireUser, (req, res) => {
