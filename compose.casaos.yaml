@@ -1,5 +1,6 @@
 name: marquee
 services:
+  # Creates non-root ownership for settings. Exited (0) is normal.
   marquee-init:
     image: alpine:3.21
     user: 0:0
@@ -28,19 +29,23 @@ services:
     depends_on:
       marquee-init:
         condition: service_completed_successfully
+    # Downloads current main on restart; requires HTTPS access to GitHub and npm.
     command:
     - sh
     - -c
     - set -eu; wget -O /app/source.tar.gz https://codeload.github.com/dhrandy/marquee/tar.gz/refs/heads/main; tar
       -xzf /app/source.tar.gz -C /app --strip-components=1; rm /app/source.tar.gz; rm -rf /app/tests /app/docs /app/.github /app/playwright.config.js /app/README.md /app/compose.yaml /app/compose.casaos.yaml /app/.env.example /app/.gitignore; npm ci --omit=dev --ignore-scripts
       --no-audit --no-fund; exec node src/server.js
+    # Change published for your host port; keep target 8739.
     ports:
     - target: 8739
       published: '8739'
       protocol: tcp
+    # Enter service URLs/API keys below. Keep keys out of public copies.
     environment:
       TZ: America/New_York
       DEMO_MODE: 'false'
+      # false only for a trusted plain-HTTP LAN; keep true behind HTTPS.
       COOKIE_SECURE: 'true'
       JELLYFIN_URL: ''
       SONARR_URL: ''
@@ -49,9 +54,11 @@ services:
       RADARR_API_KEY: ''
       SEERR_URL: ''
       SEERR_API_KEY: ''
+      # Browser-facing Jellyfin URL; blank falls back to JELLYFIN_URL.
       JELLYFIN_WEB_URL: ''
     volumes:
     - type: bind
+      # Persistent settings: keep this source in sync with marquee-init.
       source: /DATA/AppData/marquee/settings
       target: /home/node
     tmpfs:
