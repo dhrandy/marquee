@@ -498,7 +498,7 @@ function resultCardHtml(r) {
         : state.requestAccess[r.mediaType]
           ? `<button class="request-btn" data-request data-media-type="${r.mediaType}" data-media-id="${r.id}" data-title="${escape(r.title)}">Request</button>`
           : `<span class="request-unavailable">${escape(state.requestAccess.reason || state.requestAccess[`${r.mediaType}Reason`] || "Requests disabled in Seerr")}</span>`;
-  return `<article class="result-card"><div class="poster-art"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy"></div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${availabilityText(r.availability) ? ` · ${availabilityText(r.availability)}` : ""}</p>${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
+  return `<article class="result-card"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy"></div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${availabilityText(r.availability) ? ` · ${availabilityText(r.availability)}` : ""}</p>${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
 }
 function renderSearch(results) {
   $("#search-results").innerHTML = results.length
@@ -510,7 +510,7 @@ $("#popular-collapse").addEventListener("click", () => {
   state.prefs.popularCollapsed = !state.prefs.popularCollapsed;
   persist();
 });
-async function openPopular(card) {
+async function openMediaDetail(card, status) {
   try {
     showDetail(
       await api(
@@ -518,20 +518,25 @@ async function openPopular(card) {
       ),
     );
   } catch (error) {
-    $("#popular-status").textContent = error.message;
+    status.textContent = error.message;
   }
 }
-$("#popular-section").addEventListener("click", (event) => {
-  const card = event.target.closest("[data-detail-id]");
-  if (card) openPopular(card);
-});
-$("#popular-section").addEventListener("keydown", (event) => {
-  const card = event.target.closest("[data-detail-id]");
-  if (card && ["Enter", " "].includes(event.key)) {
-    event.preventDefault();
-    openPopular(card);
-  }
-});
+for (const [container, status] of [
+  ["#popular-section", "#popular-status"],
+  ["#search-results", "#search-status"],
+]) {
+  $(container).addEventListener("click", (event) => {
+    const card = event.target.closest("[data-detail-id]");
+    if (card) openMediaDetail(card, $(status));
+  });
+  $(container).addEventListener("keydown", (event) => {
+    const card = event.target.closest("[data-detail-id]");
+    if (card && ["Enter", " "].includes(event.key)) {
+      event.preventDefault();
+      openMediaDetail(card, $(status));
+    }
+  });
+}
 async function loadPopular() {
   if (!state.prefs.popular) return;
   try {
@@ -540,7 +545,7 @@ async function loadPopular() {
       $("#popular-" + type).innerHTML = data[type]
         .map(
           (item, i) =>
-            `<div class="ranked-poster"><span class="popular-rank">${i + 1}</span>${resultCardHtml(item).replace('<div class="poster-art">', `<div class="poster-art" role="button" tabindex="0" data-detail-type="${item.mediaType}" data-detail-id="${item.id}" aria-label="Details for ${escape(item.title)}">`)}</div>`,
+            `<div class="ranked-poster"><span class="popular-rank">${i + 1}</span>${resultCardHtml(item)}</div>`,
         )
         .join("");
     }

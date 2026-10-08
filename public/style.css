@@ -1054,3 +1054,6 @@ dialog select { min-width: 0; max-width: 100%; }
 @media(hover:hover) { .ranked-poster:hover .poster-art img { transform: scale(1.045); } .ranked-poster:hover h3 { color: var(--purple); } }
 .ranked-poster:focus-within .poster-art { outline: 2px solid var(--purple); outline-offset: -2px; }
 @media(prefers-reduced-motion:reduce) { .popular-row .poster-art img { transition: none; } }
+
+.poster-art[data-detail-id] { cursor: pointer; }
+.poster-art[data-detail-id]:focus-visible { outline: 2px solid var(--purple); outline-offset: -2px; }

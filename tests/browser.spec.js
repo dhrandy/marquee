@@ -833,3 +833,32 @@ test("installed service worker replaces stale cached styles with network version
   expect(css).not.toContain("stale marker");
   expect(css).toContain(".popular-title");
 });
+
+for (const width of [1440, 393, 280]) {
+  test(`search poster opens shared movie/TV details at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await login(page);
+    await page.getByPlaceholder("Search movies and shows").fill("Signal");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await page
+      .locator('#search-results [data-detail-type="movie"]')
+      .first()
+      .click();
+    await expect(page.locator("#episode-subtitle")).toHaveText("Movie");
+    await page
+      .locator("#episode-detail")
+      .screenshot({ path: `${shots}/marquee-search-popup-${width}.png` });
+    await page.keyboard.press("Escape");
+    await page.getByPlaceholder("Search movies and shows").fill("North");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await page
+      .locator('#search-results [data-detail-type="tv"]')
+      .first()
+      .focus();
+    await page.keyboard.press(" ");
+    await expect(page.locator("#episode-subtitle")).toHaveText("TV series");
+    await expect(page.locator("#episode-detail")).toBeVisible();
+  });
+}
