@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
@@ -333,11 +336,12 @@ const service = http.createServer(async (req, res) => {
   res.end("{}");
 });
 await new Promise((resolve) => service.listen(18740, "127.0.0.1", resolve));
+const settingsDir = await mkdtemp(join(tmpdir(), "marquee-live-test-"));
 const server = spawn(process.execPath, ["src/server.js"], {
   env: {
     ...process.env,
     PORT: "18739",
-    MARQUEE_DATA_DIR: "/tmp/marquee-live-test-settings",
+    MARQUEE_DATA_DIR: settingsDir,
     DEMO_MODE: "false",
     COOKIE_SECURE: "false",
     JELLYFIN_URL: "http://127.0.0.1:18740",
@@ -603,7 +607,7 @@ try {
     const stored = JSON.parse(
       await (
         await import("node:fs/promises")
-      ).readFile("/tmp/marquee-live-test-settings/settings.json", "utf8"),
+      ).readFile(join(settingsDir, "settings.json"), "utf8"),
     );
     assert.equal(stored.name, "Movie Room");
     assert.equal((await update(admin, "Marquee")).status, 200);
@@ -784,7 +788,7 @@ try {
     const disk = JSON.parse(
       await (
         await import("node:fs/promises")
-      ).readFile("/tmp/marquee-live-test-settings/settings.json", "utf8"),
+      ).readFile(join(settingsDir, "settings.json"), "utf8"),
     );
     assert.deepEqual(disk.weatherByUser.alice, value);
   });
@@ -962,4 +966,5 @@ try {
 } finally {
   server.kill();
   service.close();
+  await rm(settingsDir, { recursive: true, force: true });
 }

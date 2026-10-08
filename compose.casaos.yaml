@@ -5,22 +5,22 @@ services:
     image: alpine:3.21
     user: 0:0
     command:
-    - sh
-    - -c
-    - chown -R 1000:1000 /settings
+      - sh
+      - -c
+      - chown -R 1000:1000 /settings
     volumes:
-    - type: bind
-      source: /DATA/AppData/marquee/settings
-      target: /settings
+      - type: bind
+        source: /DATA/AppData/marquee/settings
+        target: /settings
     read_only: true
     cap_drop:
-    - ALL
+      - ALL
     cap_add:
-    - CHOWN
-    - DAC_OVERRIDE
+      - CHOWN
+      - DAC_OVERRIDE
     security_opt:
-    - no-new-privileges:true
-    restart: 'no'
+      - no-new-privileges:true
+    restart: "no"
   marquee:
     image: node:22-alpine
     working_dir: /app
@@ -31,51 +31,70 @@ services:
         condition: service_completed_successfully
     # Downloads current main on restart; requires HTTPS access to GitHub and npm.
     command:
-    - sh
-    - -c
-    - set -eu; wget -O /app/source.tar.gz https://codeload.github.com/dhrandy/marquee/tar.gz/refs/heads/main; tar
-      -xzf /app/source.tar.gz -C /app --strip-components=1; rm /app/source.tar.gz; rm -rf /app/tests /app/docs /app/.github /app/playwright.config.js /app/README.md /app/compose.yaml /app/compose.casaos.yaml /app/.env.example /app/.gitignore; npm ci --omit=dev --ignore-scripts
-      --no-audit --no-fund; exec node src/server.js
+      - sh
+      - -c
+      - |
+          set -eu
+
+          # 1. Download Marquee from GitHub.
+          wget -O /app/source.tar.gz \
+            https://codeload.github.com/dhrandy/marquee/tar.gz/refs/heads/main
+
+          # 2. Unpack the app and remove the download.
+          tar -xzf /app/source.tar.gz -C /app --strip-components=1
+          rm /app/source.tar.gz
+
+          # 3. Leave tests and development files out of the running copy.
+          rm -rf /app/tests /app/docs /app/.github \
+            /app/playwright.config.js /app/README.md \
+            /app/compose.yaml /app/compose.casaos.yaml \
+            /app/.env.example /app/.gitignore
+
+          # 4. Install only the packages the app needs to run.
+          npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+
+          # 5. Start Marquee.
+          exec node src/server.js
     # Change published for your host port; keep target 8739.
     ports:
-    - target: 8739
-      published: '8739'
-      protocol: tcp
+      - target: 8739
+        published: "8739"
+        protocol: tcp
     # Enter service URLs/API keys below. Keep keys out of public copies.
     environment:
       TZ: America/New_York
-      DEMO_MODE: 'false'
+      DEMO_MODE: "false"
       # false only for a trusted plain-HTTP LAN; keep true behind HTTPS.
-      COOKIE_SECURE: 'true'
-      JELLYFIN_URL: ''
-      SONARR_URL: ''
-      SONARR_API_KEY: ''
-      RADARR_URL: ''
-      RADARR_API_KEY: ''
-      SEERR_URL: ''
-      SEERR_API_KEY: ''
+      COOKIE_SECURE: "true"
+      JELLYFIN_URL: ""
+      SONARR_URL: ""
+      SONARR_API_KEY: ""
+      RADARR_URL: ""
+      RADARR_API_KEY: ""
+      SEERR_URL: ""
+      SEERR_API_KEY: ""
       # Browser-facing Jellyfin URL; blank falls back to JELLYFIN_URL.
-      JELLYFIN_WEB_URL: ''
+      JELLYFIN_WEB_URL: ""
     volumes:
-    - type: bind
-      # Persistent settings: keep this source in sync with marquee-init.
-      source: /DATA/AppData/marquee/settings
-      target: /home/node
+      - type: bind
+        # Persistent settings: keep this source in sync with marquee-init.
+        source: /DATA/AppData/marquee/settings
+        target: /home/node
     tmpfs:
-    - /app:uid=1000,gid=1000,mode=0700
-    - /home/node/.npm:uid=1000,gid=1000,mode=0700
+      - /app:uid=1000,gid=1000,mode=0700
+      - /home/node/.npm:uid=1000,gid=1000,mode=0700
     read_only: true
     cap_drop:
-    - ALL
+      - ALL
     security_opt:
-    - no-new-privileges:true
+      - no-new-privileges:true
     restart: unless-stopped
     healthcheck:
       test:
-      - CMD
-      - node
-      - -e
-      - fetch('http://127.0.0.1:8739/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:8739/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
       interval: 30s
       timeout: 5s
       start_period: 60s

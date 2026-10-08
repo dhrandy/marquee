@@ -47,7 +47,7 @@ During beta, updates are manual. Pull the latest image yourself when updating an
 - Settings includes per-service connection tests with real error messages (DNS failure, connection refused, timeout, or HTTP status).
 - Installable as a PWA (manifest and service worker). Only static assets are cached; media API responses are never cached.
 - Settings can hide either main section, weather, the status legend, added dates, and poster navigation arrows.
-- Mobile defaults to a readable list. Month/week remain available with horizontal scrolling instead of squeezed columns.
+- Mobile defaults to Agenda. Month/week remain available with horizontal scrolling instead of squeezed columns.
 - Display preferences are stored on the current device. Weather enabled state, city and F/C units are saved server-side per Jellyfin account and follow that user across devices. The display name is shared.
 - Demo mode with fictional titles and original sample poster art. No external credentials required.
 
@@ -66,11 +66,26 @@ docker compose up -d
 
 Open the configured port through an HTTPS reverse proxy. `COOKIE_SECURE=true` requires HTTPS. For a local HTTP demo only, set `DEMO_MODE=true` and `COOKIE_SECURE=false`.
 
-The initial beta copies the mounted source into a temporary writable container directory and installs the locked production dependencies at startup. This needs internet access to the package registry. Sessions live in memory, so a restart signs users out. The `marquee-settings` volume keeps the administrator-set display name and per-user weather preferences across container restarts. Other display preferences remain on the current device. Do not delete the settings volume when upgrading.
+The initial beta copies the mounted source into a temporary writable container directory and installs the locked production dependencies at startup. This needs internet access to the package registry. Sessions live in memory, so a restart signs users out. The `marquee-settings` volume keeps the administrator-set display name and per-user weather/colorblind preferences across container restarts. Other display preferences remain on the current device. Do not delete the settings volume when upgrading.
 
 ### CasaOS or standalone stack (no clone needed)
 
-Use `compose.casaos.yaml` when pasting a stack into CasaOS or a Docker manager without a source checkout. No source folder or `/source` mount is needed. URLs and keys start empty; fill them before starting. Defaults are timezone America/New_York, demo off, secure cookies on, and host port 8739. Change the published host port in the Ports UI. No separate `.env` is required for this variant. The container downloads this repository's `main` archive into temporary storage, removes tests/docs/development-only files from the runtime copy, installs locked production dependencies, and starts the app. Every restart downloads current main; recreate/restart to update. Startup needs HTTPS access to GitHub and npm. A failed download/install stops startup rather than running incomplete code. Settings stay in `/DATA/AppData/marquee/settings`, created automatically by the bind mount. The `marquee-init` service fixes this folder's ownership for the non-root app, then exits successfully. No host terminal commands needed. Docker Compose waits for init to complete before starting Marquee. CasaOS AppManagement currently uses Compose v2; older installations may behave differently. An init container showing `Exited (0)` is expected. If init fails, Marquee is blocked until init is recreated successfully.
+This is the easiest option for CasaOS, Dockhand, or another stack manager. You do not need to download the source folder or create a `.env` file.
+
+1. Copy the complete example below into your stack editor (or use `compose.casaos.yaml`).
+2. Fill in the empty service URLs and API keys under `environment`. Keep your keys private.
+3. Set your timezone. Leave `DEMO_MODE` off for your real media.
+4. Keep `COOKIE_SECURE` true for HTTPS. Use false only on a trusted plain-HTTP home network.
+5. Change `published: "8739"` if you want a different host port. Keep `target: 8739`.
+6. Start the stack. Open your server at that port, or use your HTTPS reverse proxy.
+
+You only need to edit the settings above. The commented startup steps download Marquee, install its runtime packages, and start it automatically. Your server needs internet access to GitHub and npm during startup. If a download fails, startup stops rather than running an incomplete app.
+
+**Updates:** restart or recreate the stack to download the latest beta. A running app does not update itself. Restarting signs users out.
+
+**Saved settings:** they stay in `/DATA/AppData/marquee/settings`. Keep that folder when updating. The small `marquee-init` helper prepares it for the app. Seeing this helper show `Exited (0)` is normal; the main `marquee` service should stay running. If you change the settings path, change it in both services.
+
+Docker Compose waits for the helper to finish before starting Marquee. CasaOS uses Compose v2; older installations may behave differently.
 
 ```yaml
 name: marquee
@@ -80,22 +95,22 @@ services:
     image: alpine:3.21
     user: 0:0
     command:
-    - sh
-    - -c
-    - chown -R 1000:1000 /settings
+      - sh
+      - -c
+      - chown -R 1000:1000 /settings
     volumes:
-    - type: bind
-      source: /DATA/AppData/marquee/settings
-      target: /settings
+      - type: bind
+        source: /DATA/AppData/marquee/settings
+        target: /settings
     read_only: true
     cap_drop:
-    - ALL
+      - ALL
     cap_add:
-    - CHOWN
-    - DAC_OVERRIDE
+      - CHOWN
+      - DAC_OVERRIDE
     security_opt:
-    - no-new-privileges:true
-    restart: 'no'
+      - no-new-privileges:true
+    restart: "no"
   marquee:
     image: node:22-alpine
     working_dir: /app
@@ -106,51 +121,70 @@ services:
         condition: service_completed_successfully
     # Downloads current main on restart; requires HTTPS access to GitHub and npm.
     command:
-    - sh
-    - -c
-    - set -eu; wget -O /app/source.tar.gz https://codeload.github.com/dhrandy/marquee/tar.gz/refs/heads/main; tar
-      -xzf /app/source.tar.gz -C /app --strip-components=1; rm /app/source.tar.gz; rm -rf /app/tests /app/docs /app/.github /app/playwright.config.js /app/README.md /app/compose.yaml /app/compose.casaos.yaml /app/.env.example /app/.gitignore; npm ci --omit=dev --ignore-scripts
-      --no-audit --no-fund; exec node src/server.js
+      - sh
+      - -c
+      - |
+          set -eu
+
+          # 1. Download Marquee from GitHub.
+          wget -O /app/source.tar.gz \
+            https://codeload.github.com/dhrandy/marquee/tar.gz/refs/heads/main
+
+          # 2. Unpack the app and remove the download.
+          tar -xzf /app/source.tar.gz -C /app --strip-components=1
+          rm /app/source.tar.gz
+
+          # 3. Leave tests and development files out of the running copy.
+          rm -rf /app/tests /app/docs /app/.github \
+            /app/playwright.config.js /app/README.md \
+            /app/compose.yaml /app/compose.casaos.yaml \
+            /app/.env.example /app/.gitignore
+
+          # 4. Install only the packages the app needs to run.
+          npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+
+          # 5. Start Marquee.
+          exec node src/server.js
     # Change published for your host port; keep target 8739.
     ports:
-    - target: 8739
-      published: '8739'
-      protocol: tcp
+      - target: 8739
+        published: "8739"
+        protocol: tcp
     # Enter service URLs/API keys below. Keep keys out of public copies.
     environment:
       TZ: America/New_York
-      DEMO_MODE: 'false'
+      DEMO_MODE: "false"
       # false only for a trusted plain-HTTP LAN; keep true behind HTTPS.
-      COOKIE_SECURE: 'true'
-      JELLYFIN_URL: ''
-      SONARR_URL: ''
-      SONARR_API_KEY: ''
-      RADARR_URL: ''
-      RADARR_API_KEY: ''
-      SEERR_URL: ''
-      SEERR_API_KEY: ''
+      COOKIE_SECURE: "true"
+      JELLYFIN_URL: ""
+      SONARR_URL: ""
+      SONARR_API_KEY: ""
+      RADARR_URL: ""
+      RADARR_API_KEY: ""
+      SEERR_URL: ""
+      SEERR_API_KEY: ""
       # Browser-facing Jellyfin URL; blank falls back to JELLYFIN_URL.
-      JELLYFIN_WEB_URL: ''
+      JELLYFIN_WEB_URL: ""
     volumes:
-    - type: bind
-      # Persistent settings: keep this source in sync with marquee-init.
-      source: /DATA/AppData/marquee/settings
-      target: /home/node
+      - type: bind
+        # Persistent settings: keep this source in sync with marquee-init.
+        source: /DATA/AppData/marquee/settings
+        target: /home/node
     tmpfs:
-    - /app:uid=1000,gid=1000,mode=0700
-    - /home/node/.npm:uid=1000,gid=1000,mode=0700
+      - /app:uid=1000,gid=1000,mode=0700
+      - /home/node/.npm:uid=1000,gid=1000,mode=0700
     read_only: true
     cap_drop:
-    - ALL
+      - ALL
     security_opt:
-    - no-new-privileges:true
+      - no-new-privileges:true
     restart: unless-stopped
     healthcheck:
       test:
-      - CMD
-      - node
-      - -e
-      - fetch('http://127.0.0.1:8739/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:8739/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -158,7 +192,7 @@ services:
 
 The original `compose.yaml` below is for an existing local/git checkout. Do not use its source mount with an empty CasaOS folder.
 
-### Copy-paste compose
+### Local-checkout compose (requires source folder)
 
 ```yaml
 services:
@@ -170,7 +204,18 @@ services:
     command:
       - sh
       - -c
-      - cp /source/package*.json /app/ && cp -R /source/src /source/public /app/ && npm ci --omit=dev --ignore-scripts --no-audit --no-fund && node src/server.js
+      - |
+          set -e
+
+          # Copy the app from your downloaded source folder.
+          cp /source/package*.json /app/
+          cp -R /source/src /source/public /app/
+
+          # Install only the packages the app needs to run.
+          npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+
+          # Start Marquee.
+          node src/server.js
     ports:
       - "${MARQUEE_PORT}:8739"
     environment:
@@ -272,7 +317,7 @@ Terminate HTTPS at your preferred reverse proxy and forward to port 8739. Preser
 - `RADARR_URL` and `RADARR_API_KEY`: server base URL and API key. Requests use `/api/v3/calendar`.
 - `SEERR_URL` and `SEERR_API_KEY`: Jellyseerr or Overseerr base URL and API key. Search uses `/api/v1/search`; requests use `/api/v1/request`.
 - Internal/external URL split: `JELLYFIN_URL`, `SONARR_URL`, `RADARR_URL`, and `SEERR_URL` are how the container reaches each service (Docker network or LAN). `JELLYFIN_WEB_URL` is the public address browsers open when someone taps a poster; it defaults to `JELLYFIN_URL`. Set both when containers use an internal address phones cannot open. `SONARR_WEB_URL`, `RADARR_WEB_URL`, and `SEERR_WEB_URL` are reserved for future deep links and unused today.
-- Weather: use Settings to find and pick a city, choose F/C units, and enable the widget. These choices are saved for that viewer on that device, not in `.env`.
+- Weather: use Settings to find and pick a city, choose F/C units, and enable the widget. These choices are saved on the server for that viewer, not in `.env`.
 - Display name: Jellyfin administrators see a name field in Settings. The default is Marquee; the shared value is stored in the settings volume. This changes the dashboard header and browser tab. Installed PWA icons/name remain Marquee.
 - `TZ`: server timezone. Calendar air times and poster dates use the viewer's browser timezone.
 

@@ -7,7 +7,18 @@ services:
     command:
       - sh
       - -c
-      - cp /source/package*.json /app/ && cp -R /source/src /source/public /app/ && npm ci --omit=dev --ignore-scripts --no-audit --no-fund && node src/server.js
+      - |
+          set -e
+
+          # Copy the app from your downloaded source folder.
+          cp /source/package*.json /app/
+          cp -R /source/src /source/public /app/
+
+          # Install only the packages the app needs to run.
+          npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+
+          # Start Marquee.
+          node src/server.js
     ports:
       - "${MARQUEE_PORT}:8739"
     environment:
