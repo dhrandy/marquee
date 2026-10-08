@@ -63,7 +63,9 @@ test("desktop navigation, status filters, settings, weather, and session invalid
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByPlaceholder("City name").fill("Sample");
   await page.getByRole("button", { name: "Find city", exact: true }).click();
-  await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Sample City, Example Region", exact: true })
+    .click();
   await page.locator('[data-pref="weather"]').check();
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(page.locator("#weather-content")).toContainText("68°F");
@@ -200,12 +202,17 @@ test("demo search, request flow, requests list, and settings toggles", async ({
   await expect(page.locator("#requests-section .request-row")).toHaveCount(3);
   await page.getByPlaceholder("Search movies and shows").fill("orbit");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.locator("#search-results .result-card h3")).toHaveText(["Orbit Nine"]);
+  await expect(page.locator("#search-results .result-card h3")).toHaveText([
+    "Orbit Nine",
+  ]);
   page.once("dialog", (dialog) => dialog.accept());
-  await page.locator("#search-results").getByRole("button", { name: "Request", exact: true }).click();
-  await expect(page.locator("#search-results .result-card .requested-label")).toHaveText(
-    "Requested",
-  );
+  await page
+    .locator("#search-results")
+    .getByRole("button", { name: "Request", exact: true })
+    .click();
+  await expect(
+    page.locator("#search-results .result-card .requested-label"),
+  ).toHaveText("Requested");
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.locator('[data-pref="requests"]').uncheck();
   await page.getByRole("button", { name: "Close settings" }).click();
@@ -247,7 +254,9 @@ test("seerr titles are rendered as text, not executable markup", async ({
   await expect(page.locator("#search-results .result-card h3")).toHaveText(
     "<img src=x onerror=alert(1)>",
   );
-  await expect(page.locator("#search-results .result-card h3 img")).toHaveCount(0);
+  await expect(page.locator("#search-results .result-card h3 img")).toHaveCount(
+    0,
+  );
   await expect(page.locator(".result-overview script")).toHaveCount(0);
 });
 
@@ -285,7 +294,12 @@ test("search section screenshot for review", async ({ page }) => {
   const box = await section.boundingBox();
   await page.screenshot({
     path: `${shots}/marquee-search.png`,
-    clip: { x: 0, y: Math.max(0, box.y - 10), width: 1440, height: Math.min(box.height + 20, 900) },
+    clip: {
+      x: 0,
+      y: Math.max(0, box.y - 10),
+      width: 1440,
+      height: Math.min(box.height + 20, 900),
+    },
   });
   await page
     .locator("#requests-section")
@@ -356,7 +370,9 @@ test("settings connection tests report results", async ({ page }) => {
 });
 
 for (const width of [1440, 393, 320, 280]) {
-  test(`search cards have aligned footers and no overflow at ${width}px`, async ({ page }) => {
+  test(`search cards have aligned footers and no overflow at ${width}px`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width, height: 1000 });
     await login(page);
     await page.getByPlaceholder("Search movies and shows").fill("o");
@@ -367,132 +383,251 @@ for (const width of [1440, 393, 320, 280]) {
     await page.mouse.move(0, 0);
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(300);
-    const geometry = await page.locator("#search-results .result-card").evaluateAll(cards => cards.map(card => {
-      const box = card.getBoundingClientRect();
-      const footer = card.querySelector(".result-action").getBoundingClientRect();
-      const action = card.querySelector(".result-action > *").getBoundingClientRect();
-      return { top: box.top, bottom: box.bottom, footerBottom: footer.bottom, actionCenter: action.top + action.height / 2 };
-    }));
+    const geometry = await page
+      .locator("#search-results .result-card")
+      .evaluateAll((cards) =>
+        cards.map((card) => {
+          const box = card.getBoundingClientRect();
+          const footer = card
+            .querySelector(".result-action")
+            .getBoundingClientRect();
+          const action = card
+            .querySelector(".result-action > *")
+            .getBoundingClientRect();
+          return {
+            top: box.top,
+            bottom: box.bottom,
+            footerBottom: footer.bottom,
+            actionCenter: action.top + action.height / 2,
+          };
+        }),
+      );
     for (const card of geometry) {
       expect(Math.abs(card.bottom - card.footerBottom)).toBeLessThan(1);
-      for (const other of geometry.filter(other => Math.abs(other.top - card.top) < 1)) {
+      for (const other of geometry.filter(
+        (other) => Math.abs(other.top - card.top) < 1,
+      )) {
         expect(Math.abs(other.bottom - card.bottom)).toBeLessThan(1);
-        expect(Math.abs(other.actionCenter - card.actionCenter)).toBeLessThan(1);
+        expect(Math.abs(other.actionCenter - card.actionCenter)).toBeLessThan(
+          1,
+        );
       }
     }
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width);
     await section.screenshot({ path: `${shots}/marquee-search-${width}.png` });
   });
 }
 
-test("search footers stay aligned with long titles, missing overviews, and after requesting", async ({ page }) => {
+test("search footers stay aligned with long titles, missing overviews, and after requesting", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.route("**/api/seerr/search**", route => route.fulfill({ json: { results: [
-    { id: 81, mediaType: "movie", title: "Short title", poster: "orbit", availability: 1 },
-    { id: 82, mediaType: "tv", title: "A much longer title that wraps onto multiple lines in a card", poster: "north", overview: "A long overview. ".repeat(30), availability: 2, requested: true },
-    { id: 83, mediaType: "movie", title: "In the library", poster: "hours", overview: "A short overview.", availability: 5 },
-  ] } }));
+  await page.route("**/api/seerr/search**", (route) =>
+    route.fulfill({
+      json: {
+        results: [
+          {
+            id: 81,
+            mediaType: "movie",
+            title: "Short title",
+            poster: "orbit",
+            availability: 1,
+          },
+          {
+            id: 82,
+            mediaType: "tv",
+            title:
+              "A much longer title that wraps onto multiple lines in a card",
+            poster: "north",
+            overview: "A long overview. ".repeat(30),
+            availability: 2,
+            requested: true,
+          },
+          {
+            id: 83,
+            mediaType: "movie",
+            title: "In the library",
+            poster: "hours",
+            overview: "A short overview.",
+            availability: 5,
+          },
+        ],
+      },
+    }),
+  );
   await login(page);
   await page.getByPlaceholder("Search movies and shows").fill("test");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator("#search-results .result-card")).toHaveCount(3);
-  const centers = () => page.locator("#search-results .result-action > *").evaluateAll(actions => actions.map(action => {
-    const box = action.getBoundingClientRect();
-    return box.top + box.height / 2;
-  }));
+  const centers = () =>
+    page.locator("#search-results .result-action > *").evaluateAll((actions) =>
+      actions.map((action) => {
+        const box = action.getBoundingClientRect();
+        return box.top + box.height / 2;
+      }),
+    );
   let values = await centers();
   expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1);
-  page.once("dialog", dialog => dialog.accept());
-  await page.locator("#search-results").getByRole("button", { name: "Request", exact: true }).click();
-  await expect(page.locator("#search-results .result-card .requested-label")).toHaveCount(2);
+  page.once("dialog", (dialog) => dialog.accept());
+  await page
+    .locator("#search-results")
+    .getByRole("button", { name: "Request", exact: true })
+    .click();
+  await expect(
+    page.locator("#search-results .result-card .requested-label"),
+  ).toHaveCount(2);
   values = await centers();
   expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1);
 });
 
 for (const width of [1440, 393, 320, 280]) {
-  test(`weather city picker and administrator name settings at ${width}px`, async ({ page }) => {
+  test(`weather city picker and administrator name settings at ${width}px`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width, height: 1000 });
     await login(page);
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByPlaceholder('City name').fill('Sample');
-    await page.getByRole('button', { name: 'Find city', exact: true }).click();
-    await page.getByRole('button', { name: 'Sample City, Example Region', exact: true }).click();
-    await page.locator('#weather-units').selectOption('celsius');
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByPlaceholder("City name").fill("Sample");
+    await page.getByRole("button", { name: "Find city", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Sample City, Example Region", exact: true })
+      .click();
+    await page.locator("#weather-units").selectOption("celsius");
     await page.locator('[data-pref="weather"]').check();
-    await expect(page.locator('#weather-content')).toContainText('20°C');
-    await page.locator('#display-name').fill('Movie Room');
-    await page.getByRole('button', { name: 'Save name', exact: true }).click();
-    await expect(page.locator('#display-name-status')).toHaveText('Saved for everyone.');
-    await expect(page.locator('.masthead .app-name')).toHaveText('Movie Room');
-    await page.locator('#weather-settings').scrollIntoViewIfNeeded();
-    await page.locator('#settings').screenshot({ path: `${shots}/marquee-settings-weather-${width}.png` });
-    await page.locator('#display-name-settings').scrollIntoViewIfNeeded();
-    await page.locator('#settings').screenshot({ path: `${shots}/marquee-settings-name-${width}.png` });
-    expect(await page.locator('#settings').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-    await expect(page.locator('#weather-settings-status')).toHaveText('Saved to your account.');
-    await page.getByRole('button', { name: 'Close settings' }).click();
+    await expect(page.locator("#weather-content")).toContainText("20°C");
+    await page.locator("#display-name").fill("Movie Room");
+    await page.getByRole("button", { name: "Save name", exact: true }).click();
+    await expect(page.locator("#display-name-status")).toHaveText(
+      "Saved for everyone.",
+    );
+    await expect(page.locator(".masthead .app-name")).toHaveText("Movie Room");
+    await page.locator("#weather-settings").scrollIntoViewIfNeeded();
+    await page
+      .locator("#settings")
+      .screenshot({ path: `${shots}/marquee-settings-weather-${width}.png` });
+    await page.locator("#display-name-settings").scrollIntoViewIfNeeded();
+    await page
+      .locator("#settings")
+      .screenshot({ path: `${shots}/marquee-settings-name-${width}.png` });
+    expect(
+      await page
+        .locator("#settings")
+        .evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+    await expect(page.locator("#weather-settings-status")).toHaveText(
+      "Saved to your account.",
+    );
+    await page.getByRole("button", { name: "Close settings" }).click();
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await expect(page.locator('#weather-content')).toContainText('20°C');
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await expect(page.locator('#weather-city-selected')).toHaveText('Sample City, Example Region');
-    await page.locator('#display-name').fill('Marquee');
-    await page.getByRole('button', { name: 'Save name', exact: true }).click();
-    await expect(page.locator('#display-name-status')).toHaveText('Saved for everyone.');
+    await expect(page.locator("#weather-content")).toContainText("20°C");
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.locator("#weather-city-selected")).toHaveText(
+      "Sample City, Example Region",
+    );
+    await page.locator("#display-name").fill("Marquee");
+    await page.getByRole("button", { name: "Save name", exact: true }).click();
+    await expect(page.locator("#display-name-status")).toHaveText(
+      "Saved for everyone.",
+    );
   });
 }
 
-test("Seerr request buttons reflect movie/TV access and escape denial text", async ({ page }) => {
-  await page.route("**/api/me", route => route.fulfill({ json: { name: "Demo viewer", canRequest: true, isAdmin: false, requestAccess: { movie: true, tv: false, tvReason: "TV requests are not permitted by Seerr." } } }));
+test("Seerr request buttons reflect movie/TV access and escape denial text", async ({
+  page,
+}) => {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        name: "Demo viewer",
+        canRequest: true,
+        isAdmin: false,
+        requestAccess: {
+          movie: true,
+          tv: false,
+          tvReason: "TV requests are not permitted by Seerr.",
+        },
+      },
+    }),
+  );
   await login(page);
   await page.getByPlaceholder("Search movies and shows").fill("o");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator("#search-results .request-btn")).toHaveCount(1);
-  await expect(page.locator("#search-results .request-unavailable")).toHaveText("TV requests are not permitted by Seerr.");
+  await expect(page.locator("#search-results .request-unavailable")).toHaveText(
+    "TV requests are not permitted by Seerr.",
+  );
 });
 
 for (const width of [1440, 393, 320, 280]) {
-  test(`chosen marquee logo renders in header and favicon at ${width}px`, async ({ page, request }) => {
+  test(`chosen marquee logo renders in header and favicon at ${width}px`, async ({
+    page,
+    request,
+  }) => {
     await page.setViewportSize({ width, height: 950 });
     await login(page);
-    const logo = page.locator('.masthead .brand-mark');
-    await expect(logo).toHaveAttribute('src', '/icons/header-logo-96.png');
-    expect(await logo.evaluate(img => img.complete && img.naturalWidth === 112 && img.naturalHeight === 96)).toBe(true);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    const logo = page.locator(".masthead .brand-mark");
+    await expect(logo).toHaveAttribute("src", "/icons/header-logo-96.png");
+    expect(
+      await logo.evaluate(
+        (img) =>
+          img.complete && img.naturalWidth === 112 && img.naturalHeight === 96,
+      ),
+    ).toBe(true);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width);
     await page.screenshot({ path: `${shots}/marquee-logo-${width}.png` });
-    await expect(page.locator('link[rel="icon"][type="image/png"]')).toHaveAttribute('href', '/favicon.png');
-    expect((await request.get('/favicon.ico')).status()).toBe(200);
-    await page.goto('/favicon.png');
+    await expect(
+      page.locator('link[rel="icon"][type="image/png"]'),
+    ).toHaveAttribute("href", "/favicon.png");
+    expect((await request.get("/favicon.ico")).status()).toBe(200);
+    await page.goto("/favicon.png");
     await page.screenshot({ path: `${shots}/marquee-favicon-${width}.png` });
   });
 }
 
 for (const width of [1440, 393, 320, 280]) {
-  test(`episode details and premiere colors at ${width}px`, async ({ page }) => {
+  test(`episode details and premiere colors at ${width}px`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width, height: 1000 });
     await login(page);
-    await page.getByRole('button', { name: 'Agenda', exact: true }).click();
-    const premiere = page.locator('.entry.premiere').first();
+    await page.getByRole("button", { name: "Agenda", exact: true }).click();
+    const premiere = page.locator(".entry.premiere").first();
     await expect(premiere).toBeVisible();
-    await expect(premiere.locator('.entry-status')).toContainText('Season premiere');
-    expect(await premiere.evaluate(el => getComputedStyle(el).color)).toBe('rgb(239, 207, 114)');
-    const episode = page.locator('.entry[data-event]').first();
+    await expect(premiere.locator(".entry-status")).toContainText(
+      "Season premiere",
+    );
+    expect(await premiere.evaluate((el) => getComputedStyle(el).color)).toBe(
+      "rgb(239, 207, 114)",
+    );
+    const episode = page.locator(".entry[data-event]").first();
     await episode.click();
-    const modal = page.locator('#episode-detail');
+    const modal = page.locator("#episode-detail");
     await expect(modal).toBeVisible();
-    await expect(page.locator('#episode-title')).toContainText('(2026)');
-    await expect(page.locator('#episode-subtitle')).toContainText('S');
-    await expect(page.locator('#episode-genres')).toContainText('Adventure');
-    await expect(page.locator('#episode-meta')).toContainText('Sample Network · 48 min');
-    await expect(page.locator('#episode-trailer')).toHaveAttribute('href', /youtube.com\/results\?search_query=/);
-    expect(await modal.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await expect(page.locator("#episode-title")).toContainText("(2026)");
+    await expect(page.locator("#episode-subtitle")).toContainText("S");
+    await expect(page.locator("#episode-genres")).toContainText("Adventure");
+    await expect(page.locator("#episode-meta")).toContainText(
+      "Sample Network · 48 min",
+    );
+    await expect(page.locator("#episode-trailer")).toHaveAttribute(
+      "href",
+      /youtube.com\/results\?search_query=/,
+    );
+    expect(await modal.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
+      true,
+    );
     await modal.screenshot({ path: `${shots}/marquee-episode-${width}.png` });
-    await page.getByRole('button', { name: 'Close episode details' }).click();
+    await page.getByRole("button", { name: "Close episode details" }).click();
     await expect(modal).not.toBeVisible();
     await episode.focus();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press("Enter");
     await expect(modal).toBeVisible();
-    await page.keyboard.press('Escape');
+    await page.keyboard.press("Escape");
     await expect(modal).not.toBeVisible();
   });
 }
@@ -501,21 +636,123 @@ for (const width of [1440, 393, 320, 280]) {
   test(`popular poster rows at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await login(page);
-    await expect(page.locator('#popular-movies .result-card')).toHaveCount(10);
-    await expect(page.locator('#popular-tv .result-card')).toHaveCount(10);
-    await expect(page.locator('#popular-movies')).toContainText('Available');
-    await expect(page.locator('#popular-movies')).toContainText('Requested');
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.locator('#popular-section').screenshot({ path: `${shots}/marquee-popular-${width}.png` });
+    await expect(page.locator("#popular-movies .result-card")).toHaveCount(10);
+    await expect(page.locator("#popular-tv .result-card")).toHaveCount(10);
+    await expect(page.locator("#popular-movies")).toContainText("Available");
+    await expect(page.locator("#popular-movies")).toContainText("Requested");
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page
+      .locator("#popular-section")
+      .screenshot({ path: `${shots}/marquee-popular-${width}.png` });
   });
 }
 
-test('broken episode artwork falls back to the solid hero without a broken image icon', async ({ page }) => {
-  await page.route('**/api/calendar?**', route => route.fulfill({ json: { events: [{ id: 'broken', type: 'tv', title: 'Sample', subtitle: 'S01E01', date: new Date().toISOString(), status: 'upcoming', backdrop: '/api/calendar-image/broken' }], warnings: [] } }));
-  await page.route('**/api/calendar-image/broken', route => route.fulfill({ status: 404 }));
+test("broken episode artwork falls back to the solid hero without a broken image icon", async ({
+  page,
+}) => {
+  await page.route("**/api/calendar?**", (route) =>
+    route.fulfill({
+      json: {
+        events: [
+          {
+            id: "broken",
+            type: "tv",
+            title: "Sample",
+            subtitle: "S01E01",
+            date: new Date().toISOString(),
+            status: "upcoming",
+            backdrop: "/api/calendar-image/broken",
+          },
+        ],
+        warnings: [],
+      },
+    }),
+  );
+  await page.route("**/api/calendar-image/broken", (route) =>
+    route.fulfill({ status: 404 }),
+  );
   await login(page);
-  await page.locator('.entry[data-event]').first().click();
-  await expect(page.locator('#episode-detail')).toBeVisible();
-  await expect(page.locator('#episode-backdrop')).toBeHidden();
-  await page.locator('#episode-detail').screenshot({ path: `${shots}/marquee-episode-fallback.png` });
+  await page.locator(".entry[data-event]").first().click();
+  await expect(page.locator("#episode-detail")).toBeVisible();
+  await expect(page.locator("#episode-backdrop")).toBeHidden();
+  await page
+    .locator("#episode-detail")
+    .screenshot({ path: `${shots}/marquee-episode-fallback.png` });
+});
+
+test("top ten collapse and settings hiding persist", async ({ page }) => {
+  await login(page);
+  await page.locator("#popular-collapse").click();
+  await expect(page.locator("#popular-content")).toBeHidden();
+  await page
+    .locator("#popular-section")
+    .screenshot({ path: `${shots}/marquee-popular-collapsed.png` });
+  await page.reload();
+  await expect(page.locator("#popular-collapse")).toHaveText("Expand");
+  await page.locator("#popular-collapse").click();
+  await expect(page.locator("#popular-content")).toBeVisible();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator('[data-pref="popular"]').uncheck();
+  await expect(page.locator("#popular-section")).toBeHidden();
+});
+
+test("top ten posters respond to desktop hover", async ({ page }) => {
+  await login(page);
+  const card = page.locator("#popular-movies .ranked-poster").first();
+  await card.hover();
+  await expect
+    .poll(() =>
+      card.locator("img").evaluate((el) => getComputedStyle(el).transform),
+    )
+    .not.toBe("none");
+  await page
+    .locator("#popular-section")
+    .screenshot({ path: `${shots}/marquee-popular-hover.png` });
+});
+
+for (const width of [1440, 393, 280]) {
+  test(`top-ten popup details at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await login(page);
+    await page.locator("#popular-movies [data-detail-id]").first().click();
+    await expect(page.locator("#episode-detail")).toBeVisible();
+    await expect(page.locator("#episode-subtitle")).toHaveText("Movie");
+    await expect(page.locator("#episode-meta")).toContainText("Sample Network");
+    await page
+      .locator("#episode-detail")
+      .screenshot({ path: `${shots}/marquee-popular-popup-${width}.png` });
+    await page.keyboard.press("Escape");
+    await page.locator("#popular-tv [data-detail-id]").first().focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#episode-subtitle")).toHaveText("TV series");
+  });
+}
+
+test("weather refreshes on a 15-minute timer and stops when disabled", async ({
+  page,
+}) => {
+  await login(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByPlaceholder("City name").fill("Sample");
+  await page.getByRole("button", { name: "Find city", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Sample City, Example Region", exact: true })
+    .click();
+  await page.locator('[data-pref="weather"]').check();
+  await expect(page.locator("#weather-content")).toContainText("68°F");
+  await page.clock.install();
+  await page.evaluate(() => scheduleWeather());
+  let calls = 0;
+  page.on("request", (req) => {
+    if (req.url().includes("/api/weather?")) calls++;
+  });
+  await page.clock.fastForward(15 * 60 * 1000);
+  await expect.poll(() => calls).toBe(1);
+  await page.locator('[data-pref="weather"]').uncheck();
+  await page.clock.fastForward(30 * 60 * 1000);
+  expect(calls).toBe(1);
 });

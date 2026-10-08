@@ -4,6 +4,7 @@ import http from "node:http";
 import { spawn } from "node:child_process";
 
 const calls = [];
+let maliciousArtwork = null;
 const service = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   calls.push({
@@ -143,6 +144,26 @@ const service = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/Users/missing-season/Items/season-1")
     return res.end(JSON.stringify({ IndexNumber: 1 }));
+  if (url.pathname === "/api/v3/calendar" && maliciousArtwork)
+    return res.end(
+      JSON.stringify([
+        {
+          id: 1,
+          series: {
+            id: 17,
+            title: "Synthetic show",
+            monitored: true,
+            images: [{ coverType: "fanart", remoteUrl: maliciousArtwork }],
+          },
+          title: "Pilot",
+          seasonNumber: 1,
+          episodeNumber: 1,
+          airDateUtc: "2026-10-07T20:00:00Z",
+          hasFile: true,
+          monitored: true,
+        },
+      ]),
+    );
   if (url.pathname === "/api/v3/calendar")
     return res.end(
       JSON.stringify([
@@ -201,7 +222,8 @@ const service = http.createServer(async (req, res) => {
     return res.end(
       JSON.stringify({
         results: Array.from({ length: 20 }, (_, i) => ({
-          id: 200 + i,
+          id: 200 + i + Number(url.searchParams.get("page")) * 100,
+          genreIds: i < 16 && url.pathname.endsWith("tv") ? [10767] : [18],
           mediaType: url.pathname.endsWith("tv") ? "tv" : "movie",
           title: `Popular ${i}`,
           name: `Popular ${i}`,
@@ -253,7 +275,12 @@ const service = http.createServer(async (req, res) => {
     assert.equal(req.headers["x-api-user"], "4");
     assert.equal(req.headers["x-api-key"], "seerr-mock");
     return res.end(
-      JSON.stringify({ title: "Requested Film", posterPath: "/abc.jpg" }),
+      JSON.stringify({
+        title: "Requested Film",
+        posterPath: "/abc.jpg",
+        genres: [{ name: "Drama" }],
+        productionCompanies: [{ name: "Sample Studio" }],
+      }),
     );
   }
   if (url.pathname === "/api/v1/request" && req.method === "POST") {
@@ -744,6 +771,9 @@ try {
     assert.equal(data.movies[0].availability, 5);
     assert.equal(data.tv[1].requested, true);
     assert.equal(data.tv[0].mediaType, "tv");
+    assert.equal(data.tv[0].title, "Popular 16");
+    assert.equal(data.tv[4].title, "Popular 16");
+    assert.equal(new Set(data.tv.map((item) => item.id)).size, 10);
     assert.equal(
       (
         await fetch(`${base}/api/calendar-image/arbitrary`, {
@@ -778,6 +808,62 @@ try {
     assert.match(data.items[0].subtitle, /Episode 4: Actual new episode/);
     assert.match(data.items[0].link, /id=physical-episode$/);
     assert.equal(JSON.stringify(data).includes("virtual-future"), false);
+  });
+  await test("calendar proxy rejects forged artwork hosts and isolates image maps by session", async () => {
+    const a = await signin("alice");
+    const cookieA = a.headers.get("set-cookie").split(";")[0];
+    const b = await signin("bob");
+    const cookieB = b.headers.get("set-cookie").split(";")[0];
+    for (const art of [
+      "http://127.0.0.1/secret",
+      "https://image.tmdb.org.evil.invalid/x.jpg",
+      "https://image.tmdb.org@evil.invalid/x.jpg",
+      "https://image.tmdb.org:444/x.jpg",
+      "https://user:pass@image.tmdb.org/x.jpg",
+      "https://evil.invalid/x.jpg",
+    ]) {
+      maliciousArtwork = art;
+      const data = await (
+        await fetch(`${base}/api/calendar?start=2026-10-01&end=2026-10-31`, {
+          headers: { Cookie: cookieA },
+        })
+      ).json();
+      assert.equal(data.events[0].backdrop, null, art);
+      assert.equal(
+        (
+          await fetch(`${base}/api/calendar-image/tv-1`, {
+            headers: { Cookie: cookieA },
+          })
+        ).status,
+        404,
+      );
+    }
+    maliciousArtwork = null;
+    await fetch(`${base}/api/calendar?start=2026-10-01&end=2026-10-31`, {
+      headers: { Cookie: cookieA },
+    });
+    assert.equal(
+      (
+        await fetch(`${base}/api/calendar-image/tv-1`, {
+          headers: { Cookie: cookieB },
+        })
+      ).status,
+      404,
+    );
+  });
+  await test("popular details read metadata as linked user", async () => {
+    const login = await signin("alice");
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const data = await (
+      await fetch(`${base}/api/seerr/details/movie/9001`, {
+        headers: { Cookie: cookie },
+      })
+    ).json();
+    assert.equal(data.title, "Requested Film");
+    assert.equal(data.subtitle, "Movie");
+    assert.deepEqual(data.genres, ["Drama"]);
+    assert.equal(data.network, "Sample Studio");
+    assert.equal(data.backdrop, "/api/seerr/image?path=%2Fabc.jpg");
   });
   await test("bad passwords are rejected, repeated attempts are limited", async () => {
     for (let i = 0; i < 10; i++)

@@ -25,6 +25,7 @@ const defaults = {
   hideUnmonitored: false,
   requests: true,
   popular: true,
+  popularCollapsed: false,
   defaultView: "auto",
 };
 const statusLabel = {
@@ -112,6 +113,14 @@ function applyPrefs() {
   $("#calendar-section").hidden = !state.prefs.calendar;
   $("#search-section").hidden = !state.prefs.search;
   $("#popular-section").hidden = !state.prefs.popular;
+  $("#popular-content").hidden = Boolean(state.prefs.popularCollapsed);
+  $("#popular-collapse").textContent = state.prefs.popularCollapsed
+    ? "Expand"
+    : "Collapse";
+  $("#popular-collapse").setAttribute(
+    "aria-expanded",
+    String(!state.prefs.popularCollapsed),
+  );
   $("#requests-section").hidden = !state.prefs.requests;
   $("#legend").hidden = !state.prefs.legend;
   $(".recent-controls").hidden = !state.prefs.shelfNavigation;
@@ -121,6 +130,7 @@ function applyPrefs() {
   $("#nothing").hidden = state.prefs.recent || state.prefs.calendar;
   $("#weather").hidden = !state.prefs.weather;
   if (state.prefs.weather) loadWeather();
+  scheduleWeather();
 }
 function buildSettings() {
   const labels = {
@@ -306,13 +316,16 @@ function openEpisode(id) {
     (event) => event.id === id && event.type === "tv",
   );
   if (!event) return;
+  showDetail(event);
+}
+function showDetail(event) {
   $("#episode-title").textContent =
     `${event.title}${event.year ? ` (${event.year})` : ""}`;
   $("#episode-subtitle").textContent = event.subtitle;
   $("#episode-meta").textContent = [
     event.network,
     event.runtime ? `${event.runtime} min` : null,
-    statusLabel[event.status],
+    statusLabel[event.status] || event.subtitle,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -406,6 +419,27 @@ function move(amount) {
     state.date = addDays(state.date, amount * (state.view === "week" ? 7 : 1));
   loadCalendar();
 }
+let weatherTimer;
+let weatherLastLoaded = 0;
+function scheduleWeather() {
+  clearInterval(weatherTimer);
+  if (!state.prefs.weather || !state.prefs.weatherCity) return;
+  weatherTimer = setInterval(
+    () => {
+      if (!document.hidden && !$("#dashboard").hidden) loadWeather();
+    },
+    15 * 60 * 1000,
+  );
+}
+document.addEventListener("visibilitychange", () => {
+  if (
+    !document.hidden &&
+    !$("#dashboard").hidden &&
+    state.prefs.weather &&
+    Date.now() - weatherLastLoaded >= 15 * 60 * 1000
+  )
+    loadWeather();
+});
 async function loadWeather() {
   try {
     const city = state.prefs.weatherCity;
@@ -420,6 +454,7 @@ async function loadWeather() {
       units: state.prefs.weatherUnits,
     });
     const data = await api(`/api/weather?${params}`);
+    weatherLastLoaded = Date.now();
     const codes = {
       0: "Clear",
       1: "Mostly clear",
@@ -465,6 +500,32 @@ function renderSearch(results) {
     : '<p class="empty">Nothing found. Try another title.</p>';
   fixBrokenPosters();
 }
+$("#popular-collapse").addEventListener("click", () => {
+  state.prefs.popularCollapsed = !state.prefs.popularCollapsed;
+  persist();
+});
+async function openPopular(card) {
+  try {
+    showDetail(
+      await api(
+        `/api/seerr/details/${card.dataset.detailType}/${card.dataset.detailId}`,
+      ),
+    );
+  } catch (error) {
+    $("#popular-status").textContent = error.message;
+  }
+}
+$("#popular-section").addEventListener("click", (event) => {
+  const card = event.target.closest("[data-detail-id]");
+  if (card) openPopular(card);
+});
+$("#popular-section").addEventListener("keydown", (event) => {
+  const card = event.target.closest("[data-detail-id]");
+  if (card && ["Enter", " "].includes(event.key)) {
+    event.preventDefault();
+    openPopular(card);
+  }
+});
 async function loadPopular() {
   if (!state.prefs.popular) return;
   try {
@@ -473,7 +534,7 @@ async function loadPopular() {
       $("#popular-" + type).innerHTML = data[type]
         .map(
           (item, i) =>
-            `<div class="ranked-poster"><span class="popular-rank">${i + 1}</span>${resultCardHtml(item)}</div>`,
+            `<div class="ranked-poster"><span class="popular-rank">${i + 1}</span>${resultCardHtml(item).replace('<div class="poster-art">', `<div class="poster-art" role="button" tabindex="0" data-detail-type="${item.mediaType}" data-detail-id="${item.id}" aria-label="Details for ${escape(item.title)}">`)}</div>`,
         )
         .join("");
     }
@@ -665,7 +726,12 @@ $("#today").addEventListener("click", () => {
   loadCalendar();
 });
 $("#refresh").addEventListener("click", () =>
-  Promise.all([loadRecent(), loadCalendar(), loadRequests()]),
+  Promise.all([
+    loadRecent(),
+    loadCalendar(),
+    loadRequests(),
+    ...(state.prefs.weather ? [loadWeather()] : []),
+  ]),
 );
 $("#filter-button").addEventListener("click", () => {
   $("#filters").hidden = !$("#filters").hidden;

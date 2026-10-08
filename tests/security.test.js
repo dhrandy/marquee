@@ -67,6 +67,10 @@ try {
 
   await test("auth bypass: every media and mutation route rejects anonymous clients", async () => {
     const gets = [
+      "/api/seerr/details/movie/1",
+      "/api/seerr/popular",
+      "/api/weather-settings",
+      "/api/calendar-image/id",
       "/api/me",
       "/api/recent",
       "/api/calendar?start=2026-10-01&end=2026-10-02",
@@ -265,6 +269,41 @@ try {
     assert.equal(body.error.includes("topsecret-marker"), false);
   });
 
+  await test("new endpoints reject invalid IDs, array search terms and weather markup", async () => {
+    const cookie = await login();
+    for (const path of [
+      "/api/seerr/details/movie/0",
+      "/api/seerr/details/person/1",
+      "/api/seerr/details/tv/1000000001",
+      "/api/seerr/details/tv/1abc",
+      "/api/seerr/search?query[]=x",
+      "/api/weather?latitude[]=0&longitude=0&units=celsius",
+    ])
+      assert.equal(
+        (await fetch(`${base}${path}`, { headers: { Cookie: cookie } })).status,
+        400,
+        path,
+      );
+    assert.equal(
+      (
+        await post(
+          "/api/weather-settings",
+          JSON.stringify({
+            weather: true,
+            weatherUnits: "celsius",
+            weatherCity: { label: "<img>", latitude: 0, longitude: 0 },
+          }),
+          { Cookie: cookie },
+        )
+      ).status,
+      400,
+    );
+    assert.equal(
+      (await post("/api/display-name", '{"name":"Hidden"}', { Cookie: cookie }))
+        .status,
+      403,
+    );
+  });
   await test("method tampering does not reach handlers", async () => {
     const cookie = await login();
     const response = await fetch(`${base}/api/me`, {
@@ -272,6 +311,17 @@ try {
       headers: { Origin: base, Cookie: cookie },
     });
     assert.notEqual(response.status, 200);
+  });
+  await test("authenticated API floods are capped across the user's sessions", async () => {
+    const cookie = await login();
+    let status;
+    for (let i = 0; i < 241; i++)
+      status = (
+        await fetch(`${base}/api/weather-settings`, {
+          headers: { Cookie: cookie },
+        })
+      ).status;
+    assert.equal(status, 429);
   });
 } finally {
   server.kill();

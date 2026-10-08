@@ -373,20 +373,63 @@ export async function seerrSearch(query, page, userId) {
   return normalizeSeerrResults(data);
 }
 
+export async function seerrDetails(type, id, userId) {
+  const data = await upstream(process.env.SEERR_URL, `/api/v1/${type}/${id}`, {
+    headers: {
+      "X-Api-Key": process.env.SEERR_API_KEY,
+      "X-API-User": String(userId),
+    },
+  });
+  const safeArt = (value) =>
+    typeof value === "string" &&
+    /^\/[A-Za-z0-9]+\.(jpg|jpeg|png|webp)$/.test(value)
+      ? `/api/seerr/image?path=${encodeURIComponent(value)}`
+      : null;
+  return {
+    title: data.title || data.name || "Untitled",
+    year: String(data.releaseDate || data.firstAirDate || "").slice(0, 4),
+    subtitle: type === "movie" ? "Movie" : "TV series",
+    overview: data.overview || "Overview not available yet.",
+    genres: (data.genres || []).slice(0, 8).map((genre) => genre.name),
+    network:
+      (type === "tv" ? data.networks : data.productionCompanies)
+        ?.map((item) => item.name)
+        .slice(0, 3)
+        .join(", ") || null,
+    runtime: data.runtime || data.episodeRunTime?.[0] || null,
+    backdrop: safeArt(data.backdropPath) || safeArt(data.posterPath),
+  };
+}
+
 export async function seerrPopular(userId) {
   const [movies, tv] = await Promise.all(
     ["movies", "tv"].map(async (type) => {
-      const data = await upstream(
-        process.env.SEERR_URL,
-        `/api/v1/discover/${type}?page=1&sortBy=popularity.desc`,
-        {
-          headers: {
-            "X-Api-Key": process.env.SEERR_API_KEY,
-            "X-API-User": String(userId),
+      const results = [];
+      for (let page = 1; page <= 5 && results.length < 10; page++) {
+        const data = await upstream(
+          process.env.SEERR_URL,
+          `/api/v1/discover/${type}?page=${page}&sortBy=popularity.desc`,
+          {
+            headers: {
+              "X-Api-Key": process.env.SEERR_API_KEY,
+              "X-API-User": String(userId),
+            },
           },
-        },
-      );
-      return normalizeSeerrResults(data).slice(0, 10);
+        );
+        const filtered = (data.results || []).filter(
+          (item) =>
+            type !== "tv" ||
+            !(item.genreIds || item.genre_ids || []).includes(10767),
+        );
+        for (const item of normalizeSeerrResults({ results: filtered }))
+          if (!results.some((old) => old.id === item.id)) results.push(item);
+        if (
+          !data.results?.length ||
+          (data.totalPages && page >= data.totalPages)
+        )
+          break;
+      }
+      return results.slice(0, 10);
     }),
   );
   return { movies, tv };

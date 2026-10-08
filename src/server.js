@@ -11,6 +11,7 @@ import {
   jellyfinHeaders,
   seerrSearch,
   seerrPopular,
+  seerrDetails,
   seerrIdentity,
   seerrRequest,
   seerrRequests,
@@ -87,6 +88,7 @@ const demo = process.env.DEMO_MODE === "true";
 const secure = process.env.COOKIE_SECURE !== "false";
 const sessions = new Map();
 const attempts = new Map();
+const apiAttempts = new Map();
 const ttl = 8 * 60 * 60 * 1000;
 const port = Number(process.env.PORT || 8739);
 
@@ -130,7 +132,33 @@ function session(req) {
 function requireUser(req, res, next) {
   req.user = session(req);
   if (!req.user) return res.status(401).json({ error: "Please sign in." });
+  const key = demo ? req.user.sid : req.user.id;
+  const old = apiAttempts.get(key);
+  const entry =
+    old && old.until > Date.now()
+      ? old
+      : { count: 0, until: Date.now() + 60000 };
+  entry.count++;
+  apiAttempts.set(key, entry);
+  if (entry.count > 240)
+    return res
+      .status(429)
+      .json({ error: "Too many requests. Try again in a minute." });
   next();
+}
+async function imageBytes(response, limit) {
+  if (Number(response.headers.get("content-length")) > limit) {
+    await response.body?.cancel();
+    throw new Error("Image too large");
+  }
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of response.body) {
+    size += chunk.length;
+    if (size > limit) throw new Error("Image too large");
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
 function cookie(res, value, maxAge) {
   res.cookie("marquee_session", value, {
@@ -299,6 +327,38 @@ app.post("/api/display-name", requireUser, async (req, res) => {
     });
   }
 });
+app.get("/api/seerr/details/:type/:id", requireUser, async (req, res) => {
+  const { type, id } = req.params;
+  if (
+    !["movie", "tv"].includes(type) ||
+    !/^\d+$/.test(id) ||
+    !Number.isSafeInteger(Number(id)) ||
+    Number(id) < 1 ||
+    Number(id) > 1e9
+  )
+    return res.status(400).json({ error: "Invalid media item." });
+  if (demo)
+    return res.json({
+      title: type === "tv" ? "North of Nowhere" : "The Last Signal",
+      year: "2026",
+      subtitle: type === "tv" ? "TV series" : "Movie",
+      genres: ["Adventure", "Drama"],
+      network: "Sample Network",
+      runtime: 48,
+      overview:
+        "A discovery draws old friends into a story that changes their lives.",
+      backdrop: "/art/north.svg",
+    });
+  try {
+    const access = await requestAccess(req.user);
+    if (access.error) return res.status(403).json({ error: access.error });
+    res.json(await seerrDetails(type, Number(id), access.id));
+  } catch {
+    res
+      .status(502)
+      .json({ error: "Details are temporarily unavailable from Seerr." });
+  }
+});
 app.get("/api/seerr/popular", requireUser, async (req, res) => {
   if (demo) {
     const sample = demoSearch("");
@@ -365,10 +425,11 @@ app.get("/api/seerr/popular", requireUser, async (req, res) => {
   }
 });
 app.get("/api/seerr/search", requireUser, async (req, res) => {
-  const query = String(req.query.query ?? "");
+  const query = req.query.query;
   const page = Number(req.query.page || 1);
   if (
-    !query ||
+    typeof query !== "string" ||
+    !query.trim() ||
     query.length > 120 ||
     !Number.isInteger(page) ||
     page < 1 ||
@@ -458,8 +519,7 @@ app.get("/api/seerr/image", requireUser, async (req, res) => {
       )
     )
       return res.sendStatus(502);
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length > 2 * 1024 * 1024) return res.sendStatus(502);
+    const bytes = await imageBytes(response, 2 * 1024 * 1024);
     res
       .type(response.headers.get("content-type"))
       .set("Cache-Control", "private, max-age=86400")
@@ -502,8 +562,7 @@ app.get("/api/image/:id", requireUser, async (req, res) => {
       )
     )
       return res.sendStatus(502);
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length > 5 * 1024 * 1024) return res.sendStatus(502);
+    const bytes = await imageBytes(response, 5 * 1024 * 1024);
     res.type(response.headers.get("content-type")).send(bytes);
   } catch {
     res.sendStatus(502);
@@ -581,8 +640,7 @@ app.get("/api/calendar-image/:id", requireUser, async (req, res) => {
       )
     )
       return res.sendStatus(502);
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length > 5 * 1024 * 1024) return res.sendStatus(502);
+    const bytes = await imageBytes(response, 5 * 1024 * 1024);
     res
       .type(response.headers.get("content-type"))
       .set("Cache-Control", "private, max-age=3600")
@@ -728,6 +786,8 @@ setInterval(() => {
     if (data.expires < Date.now()) sessions.delete(id);
   for (const [id, data] of weatherAttempts)
     if (data.until < Date.now()) weatherAttempts.delete(id);
+  for (const [id, data] of apiAttempts)
+    if (data.until < Date.now()) apiAttempts.delete(id);
   for (const [ip, data] of attempts)
     if (data.until < Date.now()) attempts.delete(ip);
 }, 60000).unref();
