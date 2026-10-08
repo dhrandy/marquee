@@ -1123,7 +1123,7 @@ for (const width of [1440, 393, 320, 280]) {
       .screenshot({ path: `${shots}/marquee-request-popup-${width}.png` });
     await page.locator("#episode-close").click();
     await expect(page.locator("footer")).toContainText(
-      "your media, your server, your way",
+      "Your Media. Your Server. Your Way.",
     );
     await page
       .locator("footer")
