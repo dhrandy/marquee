@@ -1208,3 +1208,44 @@ test("blue orange accessibility palette applies to every calendar view", async (
       .evaluate((el) => getComputedStyle(el).color),
   ).toBe(normal);
 });
+
+for (const width of [393, 320, 280]) {
+  test(`mobile form controls keep 16px text and zoom access at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 852 });
+    await page.route("**/api/config", (route) =>
+      route.fulfill({ json: { demo: false, name: "Marquee" } }),
+    );
+    await page.goto("/");
+    const viewport = await page
+      .locator('meta[name="viewport"]')
+      .getAttribute("content");
+    expect(viewport).not.toMatch(/maximum-scale|user-scalable\s*=\s*(no|0)/i);
+    for (const input of await page.locator("#login-form input").all()) {
+      expect(
+        await input.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+      ).toBeGreaterThanOrEqual(16);
+      await input.focus();
+    }
+    await page
+      .locator("#login")
+      .screenshot({ path: `${shots}/marquee-login-16px-${width}.png` });
+    await page.unroute("**/api/config");
+    await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    for (const input of await page.locator("input, select, textarea").all()) {
+      expect(
+        await input.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+      ).toBeGreaterThanOrEqual(16);
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page
+      .locator("#settings")
+      .screenshot({ path: `${shots}/marquee-settings-16px-${width}.png` });
+  });
+}

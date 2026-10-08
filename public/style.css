@@ -1123,3 +1123,11 @@ body.colorblind .legend .premiere { color:#ffe66b; }
 .jellyfin-shortcut img { width:22px; height:22px; }
 .jellyfin-shortcut:hover { color:#e2d5ff; border-color:#a991ee; }
 @media(max-width:600px) { .masthead { flex-wrap:wrap; gap:12px; } .account { flex-wrap:wrap; } footer { flex-wrap:wrap; row-gap:8px; } }
+
+/* Keep iPhone focus from auto-zooming; leave pinch zoom available. */
+@media (max-width: 900px), (pointer: coarse) {
+  input, select, textarea,
+  .login-card input, .setting select, .settings-input-row input {
+    font-size: 16px;
+  }
+}
