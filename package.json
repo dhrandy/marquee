@@ -6,8 +6,8 @@
   "description": "A small self-hosted media shelf and release calendar",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test tests/unit.test.js tests/live.test.js tests/security.test.js && playwright test",
-    "test:unit": "node --test tests/unit.test.js tests/live.test.js tests/security.test.js"
+    "test": "node --test tests/unit.test.js tests/live.test.js tests/security.test.js tests/proxy.test.js && playwright test",
+    "test:unit": "node --test tests/unit.test.js tests/live.test.js tests/security.test.js tests/proxy.test.js"
   },
   "dependencies": {
     "express": "^5.1.0"

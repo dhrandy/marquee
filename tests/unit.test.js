@@ -308,3 +308,13 @@ test("Seerr facts validate scores, releases and country data without guesses", a
   assert.equal(empty.originalLanguage,null);
   assert.equal(empty.productionCountries.length,0);
 });
+
+import { trustedProxies, allowedOrigin } from "../src/security.js";
+test("proxy trust requires explicit IPs and HTTPS origins stay strict",()=>{
+ assert.equal(trustedProxies(),false);
+ assert.deepEqual(trustedProxies("127.0.0.1, ::1, 192.0.2.4/32"),["127.0.0.1","::1","192.0.2.4/32"]);
+ for(const invalid of ["true","1","loopback","0.0.0.0/0","::/0","192.0.2.4/33","127.0.0.1/32/1"])assert.throws(()=>trustedProxies(invalid));
+ assert.equal(allowedOrigin("https://example.test","example.test",true),true);
+ for(const origin of ["http://example.test","null",undefined,"https://example.test.evil.test"])assert.equal(allowedOrigin(origin,"example.test",true),false);
+ assert.equal(allowedOrigin("http://example.test","example.test",false),true);
+});

@@ -66,6 +66,7 @@ services:
       DEMO_MODE: ${DEMO_MODE}
       # false only for a trusted plain-HTTP LAN; keep true behind HTTPS.
       COOKIE_SECURE: ${COOKIE_SECURE}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       JELLYFIN_URL: ${JELLYFIN_URL}
       SONARR_URL: ${SONARR_URL}
       SONARR_API_KEY: ${SONARR_API_KEY}

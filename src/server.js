@@ -1,4 +1,5 @@
 import express from "express";
+import { trustedProxies, allowedOrigin } from "./security.js";
 import crypto from "node:crypto";
 import path from "node:path";
 import fs from "node:fs/promises";
@@ -92,6 +93,7 @@ const apiAttempts = new Map();
 const ttl = 8 * 60 * 60 * 1000;
 const port = Number(process.env.PORT || 8739);
 
+app.set("trust proxy", trustedProxies(process.env.TRUSTED_PROXIES));
 app.disable("x-powered-by");
 app.use((req, res, next) => {
   res.set({
@@ -108,12 +110,7 @@ app.use((req, res, next) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
     // Browser writes must be same-origin. Non-browser clients can use a same-origin header.
     const origin = req.headers.origin;
-    if (
-      !origin ||
-      !["http:", "https:"].some(
-        (protocol) => origin === `${protocol}//${req.headers.host}`,
-      )
-    ) {
+    if (!allowedOrigin(origin, req.headers.host, secure)) {
       return res.status(403).json({ error: "Request origin not allowed." });
     }
   }
@@ -172,7 +169,7 @@ function cookie(res, value, maxAge) {
 
 app.get("/api/config", (req, res) => res.json({ demo, name: displayName }));
 app.post("/api/login", async (req, res) => {
-  const ip = req.socket.remoteAddress;
+  const ip = req.ip;
   const current = attempts.get(ip) || {
     count: 0,
     until: Date.now() + 15 * 60 * 1000,
