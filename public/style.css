@@ -1131,3 +1131,12 @@ body.colorblind .legend .premiere { color:#ffe66b; }
     font-size: 16px;
   }
 }
+
+/* One continuous backdrop behind the whole detail popup. */
+.episode-surface { position:relative; isolation:isolate; overflow:hidden; background:#10121c; }
+.episode-hero { background:transparent; isolation:auto; overflow:visible; }
+.episode-hero::after { content:none; }
+.episode-surface::after { content:""; position:absolute; inset:0; z-index:-1; pointer-events:none; background:linear-gradient(180deg,rgba(12,15,24,.76),rgba(12,15,24,.88)); }
+.episode-body { position:relative; padding-top:0; }
+.episode-meta, #episode-rating { color:#c5cad6; }
+#episode-trailer { background:rgba(12,15,24,.45); }
