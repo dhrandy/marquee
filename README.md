@@ -4,12 +4,7 @@
 
 A small self-hosted media home screen: recently added at the top, a release calendar underneath. Sign in with your Jellyfin account. Your recent titles follow your Jellyfin library permissions.
 
-<img src="docs/images/desktop.png" alt="Marquee desktop demo with poster shelf and monthly calendar" width="100%">
-
-<details>
-<summary>Full dashboard example (requester names removed)</summary>
-<img src="docs/images/dashboard-redacted.png" alt="Marquee full dashboard with recent titles, agenda, Seerr search, top ten and Requests; requester names removed" width="100%">
-</details>
+<img src="docs/images/dashboard-redacted.png" alt="Marquee dashboard with recent titles, release agenda, Seerr search, top ten and Requests; requester names removed" width="100%">
 
 <details>
 <summary>Mobile demo</summary>
