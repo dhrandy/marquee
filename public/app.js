@@ -407,7 +407,34 @@ function statusBadgeHtml(item) {
   const [icon, cls] = ({2:["bell","pending"],3:["clock","processing"],4:["minus-small","partial"],5:["check-circle","available"],6:["eye-slash","blocked"],7:["trash","deleted"]})[item.availability] || ["clock","processing"];
   return `<span class="poster-status ${cls}" role="img" aria-label="${label}" title="${label}">${seerrStatusIcons[icon]}</span>`;
 }
+function renderDetailFacts(facts) {
+  const panel = $("#episode-facts");
+  panel.innerHTML = "";
+  panel.hidden = true;
+  if (!facts) return;
+  const scores = facts.scores || {};
+  const ratings = [["critics", "🍅", "Rotten Tomatoes critics", "%"], ["audience", "🍿", "Rotten Tomatoes audience", "%"], ["imdb", "IMDb", "IMDb", "/10"], ["tmdb", "TMDB", "TMDB user score", "%"]]
+    .filter(([key]) => Number.isFinite(scores[key]) && scores[key] >= 0);
+  let html = state.prefs.ratings && ratings.length ? `<div class="detail-scores">${ratings.map(([key, icon, label, suffix]) => `<span class="detail-score" title="${label}" aria-label="${label}: ${scores[key]}${suffix}"><span class="score-mark ${key}">${icon}</span> ${scores[key]}${suffix}</span>`).join("")}</div>` : "";
+  const row = (label, value) => `<div class="detail-fact"><strong>${label}</strong><span>${value}</span></div>`;
+  if (facts.status) html += row("Status", escape(facts.status));
+  if (facts.releases?.length) html += row("Release dates", facts.releases.map(r => {
+    const date = new Date(`${r.date}T12:00:00Z`);
+    if (!Number.isFinite(date.getTime())) return "";
+    const icon = ({ Theatrical:"🎟", Digital:"☁", Physical:"◉", "First aired":"▣" })[r.type] || "▦";
+    return `<span class="detail-release" title="${escape(r.type)}${r.region ? ` (${escape(r.region)})` : ""}"><span class="release-label"><span aria-hidden="true">${icon}</span><small>${escape(r.type)}${r.region ? ` · ${escape(r.region)}` : ""}</small></span><span class="release-date">${escape(date.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric",timeZone:"UTC"}))}</span></span>`;
+  }).join(""));
+  if (facts.productionCountries?.length) html += row("Production", `<span class="country-flags">${facts.productionCountries.map(c => `<span tabindex="0" title="${escape(c.name)}" aria-label="${escape(c.name)}">${/^[A-Z]{2}$/.test(c.code) ? String.fromCodePoint(...[...c.code].map(x => 127397 + x.charCodeAt())) : escape(c.name)}</span>`).join(" ")}</span>`);
+  if (facts.originalLanguage) {
+    let language = facts.originalLanguage;
+    try { language = new Intl.DisplayNames([navigator.language || "en"], { type:"language" }).of(language) || language; } catch {}
+    html += row("Original language", escape(language));
+  }
+  panel.innerHTML = html;
+  panel.hidden = !html;
+}
 function showDetail(event) {
+  renderDetailFacts(event.facts);
   $("#episode-title").textContent =
     `${event.title}${event.year ? ` (${event.year})` : ""}`;
   $("#episode-subtitle").textContent = event.subtitle;
@@ -457,7 +484,7 @@ function showDetail(event) {
     .join("");
   $("#episode-rating").textContent = ratingText(event.rating);
   $("#episode-rating").hidden =
-    !state.prefs.ratings || !ratingText(event.rating);
+    !state.prefs.ratings || !ratingText(event.rating) || Boolean(event.facts?.scores?.tmdb !== null && event.facts?.scores?.tmdb !== undefined);
   const image = $("#episode-backdrop");
   const poster = $("#episode-poster");
   const hero = $(".episode-hero");

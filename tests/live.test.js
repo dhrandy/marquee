@@ -300,15 +300,32 @@ const service = http.createServer(async (req, res) => {
       }),
     );
   }
+  if (["/api/v1/movie/9002/ratingscombined","/api/v1/tv/9003/ratings"].includes(url.pathname)) {
+    assert.equal(req.headers["x-api-user"], "4");
+    assert.equal(req.headers["x-api-key"], "seerr-mock");
+    if (url.pathname.includes("9002")) { res.statusCode=503; return res.end(JSON.stringify({error:"ratings unavailable"})); }
+    return res.end(JSON.stringify({criticsScore:81,audienceScore:72}));
+  }
+  if (["/api/v1/movie/9002","/api/v1/tv/9003"].includes(url.pathname)) {
+    assert.equal(req.headers["x-api-user"], "4");
+    return res.end(JSON.stringify({title:"Fallback Film",name:"Sample Show",status:"Returning Series",firstAirDate:"2025-02-17",originalLanguage:"en"}));
+  }
+  if (url.pathname === "/api/v1/movie/9001/ratingscombined") {
+    assert.equal(req.headers["x-api-user"], "4");
+    assert.equal(req.headers["x-api-key"], "seerr-mock");
+    return res.end(JSON.stringify({rt:{criticsScore:90,audienceScore:97},imdb:{criticsScore:8}}));
+  }
   if (url.pathname === "/api/v1/movie/9001") {
     assert.equal(req.headers["x-api-user"], "4");
     assert.equal(req.headers["x-api-key"], "seerr-mock");
     return res.end(
       JSON.stringify({
         title: "Requested Film",
+        status:"Released", originalLanguage:"en",
+        productionCountries:[{iso_3166_1:"US",name:"United States"}],
         releases: {
           results: [
-            { iso_3166_1: "US", release_dates: [{ certification: "PG-13" }] },
+            { iso_3166_1: "US", release_dates: [{ certification: "PG-13", type:3, release_date:"2026-07-31T00:00:00Z" }] },
           ],
         },
         credits: {
@@ -923,12 +940,27 @@ try {
     ).json();
     assert.equal(data.title, "Requested Film");
     assert.equal(data.subtitle, "Movie");
+    assert.deepEqual(data.facts.scores,{critics:90,audience:97,imdb:8,tmdb:84});
+    assert.equal(data.facts.status,"Released");
+    assert.equal(data.facts.originalLanguage,"en");
+    assert.equal(data.facts.productionCountries[0].name,"United States");
+    assert.equal(data.facts.releases[0].date,"2026-07-31");
     assert.equal(data.contentRating, "PG-13");
     assert.deepEqual(data.cast, ["Alex Sample", "Morgan Example"]);
     assert.deepEqual(data.rating, { value: 8.4, source: "TMDB" });
     assert.deepEqual(data.genres, ["Drama"]);
     assert.equal(data.network, "Sample Studio");
     assert.equal(data.backdrop, "/api/seerr/image?path=%2Fabc.jpg");
+  });
+  await test("optional movie ratings failure and TV ratings keep detail usable",async()=>{
+    const cookie=(await signin("alice")).headers.get("set-cookie").split(";")[0];
+    const get=async path=>{const response=await fetch(`${base}/api/seerr/details/${path}`,{headers:{Cookie:cookie}});assert.equal(response.status,200);return response.json();};
+    const movie=await get("movie/9002");
+    assert.equal(movie.title,"Fallback Film");
+    assert.deepEqual(movie.facts.scores,{critics:null,audience:null,imdb:null,tmdb:null});
+    const tv=await get("tv/9003");
+    assert.deepEqual(tv.facts.scores,{critics:81,audience:72,imdb:null,tmdb:null});
+    assert.deepEqual(tv.facts.releases,[{type:"First aired",date:"2025-02-17",region:null}]);
   });
   await test("accessibility preference is isolated by user and validates writes", async () => {
     const alice = (await signin("alice")).headers.get("set-cookie");

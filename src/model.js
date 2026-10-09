@@ -211,3 +211,36 @@ export function topCast(people, jellyfin = false) {
     ),
   ].slice(0, 4);
 }
+
+// Facts shown only for Seerr detail popups. Missing data stays missing.
+export function seerrFacts(data, type, ratings = {}) {
+  const score = (v, max) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : null;
+  const day = (v) => {
+    if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}(T|$)/.test(v)) return null;
+    const d = v.slice(0, 10);
+    const date = new Date(`${d}T12:00:00Z`);
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === d ? d : null;
+  };
+  const region = data.releases?.results?.find(r => r.iso_3166_1 === "US");
+  const releases = [];
+  for (const [code, label] of [[3, "Theatrical"], [4, "Digital"], [5, "Physical"]]) {
+    const dates = (region?.release_dates || []).filter(r => r.type === code).map(r => day(r.release_date)).filter(Boolean).sort();
+    if (dates.length) releases.push({ type: label, date: dates[0], region: "US" });
+  }
+  if (!releases.length) {
+    const date = day(type === "tv" ? data.firstAirDate : data.releaseDate);
+    if (date) releases.push({ type: type === "tv" ? "First aired" : "Release", date, region: null });
+  }
+  return {
+    status: typeof data.status === "string" ? data.status.slice(0, 80) : null,
+    productionCountries: (Array.isArray(data.productionCountries) ? data.productionCountries : []).filter(c => /^[A-Z]{2}$/.test(c.iso_3166_1) && typeof c.name === "string").slice(0, 12).map(c => ({ code: c.iso_3166_1, name: c.name.slice(0, 100) })),
+    originalLanguage: typeof data.originalLanguage === "string" && /^[a-z]{2,3}$/.test(data.originalLanguage) ? data.originalLanguage : null,
+    releases,
+    scores: {
+      critics: score(ratings.rt?.criticsScore, 100),
+      audience: score(ratings.rt?.audienceScore, 100),
+      imdb: score(ratings.imdb?.criticsScore, 10),
+      tmdb: data.voteCount > 0 && score(data.voteAverage, 10) !== null ? Math.round(data.voteAverage * 10) : null,
+    },
+  };
+}

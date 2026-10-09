@@ -295,3 +295,16 @@ test("Seerr active availability cannot become requestable when requests are omit
     }
   }
 });
+
+test("Seerr facts validate scores, releases and country data without guesses", async () => {
+  const { seerrFacts } = await import("../src/model.js");
+  const f = seerrFacts({ status: "Released", originalLanguage: "en", voteAverage: 8.3, voteCount: 30, productionCountries: [{ iso_3166_1: "US", name: "United States" }], releases: { results: [{ iso_3166_1: "US", release_dates: [{ type:3, release_date:"2026-07-31T00:00:00Z" }, {type:4, release_date:"2026-10-06T00:00:00Z"}, {type:5, release_date:"2026-12-15T00:00:00Z"}] }] } }, "movie", { rt:{criticsScore:90, audienceScore:97}, imdb:{criticsScore:8} });
+  assert.deepEqual(f.scores, {critics:90,audience:97,imdb:8,tmdb:83});
+  assert.equal(f.releases[1].date, "2026-10-06");
+  assert.equal(f.releases[1].region, "US");
+  const empty = seerrFacts({ originalLanguage:"<script>", voteAverage:9, voteCount:0, releaseDate:"2026-02-30", productionCountries:[{iso_3166_1:"ZZZ",name:"bad"}] }, "movie", { rt:{ criticsScore:101, audienceScore:0 }, imdb:{criticsScore:NaN} });
+  assert.deepEqual(empty.scores,{critics:null,audience:0,imdb:null,tmdb:null});
+  assert.equal(empty.releases.length,0);
+  assert.equal(empty.originalLanguage,null);
+  assert.equal(empty.productionCountries.length,0);
+});

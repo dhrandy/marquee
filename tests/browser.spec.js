@@ -482,7 +482,7 @@ test("search footers stay aligned with long titles, missing overviews, and after
     .click();
   await expect(
     page.locator("#search-results .result-card .poster-status"),
-  ).toHaveCount(2);
+  ).toHaveCount(3);
   values = await centers();
   expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1);
 });
@@ -1375,5 +1375,27 @@ for (const width of [1440, 393]) {
       document.querySelector("#popular-movies").innerHTML = items.map((item, i) => `<div class="ranked-poster"><span class="popular-rank">${i + 1}</span>${resultCardHtml({ ...item, id: 60 + i, mediaType: "movie", poster: ["north", "signal", "orbit", "hours", "coast"][i] })}</div>`).join("");
     });
     await page.locator("#popular-section").screenshot({ path: `${shots}/marquee-status-icons-${width}.png` });
+  });
+}
+
+for (const width of [1440,393,320,280]) {
+  test(`Seerr facts panel preview and missing-data reset at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height:1000 });
+    await login(page);
+    await page.evaluate(() => showDetail({ title:"Fictional Film", subtitle:"Movie", poster:"/art/north.svg", backdrop:"/art/north.svg", genres:["Adventure"], contentRating:"PG-13", runtime:104, cast:["Alex Sample","Morgan Example"], overview:"A fictional journey begins.", facts:{status:"Released",originalLanguage:"en",productionCountries:[{code:"US",name:"United States"},{code:"GB",name:"United Kingdom"}],scores:{critics:90,audience:97,imdb:8,tmdb:83},releases:[{type:"Theatrical",date:"2026-07-31",region:"US"},{type:"Digital",date:"2026-10-06",region:"US"},{type:"Physical",date:"2026-12-15",region:"US"}]}}));
+    await expect(page.locator("#episode-facts")).toContainText("Released");
+    await expect(page.locator("#episode-facts")).toContainText("July 31, 2026");
+    await expect(page.locator("#episode-facts")).toContainText("English");
+    expect(await page.locator(".release-label").first().evaluate(el => {
+      const icon=el.firstElementChild.getBoundingClientRect(), label=el.lastElementChild.getBoundingClientRect();
+      return label.left-icon.right <= 7 && Math.abs((label.top+label.height/2)-(icon.top+icon.height/2))<2;
+    })).toBe(true);
+    await expect(page.locator('#episode-facts [title="United States"]')).toBeVisible();
+    expect(await page.locator("#episode-detail").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.locator("#episode-detail").screenshot({path:`${shots}/marquee-facts-${width}.png`});
+    await page.locator("#episode-close").click();
+    await page.evaluate(() => showDetail({title:"Library title",subtitle:"Movie"}));
+    await expect(page.locator("#episode-facts")).toBeHidden();
+    await expect(page.locator("#episode-facts")).toHaveText("");
   });
 }

@@ -1171,3 +1171,25 @@ body.colorblind .poster-status.pending { background:#765919; }
 body.colorblind .poster-status.blocked, body.colorblind .poster-status.deleted { background:#9b5c17; }
 .episode-poster-wrap { position:relative; flex-shrink:0; }
 #episode-poster-status .poster-status { top:6px; right:6px; }
+
+#episode-facts { margin:18px 0; border-top:1px solid #ffffff24; }
+.detail-scores { display:flex; flex-wrap:wrap; gap:16px; padding:12px 0; }
+.detail-score { display:inline-flex; align-items:center; gap:6px; font-size:14px; color:#e2e5ed; }
+.score-mark { font-weight:700; font-size:17px; }
+.score-mark.imdb { background:#e7bc24; color:#161820; font-size:11px; padding:1px 3px; border-radius:2px; }
+.score-mark.tmdb { color:#73d7c2; font-size:10px; letter-spacing:.3px; }
+.detail-fact { display:flex; justify-content:space-between; gap:20px; padding:12px 0; border-top:1px solid #ffffff18; font-size:14px; line-height:1.5; }
+.detail-fact > strong { font-weight:600; color:#e2e5ed; }
+.detail-fact > span { text-align:right; color:#c5cad6; }
+/* Keep each release icon attached to its label, with its date below on phones. */
+.detail-release { display:flex; flex-direction:column; align-items:flex-end; gap:2px; margin-bottom:8px; }
+.detail-release:last-child { margin-bottom:0; }
+.release-label { display:inline-flex; align-items:center; gap:6px; }
+.release-label small { margin:0; font-size:13px; color:#b9b7c5; }
+.release-label > span { font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif; }
+.country-flags { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; font-size:22px; }
+@media(max-width:340px) { .detail-fact { gap:12px; flex-wrap:wrap; } .detail-fact > span { margin-left:auto; } .detail-scores { gap:10px 14px; } }
+.score-mark.critics, .score-mark.audience, .country-flags { font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif; }
+.detail-fact > strong { flex-shrink:0; }
+.detail-fact > span { min-width:0; }
+@media(min-width:601px) { .detail-release { flex-direction:row; align-items:center; justify-content:flex-end; gap:10px; } }

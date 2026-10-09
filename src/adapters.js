@@ -5,6 +5,7 @@ import {
   normalizedContentRating,
   topCast,
   seerrContentRating,
+  seerrFacts,
   normalizeSeerrResults,
   normalizeSeerrRequests,
 } from "./model.js";
@@ -403,12 +404,11 @@ export async function seerrSearch(query, page, userId) {
 }
 
 export async function seerrDetails(type, id, userId) {
-  const data = await upstream(process.env.SEERR_URL, `/api/v1/${type}/${id}`, {
-    headers: {
-      "X-Api-Key": process.env.SEERR_API_KEY,
-      "X-API-User": String(userId),
-    },
-  });
+  const headers = { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) };
+  const [data, ratings] = await Promise.all([
+    upstream(process.env.SEERR_URL, `/api/v1/${type}/${id}`, { headers }),
+    upstream(process.env.SEERR_URL, `/api/v1/${type}/${id}/${type === "movie" ? "ratingscombined" : "ratings"}`, { headers }).then(r => type === "tv" ? { rt: r } : r).catch(() => ({})),
+  ]);
   const safeArt = (value) =>
     typeof value === "string" &&
     /^\/[A-Za-z0-9]+\.(jpg|jpeg|png|webp)$/.test(value)
@@ -417,6 +417,7 @@ export async function seerrDetails(type, id, userId) {
   return {
     mediaType: type,
     mediaId: id,
+    facts: seerrFacts(data, type, ratings),
     availability: Number.isInteger(data.mediaInfo?.status)
       ? data.mediaInfo.status
       : null,
