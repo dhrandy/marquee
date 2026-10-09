@@ -417,6 +417,42 @@ export async function seerrSearch(query, page, userId) {
   return normalizeSeerrResults(data);
 }
 
+// Franchise names like "Marvel" or "DC" rarely appear in a film's title, so a
+// plain title search misses most of the movies. Seerr can list a production
+// company's movies and a keyword's movies, so find companies/keywords whose
+// name contains the search and return their most popular movies.
+export async function seerrFranchise(query, userId) {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const headers = {
+    "X-Api-Key": process.env.SEERR_API_KEY,
+    "X-API-User": String(userId),
+  };
+  const get = (path) => upstream(process.env.SEERR_URL, path, { headers });
+  const params = new URLSearchParams({ query, page: "1" });
+  const [companies, keywords] = await Promise.all([
+    get(`/api/v1/search/company?${params}`).catch(() => ({})),
+    get(`/api/v1/search/keyword?${params}`).catch(() => ({})),
+  ]);
+  const named = (list, max) =>
+    (Array.isArray(list?.results) ? list.results : [])
+      .filter((x) => Number.isSafeInteger(x?.id) && typeof x?.name === "string" && x.name.toLowerCase().includes(q))
+      .slice(0, max);
+  const sources = [
+    ...named(companies, 2).map((c) => `studio=${c.id}`),
+    ...named(keywords, 1).map((k) => `keywords=${k.id}`),
+  ];
+  const pages = await Promise.all(
+    sources.map((source) =>
+      get(`/api/v1/discover/movies?${source}&sortBy=popularity.desc&page=1`).catch(() => ({ results: [] })),
+    ),
+  );
+  const movies = pages.flatMap((page) =>
+    (Array.isArray(page.results) ? page.results : []).map((r) => ({ ...r, mediaType: "movie" })),
+  );
+  return normalizeSeerrResults({ results: movies });
+}
+
 export async function seerrDetails(type, id, userId) {
   const headers = { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) };
   const [data, ratings] = await Promise.all([

@@ -15,6 +15,7 @@ import {
   seerrDetails,
   jellyfinTmdb,
   seerrIdentity,
+  seerrFranchise,
   seerrRequest,
   seerrRequestOptions,
   seerrRequests,
@@ -543,8 +544,20 @@ app.get("/api/seerr/search", requireUser, async (req, res) => {
   try {
     const access = await cachedAccess(req.user);
     if (access.error) return res.status(403).json({ error: access.error });
+    const results = await seerrSearch(query, page, access.id);
+    if (page === 1) {
+      // Franchise searches ("Marvel", "DC") also list that studio's movies.
+      // A failure here never breaks the normal search.
+      const seen = new Set(results.map((r) => `${r.mediaType}:${r.id}`));
+      const extra = await seerrFranchise(query, access.id).catch((e) => { console.warn(`Franchise search skipped: ${e.message}`); return []; });
+      for (const item of extra)
+        if (!seen.has(`${item.mediaType}:${item.id}`)) {
+          seen.add(`${item.mediaType}:${item.id}`);
+          results.push(item);
+        }
+    }
     res.json({
-      results: await seerrSearch(query, page, access.id),
+      results,
       requestAccess: publicAccess(access),
     });
   } catch (error) {

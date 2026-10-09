@@ -1270,3 +1270,11 @@ button[aria-label="Close settings"]:hover { background: #b9a3f7; }
 #request-advanced select { display: block; width: 100%; max-width: 100%; margin-top: 6px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 9px; }
 .request-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 #request-status:empty { display: none; }
+
+.settings-user { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.settings-user[hidden], .settings-role[hidden] { display: none; }
+.settings-avatar { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--purple); color: #1b1730; font-weight: 700; font-size: 17px; }
+.settings-user-text { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.settings-user-label { font-size: 11px; color: var(--muted); }
+.settings-user-text strong { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.settings-role { flex: 0 0 auto; font-size: 11px; padding: 2px 9px; border-radius: 99px; border: 1px solid var(--purple); color: var(--purple); }

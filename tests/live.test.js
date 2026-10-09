@@ -230,7 +230,8 @@ const service = http.createServer(async (req, res) => {
       }),
     );
   if (
-    ["/api/v1/discover/movies", "/api/v1/discover/tv"].includes(url.pathname)
+    ["/api/v1/discover/movies", "/api/v1/discover/tv"].includes(url.pathname) &&
+    !url.searchParams.has("studio")
   ) {
     assert.equal(req.headers["x-api-user"], "4");
     assert.equal(req.headers["x-api-key"], "seerr-mock");
@@ -256,6 +257,18 @@ const service = http.createServer(async (req, res) => {
     res.statusCode = 403;
     return res.end("{}");
   }
+  if (url.pathname === "/api/v1/search/company")
+    return res.end(JSON.stringify({ results: [
+      { id: 420, name: "Signal Studios" },
+      { id: 421, name: "Unrelated Co" },
+    ] }));
+  if (url.pathname === "/api/v1/search/keyword")
+    return res.end(JSON.stringify({ results: [] }));
+  if (url.pathname === "/api/v1/discover/movies" && url.searchParams.get("studio") === "420")
+    return res.end(JSON.stringify({ results: [
+      { id: 7, title: "Signal Duplicate", posterPath: "/abc.jpg", mediaInfo: { status: 5 } },
+      { id: 880, title: "Franchise Film", posterPath: "/abc.jpg" },
+    ] }));
   if (url.pathname === "/api/v1/search")
     return res.end(
       JSON.stringify({
@@ -513,7 +526,8 @@ try {
         headers: { Cookie: cookie },
       })
     ).json();
-    assert.equal(search.results.length, 1);
+    // The literal match, then the studio's movies (the duplicate id is dropped).
+    assert.deepEqual(search.results.map((r) => r.id), [7, 880]);
     assert.equal(search.results[0].title, "<b>Signal</b>");
     assert.equal(search.results[0].poster, "/abc.jpg");
     assert.equal(

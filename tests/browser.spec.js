@@ -1600,3 +1600,38 @@ test("request dialog can be cancelled and needs a season", async ({ page }) => {
   await expect(page.locator("dialog#request-dialog[open]")).toHaveCount(0);
   await expect(page.locator("#search-results .result-card .request-btn").first()).toBeVisible();
 });
+
+for (const width of [1440, 393]) {
+  test(`settings shows who is signed in at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    const card = page.locator("#settings-user");
+    await expect(card).toBeVisible();
+    await expect(page.locator("#settings-username")).not.toHaveText("");
+    await expect(page.locator("#settings-avatar")).toHaveText(/^\S$/);
+    const box = await card.boundingBox();
+    expect(box.x + box.width).toBeLessThanOrEqual(width);
+    await page.locator("#settings").screenshot({ path: `${shots}/marquee-settings-user-${width}.png` });
+  });
+}
+
+test("request dialog still lets you request when the options cannot load", async ({ page }) => {
+  await login(page);
+  await page.getByPlaceholder("Search movies and shows").fill("harbor");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page.route("**/api/seerr/request-options*", (route) =>
+    route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ error: "Seerr could not be reached. boom" }) }),
+  );
+  let body = null;
+  await page.route("**/api/seerr/request", async (route) => {
+    body = route.request().postDataJSON();
+    await route.continue();
+  });
+  await page.locator("#search-results").getByRole("button", { name: "Request", exact: true }).first().click();
+  const dialog = page.locator("dialog#request-dialog[open]");
+  await expect(dialog.locator("#request-status")).toContainText("boom");
+  await expect(dialog.locator("#request-submit")).toBeEnabled();
+  await dialog.locator("#request-submit").click();
+  await expect.poll(() => body).toEqual({ mediaType: "tv", mediaId: 105 });
+});

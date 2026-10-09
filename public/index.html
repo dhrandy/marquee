@@ -139,6 +139,14 @@
           <button aria-label="Close settings"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" /></svg></button>
         </div>
       </form>
+      <div id="settings-user" class="settings-user" hidden>
+        <span id="settings-avatar" class="settings-avatar" aria-hidden="true"></span>
+        <div class="settings-user-text">
+          <span class="settings-user-label">Signed in as</span>
+          <strong id="settings-username"></strong>
+        </div>
+        <span id="settings-role" class="settings-role" hidden>Admin</span>
+      </div>
       <p>Display preferences are saved on this device, for this Jellyfin account.</p>
       <div id="feature-settings"></div>
       <label class="setting">Default calendar view

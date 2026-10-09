@@ -234,6 +234,10 @@ async function enter(name) {
   }
   jellyfin.hidden = !state.prefs.jellyfinLink || !jellyfin.hasAttribute("href");
   state.canRequest = me.canRequest;
+  $("#settings-username").textContent = me.name;
+  $("#settings-avatar").textContent = (Array.from(me.name || "?")[0] || "?").toUpperCase();
+  $("#settings-role").hidden = !me.isAdmin;
+  $("#settings-user").hidden = false;
   state.requestAccess = me.requestAccess || {
     movie: me.canRequest,
     tv: me.canRequest,
@@ -1124,7 +1128,10 @@ function askRequestOptions(button) {
     try {
       options = await api(`/api/seerr/request-options?mediaType=${button.dataset.mediaType}&mediaId=${button.dataset.mediaId}`);
     } catch (error) {
-      status.textContent = error.message;
+      // Never leave the user stuck: without the extra options the request
+      // still works and Seerr requests every season with its default settings.
+      status.textContent = `Could not load the options (${error.message}). You can still request ${isTv ? "the whole series" : "it"} with Seerr's defaults.`;
+      submit.disabled = false;
       return;
     }
     status.textContent = "";
