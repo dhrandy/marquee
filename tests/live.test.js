@@ -257,6 +257,22 @@ const service = http.createServer(async (req, res) => {
     res.statusCode = 403;
     return res.end("{}");
   }
+  if (url.pathname === "/api/v1/search" && url.searchParams.get("query") === "karla and the") {
+    // Real Seerr answers 400 when spaces arrive as "+".
+    if (!req.url.includes("query=karla%20and%20the&")) {
+      res.statusCode = 400;
+      return res.end("{}");
+    }
+    return res.end(JSON.stringify({ results: [] }));
+  }
+  if (url.pathname === "/api/v1/search" && url.searchParams.get("query") === "flaky") {
+    globalThis.__flaky = (globalThis.__flaky || 0) + 1;
+    if (globalThis.__flaky === 1) {
+      res.statusCode = 500;
+      return res.end("{}");
+    }
+    return res.end(JSON.stringify({ results: [] }));
+  }
   if (url.pathname === "/api/v1/search/company")
     return res.end(JSON.stringify({ results: [
       { id: 420, name: "Signal Studios" },
@@ -551,6 +567,15 @@ try {
     });
     assert.equal(refused.status, 403);
     assert.match((await refused.json()).error, /refused this account \(HTTP 403\)/);
+    assert.equal(
+      (await fetch(`${base}/api/seerr/search?query=${encodeURIComponent("  karla  and the ")}`, { headers: { Cookie: cookie } })).status,
+      200,
+    );
+    const flaky = await fetch(`${base}/api/seerr/search?query=flaky`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(flaky.status, 200);
+    assert.equal(globalThis.__flaky, 2);
     const img = await fetch(
       `${base}/api/seerr/image?path=${encodeURIComponent("/abc.jpg")}`,
       { headers: { Cookie: cookie } },

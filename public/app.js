@@ -1016,7 +1016,7 @@ all("[data-view]").forEach((button) =>
     loadCalendar();
   }),
 );
-// Live search: results update as the user types (120ms pause, at least 2 characters).
+// Live search: results update as the user types (250ms pause, at least 2 characters).
 // Older requests are cancelled, and a response that arrives late is ignored.
 let searchTimer = null;
 let searchController = null;
@@ -1048,8 +1048,10 @@ async function runSearch(query, force = false) {
     renderSearch(results);
   } catch (error) {
     if (error.name === "AbortError" || seq !== searchSeq) return;
-    $("#search-status").textContent = error.message;
-    $("#search-results").innerHTML = "";
+    // Keep what is on screen; only say what went wrong.
+    $("#search-status").textContent = /Too many requests/.test(error.message)
+      ? "Searching too fast. Give it a moment and try again."
+      : error.message;
   } finally {
     clearTimeout(slow);
   }
@@ -1062,7 +1064,7 @@ $("#search-form input[name=query]").addEventListener("input", (event) => {
   clearTimeout(searchTimer);
   const value = event.target.value;
   if (value.trim().length < 2) return runSearch(value);
-  searchTimer = setTimeout(() => runSearch(value), 120);
+  searchTimer = setTimeout(() => runSearch(value), 250);
 });
 function seasonPill(status) {
   if (status === 5) return '<span class="season-pill available">Available</span>';

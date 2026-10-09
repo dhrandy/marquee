@@ -27,6 +27,12 @@ export async function upstream(
         signal: AbortSignal.timeout(10000),
         redirect: "error",
       });
+      // Seerr/TMDB answer 5xx now and then when hit by many searches at once;
+      // a read gets one more try before it counts as a failure.
+      if (!response.ok && response.status >= 500 && method === "GET" && attempt === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        continue;
+      }
       break;
     } catch (error) {
       const code = error.cause?.code;
@@ -41,7 +47,10 @@ export async function upstream(
   }
   if (!response.ok)
     throw new Error(
-      `Service answered HTTP ${response.status}. Check its URL and API key or credentials.`,
+      `Service answered HTTP ${response.status}.` +
+        ([401, 403, 404].includes(response.status)
+          ? " Check its URL and API key or credentials."
+          : ""),
     );
   try {
     return await response.json();
@@ -403,10 +412,12 @@ export async function seerrIdentity(jellyfinId) {
 }
 
 export async function seerrSearch(query, page, userId) {
-  const params = new URLSearchParams({ query, page: String(page) });
+  // Seerr validates the query string strictly and rejects "+" for spaces
+  // (HTTP 400 on multi-word titles), so encode spaces as %20 like its own UI.
+  const clean = query.replace(/\s+/g, " ").trim();
   const data = await upstream(
     process.env.SEERR_URL,
-    `/api/v1/search?${params}`,
+    `/api/v1/search?query=${encodeURIComponent(clean)}&page=${page}`,
     {
       headers: {
         "X-Api-Key": process.env.SEERR_API_KEY,
@@ -429,7 +440,7 @@ export async function seerrFranchise(query, userId) {
     "X-API-User": String(userId),
   };
   const get = (path) => upstream(process.env.SEERR_URL, path, { headers });
-  const params = new URLSearchParams({ query, page: "1" });
+  const params = `query=${encodeURIComponent(q.replace(/\s+/g, " "))}&page=1`;
   const [companies, keywords] = await Promise.all([
     get(`/api/v1/search/company?${params}`).catch(() => ({})),
     get(`/api/v1/search/keyword?${params}`).catch(() => ({})),

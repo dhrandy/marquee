@@ -1278,3 +1278,11 @@ button[aria-label="Close settings"]:hover { background: #b9a3f7; }
 .settings-user-label { font-size: 11px; color: var(--muted); }
 .settings-user-text strong { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 .settings-role { flex: 0 0 auto; font-size: 11px; padding: 2px 9px; border-radius: 99px; border: 1px solid var(--purple); color: var(--purple); }
+
+@keyframes result-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+#search-results .result-card { animation: result-in 240ms ease-out both; }
+#search-results .result-card:nth-child(2) { animation-delay: 30ms; }
+#search-results .result-card:nth-child(3) { animation-delay: 60ms; }
+#search-results .result-card:nth-child(4) { animation-delay: 90ms; }
+#search-results .result-card:nth-child(n+5) { animation-delay: 120ms; }
+@media (prefers-reduced-motion: reduce) { #search-results .result-card { animation: none; } }

@@ -545,7 +545,7 @@ app.get("/api/seerr/search", requireUser, async (req, res) => {
     const access = await cachedAccess(req.user);
     if (access.error) return res.status(403).json({ error: access.error });
     const results = await seerrSearch(query, page, access.id);
-    if (page === 1) {
+    if (page === 1 && query.trim().length >= 3 && query.trim().length <= 40) {
       // Franchise searches ("Marvel", "DC") also list that studio's movies.
       // A failure here never breaks the normal search.
       const seen = new Set(results.map((r) => `${r.mediaType}:${r.id}`));
