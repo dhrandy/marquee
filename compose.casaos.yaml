@@ -66,6 +66,7 @@ services:
       DEMO_MODE: ${DEMO_MODE}
       # false only for a trusted plain-HTTP LAN; keep true behind HTTPS.
       COOKIE_SECURE: ${COOKIE_SECURE}
+      SESSION_SECRET: ${SESSION_SECRET:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       JELLYFIN_URL: ${JELLYFIN_URL}

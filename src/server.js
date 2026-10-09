@@ -23,6 +23,8 @@ import {
 import { demoEvents, demoRequests, demoSearch, titles, demoFacts } from "./demo.js";
 import { validateRange } from "./model.js";
 import { compress } from "./compress.js";
+import { createSessions } from "./sessions.js";
+import { upstream } from "./adapters.js";
 
 const settingsPath = path.join(
   process.env.MARQUEE_DATA_DIR || path.join(os.homedir(), ".marquee"),
@@ -89,11 +91,14 @@ const app = express();
 const root = path.dirname(fileURLToPath(import.meta.url));
 const demo = process.env.DEMO_MODE === "true";
 const secure = process.env.COOKIE_SECURE !== "false";
-const sessions = new Map();
 const attempts = new Map();
 const apiAttempts = new Map();
 const ttl = 8 * 60 * 60 * 1000;
 const port = Number(process.env.PORT || 8739);
+const sessions = createSessions({
+  dataDir: path.dirname(settingsPath),
+  ttl,
+});
 
 app.set("trust proxy", proxyTrust(process.env.TRUSTED_PROXIES, process.env.TRUST_PROXY));
 app.disable("x-powered-by");
@@ -122,12 +127,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "4kb" }));
 
 function session(req) {
-  const id = /(?:^|; )marquee_session=([a-f0-9]{64})(?:;|$)/.exec(
-    req.headers.cookie || "",
-  )?.[1];
-  const data = sessions.get(id);
-  if (data && data.expires > Date.now()) return { sid: id, ...data };
-  return null;
+  return sessions.fromRequest(req);
 }
 function requireUser(req, res, next) {
   req.user = session(req);
@@ -205,15 +205,10 @@ app.post("/api/login", async (req, res) => {
     const user = demo
       ? { id: "demo", name: "Demo viewer", isAdmin: true }
       : await authenticate(username, password);
+    // A new sign-in retires the one this browser already had.
     const old = session(req);
-    if (old) sessions.delete(old.sid);
-    const id = crypto.randomBytes(32).toString("hex");
-    sessions.set(id, {
-      ...user,
-      expires: Date.now() + ttl,
-      allowedImages: new Set(),
-    });
-    cookie(res, id, ttl);
+    if (old) sessions.revoke(old.sid, old.expires);
+    cookie(res, sessions.seal(user), ttl);
     attempts.delete(ip);
     res.json({ name: user.name });
   } catch (error) {
@@ -222,8 +217,17 @@ app.post("/api/login", async (req, res) => {
     });
   }
 });
-app.post("/api/logout", requireUser, (req, res) => {
-  sessions.delete(req.user.sid);
+app.post("/api/logout", requireUser, async (req, res) => {
+  sessions.revoke(req.user.sid, req.user.expires);
+  if (!demo && req.user.token) {
+    // Also end the Jellyfin login this cookie carried, best effort.
+    try {
+      await upstream(process.env.JELLYFIN_URL, "/Sessions/Logout", {
+        method: "POST",
+        headers: jellyfinHeaders(req.user.token),
+      });
+    } catch {}
+  }
   cookie(res, "", 0);
   res.json({ ok: true });
 });
@@ -411,7 +415,7 @@ app.get("/api/library/:id/facts", requireUser, async (req, res) => {
   if (demo) return res.json({ facts: demoFacts });
   // Only items already shown on the user's shelf can be looked up.
   if (
-    !req.user.allowedImages.has(req.params.id) ||
+    !req.user.state.allowedImages.has(req.params.id) ||
     !/^[a-zA-Z0-9-]+$/.test(req.params.id)
   )
     return res.sendStatus(404);
@@ -599,8 +603,8 @@ app.get("/api/recent", requireUser, async (req, res) => {
   try {
     const items = demo ? titles : await recentItems(req.user);
     for (const item of items) {
-      if (item.image) req.user.allowedImages.add(item.id);
-      if (item.backdropId) req.user.allowedImages.add(item.backdropId);
+      if (item.image) req.user.state.allowedImages.add(item.id);
+      if (item.backdropId) req.user.state.allowedImages.add(item.backdropId);
     }
     res.json({ items });
   } catch {
@@ -611,7 +615,7 @@ app.get("/api/recent", requireUser, async (req, res) => {
 });
 app.get("/api/image/:id", requireUser, async (req, res) => {
   if (
-    !req.user.allowedImages.has(req.params.id) ||
+    !req.user.state.allowedImages.has(req.params.id) ||
     !/^[a-zA-Z0-9-]+$/.test(req.params.id)
   )
     return res.sendStatus(404);
@@ -647,8 +651,7 @@ app.get("/api/calendar", requireUser, async (req, res) => {
     ? { events: demoEvents(start, end), warnings: [] }
     : await calendar(start, end);
   const calendarImages = new Map();
-  req.user.calendarImages = calendarImages;
-  sessions.get(req.user.sid).calendarImages = calendarImages;
+  req.user.state.calendarImages = calendarImages;
   for (const event of data.events) {
     // Use Sonarr's cached cover when present instead of depending on its remote
     // artwork host. Only fixed MediaCover paths for this returned series qualify.
@@ -662,7 +665,7 @@ app.get("/api/calendar", requireUser, async (req, res) => {
             )
           : null;
       if (local && Number(local[1]) === event.seriesId) {
-        req.user.calendarImages.set(id, {
+        req.user.state.calendarImages.set(id, {
           url: serviceUrl(
             process.env.SONARR_URL,
             `/MediaCover/${local[1]}/${local[2]}.${local[3]}`,
@@ -670,7 +673,7 @@ app.get("/api/calendar", requireUser, async (req, res) => {
           sonarr: true,
         });
       }
-      if (!req.user.calendarImages.has(id) && event[kind]) {
+      if (!req.user.state.calendarImages.has(id) && event[kind]) {
         try {
           const url = new URL(event[kind]);
           if (
@@ -680,13 +683,13 @@ app.get("/api/calendar", requireUser, async (req, res) => {
             !url.password &&
             !url.port
           )
-            req.user.calendarImages.set(id, { url: url.href, sonarr: false });
+            req.user.state.calendarImages.set(id, { url: url.href, sonarr: false });
         } catch {
           /* Ignore invalid artwork URLs from upstream metadata. */
         }
       }
       delete event[localField];
-      event[kind] = req.user.calendarImages.has(id)
+      event[kind] = req.user.state.calendarImages.has(id)
         ? `/api/calendar-image/${encodeURIComponent(id)}`
         : demo && event.type === "tv"
           ? "/art/north.svg"
@@ -697,7 +700,7 @@ app.get("/api/calendar", requireUser, async (req, res) => {
   res.json(data);
 });
 app.get("/api/calendar-image/:id", requireUser, async (req, res) => {
-  const image = req.user.calendarImages?.get(req.params.id);
+  const image = req.user.state.calendarImages?.get(req.params.id);
   if (!image) return res.sendStatus(404);
   try {
     const response = await fetch(image.url, {
@@ -862,8 +865,7 @@ app.use((err, req, res, next) =>
   res.status(400).json({ error: "Invalid request." }),
 );
 setInterval(() => {
-  for (const [id, data] of sessions)
-    if (data.expires < Date.now()) sessions.delete(id);
+  sessions.sweep();
   for (const [id, data] of weatherAttempts)
     if (data.until < Date.now()) weatherAttempts.delete(id);
   for (const [id, data] of apiAttempts)

@@ -68,6 +68,9 @@ docker compose up -d
 
 Open the configured port through an HTTPS reverse proxy. `COOKIE_SECURE=true` requires HTTPS. For a local HTTP demo only, set `DEMO_MODE=true` and `COOKIE_SECURE=false`.
 
+Sign-ins are stored in an encrypted cookie, so they survive container restarts and recreates. `SESSION_SECRET` is optional: left empty, Marquee generates a secret once and keeps it in its data volume (`MARQUEE_DATA_DIR`). Set it yourself (32+ random characters) if the data volume is not persistent or you run several instances; changing it signs everyone out. Sessions last 8 hours. Sign out also ends the Jellyfin login the cookie carried.
+
+
 The initial beta copies the mounted source into a temporary writable container directory and installs the locked production dependencies at startup. This needs internet access to the package registry. Sessions live in memory, so a restart signs users out. The `marquee-settings` volume keeps the administrator-set display name and per-user weather/colorblind preferences across container restarts. Other display preferences remain on the current device. Do not delete the settings volume when upgrading.
 
 ### CasaOS or standalone stack (no clone needed)
@@ -158,6 +161,7 @@ services:
       DEMO_MODE: ${DEMO_MODE}
       # false only for a trusted plain-HTTP LAN; keep true behind HTTPS.
       COOKIE_SECURE: ${COOKIE_SECURE}
+      SESSION_SECRET: ${SESSION_SECRET:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       JELLYFIN_URL: ${JELLYFIN_URL}
@@ -226,6 +230,7 @@ services:
       TZ: ${TZ}
       DEMO_MODE: ${DEMO_MODE}
       COOKIE_SECURE: ${COOKIE_SECURE}
+      SESSION_SECRET: ${SESSION_SECRET:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       JELLYFIN_URL: ${JELLYFIN_URL}
@@ -279,6 +284,8 @@ TZ=Etc/UTC
 DEMO_MODE=false
 # true when Marquee sits behind an HTTPS reverse proxy (recommended). false only for a local HTTP demo.
 COOKIE_SECURE=true
+# Optional. Leave empty and Marquee generates one and keeps it in its data volume.
+SESSION_SECRET=
 # Proxy IP/CIDR allowlist as seen by the container. Empty means no forwarded headers trusted.
 TRUSTED_PROXIES=
 # Simple single-proxy alternative. 1 only when every backend connection comes through your proxy.
