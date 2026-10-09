@@ -1209,3 +1209,11 @@ body.colorblind .poster-status.blocked, body.colorblind .poster-status.deleted {
 @media (max-width: 600px) {
   .date-nav > #prev, .date-nav > #next { width: 34px; height: 34px; padding: 0; }
 }
+
+/* Popups share one look: no empty genre gap, and Settings closes like the detail popup. */
+#episode-genres:empty { display: none; }
+button[aria-label="Close settings"] {
+  width: 42px; height: 42px; border: 0; border-radius: 50%;
+  background: #a991ee; color: #171322;
+}
+button[aria-label="Close settings"]:hover { background: #b9a3f7; }

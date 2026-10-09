@@ -48,6 +48,22 @@ export const titles = [
     tagline: "A LITTLE LESS ORDINARY",
   },
 ];
+// Library items carry the same popup details a live Jellyfin item would.
+for (const title of titles) {
+  const year = /^\d{4}/.exec(title.subtitle)?.[0] || "2026";
+  title.detail = {
+    year,
+    subtitle: title.type === "movie" ? "Movie" : "Episode 1: Pilot",
+    overview:
+      title.type === "movie"
+        ? "A discovery draws old friends into a story that changes their lives."
+        : "A quiet discovery changes everything for a small community.",
+    genres: ["Adventure", "Drama"],
+    network: "Sample Network",
+    runtime: title.type === "movie" ? 108 : 48,
+  };
+}
+
 
 titles.forEach((item, i) => {
   item.added = `2026-10-${String(7 - Math.floor(i / 2)).padStart(2, "0")}T${String(20 - i).padStart(2, "0")}:14:00`;

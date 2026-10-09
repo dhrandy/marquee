@@ -309,6 +309,9 @@ $("#recent").addEventListener("click", (event) => {
       ? `/api/image/${encodeURIComponent(item.backdropId)}?type=Backdrop`
       : null,
     playLink: item.link,
+    // Everything on the shelf is already in the library, so show the same
+    // "available" poster badge the Seerr popups use.
+    availability: 5,
   });
 });
 function period() {
