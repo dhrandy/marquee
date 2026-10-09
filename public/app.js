@@ -205,8 +205,11 @@ async function enter(name) {
   } catch {
     state.prefs = { ...defaults };
   }
-  Object.assign(state.prefs, await api("/api/weather-settings"));
-  Object.assign(state.prefs, await api("/api/accessibility-settings"));
+  const [weatherSettings, accessibilitySettings] = await Promise.all([
+    api("/api/weather-settings"),
+    api("/api/accessibility-settings"),
+  ]);
+  Object.assign(state.prefs, weatherSettings, accessibilitySettings);
   state.view =
     state.prefs.lastView ||
     (state.prefs.defaultView === "auto" ? "agenda" : state.prefs.defaultView);

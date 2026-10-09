@@ -21,6 +21,7 @@ import {
 } from "./adapters.js";
 import { demoEvents, demoRequests, demoSearch, titles } from "./demo.js";
 import { validateRange } from "./model.js";
+import { compress } from "./compress.js";
 
 const settingsPath = path.join(
   process.env.MARQUEE_DATA_DIR || path.join(os.homedir(), ".marquee"),
@@ -95,6 +96,7 @@ const port = Number(process.env.PORT || 8739);
 
 app.set("trust proxy", proxyTrust(process.env.TRUSTED_PROXIES, process.env.TRUST_PROXY));
 app.disable("x-powered-by");
+app.use(compress());
 app.use((req, res, next) => {
   res.set({
     "Content-Security-Policy":
@@ -825,7 +827,15 @@ app.get("/api/weather", requireUser, weatherLimit, async (req, res) => {
   }
 });
 app.use(
-  express.static(path.join(root, "..", "public"), { etag: true, maxAge: 0 }),
+  express.static(path.join(root, "..", "public"), {
+    etag: true,
+    maxAge: 0,
+    setHeaders(res, file) {
+      // Posters and icons rarely change, so let browsers reuse them for 5 minutes.
+      if (/[\\/](art|icons)[\\/]/.test(file))
+        res.setHeader("Cache-Control", "public, max-age=300");
+    },
+  }),
 );
 app.use((err, req, res, next) =>
   res.status(400).json({ error: "Invalid request." }),
