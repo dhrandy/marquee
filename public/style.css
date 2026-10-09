@@ -1185,10 +1185,12 @@ body.colorblind .poster-status.blocked, body.colorblind .poster-status.deleted {
 .detail-release:last-child { margin-bottom:0; }
 .release-label { display:inline-flex; align-items:center; gap:6px; }
 .release-label small { margin:0; font-size:13px; color:#b9b7c5; }
-.release-label > span { font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif; }
-.country-flags { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; font-size:22px; }
+.country-flags { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:8px; }
+.country-flags .flag { display:block; width:28px; height:21px; border-radius:3px; object-fit:cover; box-shadow:0 0 0 1px #ffffff33; }
+.flag-code { font-size:12px; font-weight:700; padding:2px 6px; border:1px solid #ffffff33; border-radius:3px; }
+.mini-icon { width:18px; height:18px; flex:0 0 auto; vertical-align:-3px; }
+.score-mark .mini-icon { width:20px; height:20px; vertical-align:-4px; }
 @media(max-width:340px) { .detail-fact { gap:12px; flex-wrap:wrap; } .detail-fact > span { margin-left:auto; } .detail-scores { gap:10px 14px; } }
-.score-mark.critics, .score-mark.audience, .country-flags { font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif; }
 .detail-fact > strong { flex-shrink:0; }
 .detail-fact > span { min-width:0; }
 @media(min-width:601px) { .detail-release { flex-direction:row; align-items:center; justify-content:flex-end; gap:10px; } }

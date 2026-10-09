@@ -378,6 +378,8 @@ Integration adapters live separately from the UI so another feed can be added la
 
 The Jellyfin shortcut uses the unmodified [official Jellyfin icon](https://raw.githubusercontent.com/jellyfin/jellyfin-ux/master/logos/SVG/jellyfin-icon--color-on-dark.svg) by the Jellyfin contributors, licensed under [CC BY-SA 4.0](public/licenses/jellyfin-CC-BY-SA-4.0.txt). It identifies the Jellyfin link, not Marquee. Marquee is an independent project.
 
+Country flags are served from the [flag-icons](https://github.com/lipis/flag-icons) package (MIT, [notice](public/licenses/flag-icons-MIT.txt)), installed with `npm ci`. Rating and release-type icons are drawn as inline SVG, so none of the UI depends on emoji fonts.
+
 ## Rights
 
 Copyright (c) 2026 dhrandy. All rights reserved. Marquee is proprietary; no open-source license is granted. Third-party asset notices apply only to those assets.

@@ -417,13 +417,23 @@ function statusBadgeHtml(item) {
   const [icon, cls] = ({2:["bell","pending"],3:["clock","processing"],4:["minus-small","partial"],5:["check-circle","available"],6:["eye-slash","blocked"],7:["trash","deleted"]})[item.availability] || ["clock","processing"];
   return `<span class="poster-status ${cls}" role="img" aria-label="${label}" title="${label}">${seerrStatusIcons[icon]}</span>`;
 }
+const svgIcons = {
+  critics: '<path fill="#f0483e" d="M12 6.5c-5 0-8.5 3.2-8.5 7.6C3.5 18.2 7.2 21 12 21s8.5-2.800 8.5-6.900C20.500 9.700 17 6.500 12 6.500Z"/><path fill="#4caf50" d="m12 7.500-3.300-3 .2 2.600-3.100-.4 2.600 2.100L12 7.500Zm0 0 3.300-3-.2 2.600 3.100-.4-2.600 2.100L12 7.500Z"/><path fill="#4caf50" d="M11 3h2v4.500h-2z"/>',
+  audience: '<path fill="#f7c948" d="M7 9a2.800 2.800 0 0 1 3-2.700 2.800 2.800 0 0 1 4 0A2.800 2.800 0 0 1 17 9a2.500 2.500 0 0 1 .5 4.500H6.500A2.500 2.500 0 0 1 7 9Z"/><path fill="#e5484d" d="M6 12.500h12l-1.600 8.500H7.600L6 12.500Z"/><path fill="#fff" d="M9.500 12.500h1.200l.3 8.500h-1.200zM13 12.500h1.200l-.3 8.500h-1.200z"/>',
+  Theatrical: '<path fill="currentColor" d="M3 7.500A1.500 1.500 0 0 1 4.500 6h15A1.500 1.500 0 0 1 21 7.500V10a2 2 0 0 0 0 4v2.500a1.500 1.500 0 0 1-1.500 1.500h-15A1.500 1.500 0 0 1 3 16.500V14a2 2 0 0 0 0-4V7.500Zm11 .5h-1.500v2H14V8Zm0 4h-1.500v2H14v-2Zm0 4h-1.500v1H14v-1Z"/>',
+  Digital: '<path fill="currentColor" d="M7 18a4 4 0 0 1-.6-8A5.500 5.500 0 0 1 17 8.500a4.800 4.800 0 0 1 .5 9.500H7Z"/>',
+  Physical: '<path fill="currentColor" fill-rule="evenodd" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 6.500a2.500 2.500 0 1 0 0 5 2.500 2.500 0 0 0 0-5Z"/>',
+  "First aired": '<path fill="currentColor" d="M4 6.500A1.500 1.500 0 0 1 5.500 5h13A1.500 1.500 0 0 1 20 6.500v9a1.500 1.500 0 0 1-1.500 1.500h-13A1.500 1.500 0 0 1 4 15.500v-9ZM8 19h8v1.500H8V19Z"/>',
+  other: '<path fill="currentColor" d="M5 5h14v14H5z"/>',
+};
+const svgIcon = (name) => `<svg class="mini-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${svgIcons[name] || svgIcons.other}</svg>`;
 function renderDetailFacts(facts) {
   const panel = $("#episode-facts");
   panel.innerHTML = "";
   panel.hidden = true;
   if (!facts) return;
   const scores = facts.scores || {};
-  const ratings = [["critics", "🍅", "Rotten Tomatoes critics", "%"], ["audience", "🍿", "Rotten Tomatoes audience", "%"], ["imdb", "IMDb", "IMDb", "/10"], ["tmdb", "TMDB", "TMDB user score", "%"]]
+  const ratings = [["critics", svgIcon("critics"), "Rotten Tomatoes critics", "%"], ["audience", svgIcon("audience"), "Rotten Tomatoes audience", "%"], ["imdb", "IMDb", "IMDb", "/10"], ["tmdb", "TMDB", "TMDB user score", "%"]]
     .filter(([key]) => Number.isFinite(scores[key]) && scores[key] >= 0);
   let html = state.prefs.ratings && ratings.length ? `<div class="detail-scores">${ratings.map(([key, icon, label, suffix]) => `<span class="detail-score" title="${label}" aria-label="${label}: ${scores[key]}${suffix}"><span class="score-mark ${key}">${icon}</span> ${scores[key]}${suffix}</span>`).join("")}</div>` : "";
   const row = (label, value) => `<div class="detail-fact"><strong>${label}</strong><span>${value}</span></div>`;
@@ -431,10 +441,10 @@ function renderDetailFacts(facts) {
   if (facts.releases?.length) html += row("Release dates", facts.releases.map(r => {
     const date = new Date(`${r.date}T12:00:00Z`);
     if (!Number.isFinite(date.getTime())) return "";
-    const icon = ({ Theatrical:"🎟", Digital:"☁", Physical:"◉", "First aired":"▣" })[r.type] || "▦";
-    return `<span class="detail-release" title="${escape(r.type)}${r.region ? ` (${escape(r.region)})` : ""}"><span class="release-label"><span aria-hidden="true">${icon}</span><small>${escape(r.type)}${r.region ? ` · ${escape(r.region)}` : ""}</small></span><span class="release-date">${escape(date.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric",timeZone:"UTC"}))}</span></span>`;
+    const icon = svgIcon(r.type);
+    return `<span class="detail-release" title="${escape(r.type)}${r.region ? ` (${escape(r.region)})` : ""}"><span class="release-label">${icon}<small>${escape(r.type)}${r.region ? ` · ${escape(r.region)}` : ""}</small></span><span class="release-date">${escape(date.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric",timeZone:"UTC"}))}</span></span>`;
   }).join(""));
-  if (facts.productionCountries?.length) html += row("Production", `<span class="country-flags">${facts.productionCountries.map(c => `<span tabindex="0" title="${escape(c.name)}" aria-label="${escape(c.name)}">${/^[A-Z]{2}$/.test(c.code) ? String.fromCodePoint(...[...c.code].map(x => 127397 + x.charCodeAt())) : escape(c.name)}</span>`).join(" ")}</span>`);
+  if (facts.productionCountries?.length) html += row("Production", `<span class="country-flags">${facts.productionCountries.map(c => `<span tabindex="0" title="${escape(c.name)}" aria-label="${escape(c.name)}">${/^[A-Z]{2}$/.test(c.code) ? `<img class="flag" src="/flags/${c.code.toLowerCase()}.svg" alt="" width="28" height="21" loading="lazy" data-code="${c.code}">` : escape(c.name)}</span>`).join(" ")}</span>`);
   if (facts.originalLanguage) {
     let language = facts.originalLanguage;
     try { language = new Intl.DisplayNames([navigator.language || "en"], { type:"language" }).of(language) || language; } catch {}
@@ -1102,3 +1112,10 @@ all("[data-shelf]").forEach((button) =>
       });
   }),
 );
+
+// If a flag file is missing, fall back to the country code instead of a broken image.
+document.addEventListener("error", (event) => {
+  const img = event.target;
+  if (img instanceof HTMLImageElement && img.classList.contains("flag"))
+    img.replaceWith(Object.assign(document.createElement("span"), { className: "flag-code", textContent: img.dataset.code || "" }));
+}, true);

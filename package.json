@@ -10,7 +10,8 @@
     "test:unit": "node --test tests/unit.test.js tests/live.test.js tests/security.test.js tests/proxy.test.js tests/compress.test.js tests/sessions.test.js"
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "flag-icons": "^7.5.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",

@@ -850,6 +850,15 @@ app.get("/api/weather", requireUser, weatherLimit, async (req, res) => {
     res.status(502).json({ error: "Weather is temporarily unavailable." });
   }
 });
+// Country flags come from the flag-icons package (MIT), so they render as real
+// images on every device instead of depending on emoji fonts.
+app.use(
+  "/flags",
+  express.static(path.join(root, "..", "node_modules", "flag-icons", "flags", "4x3"), {
+    maxAge: "7d",
+    index: false,
+  }),
+);
 app.use(
   express.static(path.join(root, "..", "public"), {
     etag: true,

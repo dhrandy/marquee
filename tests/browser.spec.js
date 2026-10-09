@@ -1486,3 +1486,18 @@ test("desktop popup puts meta and genres under the title and clamps long overvie
   await expect(page.locator("#episode-genres-top")).toBeHidden();
   await expect(page.locator("#episode-more")).toBeHidden();
 });
+
+test("facts panel uses real images and SVG icons instead of emoji, so nothing depends on emoji fonts", async ({ page }) => {
+  await login(page);
+  await page.locator("#recent .recent-detail").first().click();
+  const flags = page.locator("#episode-facts .country-flags img.flag");
+  await expect(flags.first()).toBeVisible();
+  const broken = await flags.evaluateAll((imgs) => imgs.filter((i) => !i.complete || i.naturalWidth === 0).length);
+  expect(broken).toBe(0);
+  const text = await page.locator("#episode-facts").innerText();
+  expect(text).not.toMatch(/[\u{1F000}-\u{1FFFF}\u2600-\u27BF]/u);
+  await expect(page.locator("#episode-facts .score-mark svg").first()).toBeVisible();
+  await expect(page.locator("#episode-facts .release-label svg").first()).toBeVisible();
+  expect((await page.request.get("/flags/us.svg")).status()).toBe(200);
+  expect((await page.request.get("/flags/zz.svg")).status()).toBe(404);
+});
