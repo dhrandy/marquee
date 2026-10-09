@@ -464,6 +464,34 @@ export async function seerrFranchise(query, userId) {
   return normalizeSeerrResults({ results: movies });
 }
 
+// Searching an actor or actress: find people whose name contains the search
+// and return the movies and shows they acted in.
+export async function seerrPersonCredits(query, userId) {
+  const q = query.replace(/\s+/g, " ").trim().toLowerCase();
+  if (q.length < 3) return [];
+  const headers = { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) };
+  const get = (path) => upstream(process.env.SEERR_URL, path, { headers });
+  const found = await get(`/api/v1/search?query=${encodeURIComponent(q)}&page=1`);
+  const people = (found.results || [])
+    .filter((r) => r.mediaType === "person" && Number.isSafeInteger(r.id) && String(r.name || "").toLowerCase().includes(q))
+    .slice(0, 1);
+  const lists = await Promise.all(
+    people.map((p) => get(`/api/v1/person/${p.id}/combined_credits`).catch(() => ({}))),
+  );
+  const cast = lists.flatMap((l) => (Array.isArray(l.cast) ? l.cast : []));
+  const seen = new Set();
+  const unique = cast.filter((c) => {
+    const key = `${c.mediaType}:${c.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  unique.sort((a, b) =>
+    String(b.releaseDate || b.firstAirDate || "").localeCompare(String(a.releaseDate || a.firstAirDate || "")),
+  );
+  return normalizeSeerrResults({ results: unique });
+}
+
 export async function seerrDetails(type, id, userId) {
   const headers = { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) };
   const [data, ratings] = await Promise.all([

@@ -148,6 +148,7 @@ export function normalizeSeerrResults(data) {
       mediaType: r.mediaType,
       title: String(r.title || r.name || "Untitled"),
       year: String(r.releaseDate || r.firstAirDate || "").slice(0, 4),
+      date: String(r.releaseDate || r.firstAirDate || ""),
       poster:
         typeof r.posterPath === "string" &&
         /^\/[A-Za-z0-9]+\.(jpg|jpeg|png|webp)$/.test(r.posterPath)

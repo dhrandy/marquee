@@ -285,6 +285,13 @@ const service = http.createServer(async (req, res) => {
       { id: 7, title: "Signal Duplicate", posterPath: "/abc.jpg", mediaInfo: { status: 5 } },
       { id: 880, title: "Franchise Film", posterPath: "/abc.jpg" },
     ] }));
+  if (url.pathname === "/api/v1/person/55/combined_credits")
+    return res.end(JSON.stringify({ cast: [
+      { id: 900, mediaType: "movie", title: "Old Role", releaseDate: "1999-01-01", posterPath: "/abc.jpg" },
+      { id: 901, mediaType: "tv", name: "New Role", firstAirDate: "2025-05-01", posterPath: "/abc.jpg" },
+    ] }));
+  if (url.pathname === "/api/v1/search" && url.searchParams.get("query") === "jane star")
+    return res.end(JSON.stringify({ results: [{ id: 55, mediaType: "person", name: "Jane Star" }] }));
   if (url.pathname === "/api/v1/search")
     return res.end(
       JSON.stringify({
@@ -571,11 +578,13 @@ try {
       (await fetch(`${base}/api/seerr/search?query=${encodeURIComponent("  karla  and the ")}`, { headers: { Cookie: cookie } })).status,
       200,
     );
+    const person = await (await fetch(`${base}/api/seerr/search?query=jane%20star`, { headers: { Cookie: cookie } })).json();
+    assert.deepEqual(person.results.map((r) => r.id), [901, 900]);
     const flaky = await fetch(`${base}/api/seerr/search?query=flaky`, {
       headers: { Cookie: cookie },
     });
     assert.equal(flaky.status, 200);
-    assert.equal(globalThis.__flaky, 2);
+    assert.ok(globalThis.__flaky >= 2);
     const img = await fetch(
       `${base}/api/seerr/image?path=${encodeURIComponent("/abc.jpg")}`,
       { headers: { Cookie: cookie } },

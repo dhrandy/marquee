@@ -16,6 +16,7 @@ import {
   jellyfinTmdb,
   seerrIdentity,
   seerrFranchise,
+  seerrPersonCredits,
   seerrRequest,
   seerrRequestOptions,
   seerrRequests,
@@ -556,8 +557,22 @@ app.get("/api/seerr/search", requireUser, async (req, res) => {
           results.push(item);
         }
     }
+    if (page === 1 && query.trim().length >= 3 && query.trim().length <= 40) {
+      const seen = new Set(results.map((r) => `${r.mediaType}:${r.id}`));
+      const people = await seerrPersonCredits(query, access.id).catch((e) => {
+        console.warn(`Person search skipped: ${e.message}`);
+        return [];
+      });
+      for (const item of people)
+        if (!seen.has(`${item.mediaType}:${item.id}`)) {
+          seen.add(`${item.mediaType}:${item.id}`);
+          results.push(item);
+        }
+    }
+    // Newest first; titles without a date go last.
+    results.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
     res.json({
-      results,
+      results: results.slice(0, 60),
       requestAccess: publicAccess(access),
     });
   } catch (error) {
