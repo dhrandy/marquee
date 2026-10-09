@@ -93,11 +93,11 @@ export function demoEvents(start, end) {
         demoLocal: true,
         monitored,
         premiere: type === "tv" && /S[0-9]+E01/.test(subtitle),
-        tmdbId: type === "tv" ? 9100 : null,
+        tmdbId: 9100,
         year: 2026,
         network: "Sample Network",
         runtime: 48,
-        genres: type === "tv" ? ["Adventure", "Drama"] : [],
+        genres: ["Adventure", "Drama"],
         overview:
           "A quiet discovery changes everything for a small community. Old friendships are tested as the story unfolds.",
       });

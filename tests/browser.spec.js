@@ -1501,3 +1501,15 @@ test("facts panel uses real images and SVG icons instead of emoji, so nothing de
   expect((await page.request.get("/flags/us.svg")).status()).toBe(200);
   expect((await page.request.get("/flags/zz.svg")).status()).toBe(404);
 });
+
+test("calendar movie entries open the same popup with a facts panel", async ({ page }) => {
+  await login(page);
+  const movie = page.locator("#calendar .entry.cinema, #calendar .entry.unreleased, #calendar .entry.available").filter({ hasText: /Orbit Nine|The Last Signal/ }).first();
+  await expect(movie).toHaveAttribute("role", "button");
+  await movie.click();
+  await expect(page.locator("#episode-detail")).toBeVisible();
+  await expect(page.locator("#episode-title")).toContainText(/Orbit Nine|The Last Signal/);
+  await expect(page.locator("#episode-facts")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#episode-detail")).toBeHidden();
+});

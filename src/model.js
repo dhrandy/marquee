@@ -82,27 +82,45 @@ export function normalizeMovies(rows, now = new Date()) {
     const home = row.digitalRelease || row.physicalRelease;
     const monitored = Boolean(row.monitored);
     const entries = [];
+    // Details shown in the popup, same fields as TV entries.
+    const details = {
+      year: row.year || null,
+      tmdbId:
+        Number.isSafeInteger(row.tmdbId) && row.tmdbId > 0 && row.tmdbId <= 1e9
+          ? row.tmdbId
+          : null,
+      contentRating: normalizedContentRating(row.certification),
+      rating:
+        normalizedRating(row.ratings?.tmdb?.value, "TMDB", row.ratings?.tmdb?.votes) ||
+        normalizedRating(row.ratings?.imdb?.value, "IMDb", row.ratings?.imdb?.votes),
+      network: typeof row.studio === "string" ? row.studio : null,
+      runtime: row.runtime || null,
+      genres: Array.isArray(row.genres) ? row.genres.slice(0, 8) : [],
+      overview: row.overview || "Overview not available yet.",
+      poster: row.images?.find((image) => image.coverType === "poster")?.remoteUrl || null,
+      backdrop: row.images?.find((image) => image.coverType === "fanart")?.remoteUrl || null,
+    };
     if (row.inCinemas)
       entries.push({
         id: `movie-${row.id}-cinema`,
         type: "movie",
-        contentRating: normalizedContentRating(row.certification),
         title: row.title,
         subtitle: `${studio} · In cinemas`,
         date: row.inCinemas,
         status: "cinema",
         monitored,
+        ...details,
       });
     if (home && home !== row.inCinemas)
       entries.push({
         id: `movie-${row.id}-digital`,
         type: "movie",
-        contentRating: normalizedContentRating(row.certification),
         title: row.title,
         subtitle: `${studio} · Digital release`,
         date: home,
         status: movieStatus(row, home, now),
         monitored,
+        ...details,
       });
     return entries;
   });

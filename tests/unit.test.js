@@ -324,3 +324,16 @@ test("single-proxy option is explicit and strict allowlist wins",()=>{
  assert.deepEqual(proxyTrust("127.0.0.1","1"),["127.0.0.1"]);
  for(const invalid of ["true","2","-1","all"])assert.throws(()=>proxyTrust("",invalid));
 });
+
+test("radarr calendar entries carry popup details and a TMDB id", async () => {
+  const { normalizeMovies } = await import("../src/model.js");
+  const [entry] = normalizeMovies(
+    [{ id: 7, title: "Runner", year: 2026, tmdbId: 555, studio: "Astral", overview: "Runs.", genres: ["Action"], runtime: 100, digitalRelease: "2026-10-10T00:00:00Z", images: [{ coverType: "poster", remoteUrl: "https://image.tmdb.org/t/p/original/p.jpg" }] }],
+    new Date("2026-10-01"),
+  );
+  assert.equal(entry.tmdbId, 555);
+  assert.equal(entry.overview, "Runs.");
+  assert.deepEqual(entry.genres, ["Action"]);
+  assert.equal(entry.runtime, 100);
+  assert.match(entry.poster, /image\.tmdb\.org/);
+});

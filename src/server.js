@@ -691,7 +691,7 @@ app.get("/api/calendar", requireUser, async (req, res) => {
       delete event[localField];
       event[kind] = req.user.state.calendarImages.has(id)
         ? `/api/calendar-image/${encodeURIComponent(id)}`
-        : demo && event.type === "tv"
+        : demo
           ? "/art/north.svg"
           : null;
     }

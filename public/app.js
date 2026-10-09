@@ -388,16 +388,16 @@ function eventHtml(event) {
   });
   const premiere =
     event.premiere && !["available", "missing"].includes(event.status);
-  return `<article class="entry ${escape(event.status)}${premiere ? " premiere" : ""}"${event.type === "tv" ? ` role="button" tabindex="0" data-event="${escape(event.id)}" aria-label="Details for ${escape(event.title)}"` : ""}><span class="entry-status">${icon}${escape(event.type === "movie" ? statusLabel[event.status] : `${time} · ${premiere ? "Season premiere" : statusLabel[event.status]}`)}</span><h4>${escape(event.title)}</h4><p>${escape(event.subtitle)}</p></article>`;
+  return `<article class="entry ${escape(event.status)}${premiere ? " premiere" : ""}"${event.type === "tv" || event.type === "movie" ? ` role="button" tabindex="0" data-event="${escape(event.id)}" aria-label="Details for ${escape(event.title)}"` : ""}><span class="entry-status">${icon}${escape(event.type === "movie" ? statusLabel[event.status] : `${time} · ${premiere ? "Season premiere" : statusLabel[event.status]}`)}</span><h4>${escape(event.title)}</h4><p>${escape(event.subtitle)}</p></article>`;
 }
 function openEpisode(id) {
-  const event = state.events.find(
-    (event) => event.id === id && event.type === "tv",
-  );
+  const event = state.events.find((event) => event.id === id);
   if (!event) return;
   showDetail({
     ...event,
-    factsUrl: event.tmdbId ? `/api/seerr/details/tv/${event.tmdbId}` : null,
+    factsUrl: event.tmdbId
+      ? `/api/seerr/details/${event.type === "movie" ? "movie" : "tv"}/${event.tmdbId}`
+      : null,
   });
 }
 function mediaActionLabel(item) {
