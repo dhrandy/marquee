@@ -231,6 +231,12 @@ app.post("/api/logout", requireUser, async (req, res) => {
   cookie(res, "", 0);
   res.json({ ok: true });
 });
+// Seerr errors from the adapter are already safe to show (no URLs, keys or
+// tokens), so say what actually failed instead of a generic message.
+function seerrFailure(res, error) {
+  console.warn(`Seerr call failed: ${error.message}`);
+  res.status(502).json({ error: `Seerr could not be reached. ${error.message}` });
+}
 async function requestAccess(user) {
   if (demo) return { id: 1, movie: true, tv: true };
   try {
@@ -521,8 +527,8 @@ app.get("/api/seerr/search", requireUser, async (req, res) => {
       results: await seerrSearch(query, page, access.id),
       requestAccess: publicAccess(access),
     });
-  } catch {
-    res.status(502).json({ error: "Seerr could not be reached." });
+  } catch (error) {
+    seerrFailure(res, error);
   }
 });
 app.post("/api/test-connection", requireUser, async (req, res) => {
@@ -542,8 +548,8 @@ app.get("/api/seerr/requests", requireUser, async (req, res) => {
     const access = await requestAccess(req.user);
     if (access.error) return res.status(403).json({ error: access.error });
     res.json({ requests: await seerrRequests(access.id) });
-  } catch {
-    res.status(502).json({ error: "Seerr could not be reached." });
+  } catch (error) {
+    seerrFailure(res, error);
   }
 });
 app.post("/api/seerr/request", requireUser, async (req, res) => {
@@ -566,10 +572,11 @@ app.post("/api/seerr/request", requireUser, async (req, res) => {
     res.json({ ok: true, status: result.status ?? null });
   } catch (error) {
     const denied = /Service returned (403|409)/.test(error.message);
+    console.warn(`Seerr request failed: ${error.message}`);
     res.status(denied ? 403 : 502).json({
       error: denied
         ? "Seerr declined this request. Check your permissions, remaining quota, or whether it was already requested."
-        : "Seerr could not complete the request.",
+        : `Seerr could not complete the request. ${error.message}`,
     });
   }
 });

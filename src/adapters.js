@@ -17,16 +17,27 @@ export async function upstream(
 ) {
   const url = serviceUrl(base, path);
   let response;
-  try {
-    response = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json", ...headers },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(10000),
-      redirect: "error",
-    });
-  } catch (error) {
-    throw new Error(connectionError(error));
+  // Reads get one retry on a dropped or timed-out connection; writes never repeat.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json", ...headers },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(10000),
+        redirect: "error",
+      });
+      break;
+    } catch (error) {
+      const code = error.cause?.code;
+      const transient =
+        method === "GET" &&
+        attempt === 0 &&
+        (error.name === "TimeoutError" ||
+          ["ECONNRESET", "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT", "ETIMEDOUT", "EAI_AGAIN"].includes(code) ||
+          error.message === "fetch failed" && !code);
+      if (!transient) throw new Error(connectionError(error));
+    }
   }
   if (!response.ok)
     throw new Error(
