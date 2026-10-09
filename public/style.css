@@ -1231,3 +1231,12 @@ button[aria-label="Close settings"]:hover { background: #b9a3f7; }
   .detail-fact { align-items: center; }
   .episode-body #episode-genres { margin-top: 4px; }
 }
+
+/* Header Settings and Sign out are icon buttons, sized like the Jellyfin shortcut. */
+.account .icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; box-sizing: border-box; width: 36px; height: 36px; padding: 0;
+  color: #b9afd1; border: 1px solid #ffffff20; border-radius: 8px;
+}
+.account .icon-btn svg { display: block; width: 20px; height: 20px; }
+.account .icon-btn:hover { color: #e2d5ff; border-color: #a991ee; }
