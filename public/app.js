@@ -1012,7 +1012,7 @@ all("[data-view]").forEach((button) =>
     loadCalendar();
   }),
 );
-// Live search: results update as the user types (300ms pause, at least 2 characters).
+// Live search: results update as the user types (120ms pause, at least 2 characters).
 // Older requests are cancelled, and a response that arrives late is ignored.
 let searchTimer = null;
 let searchController = null;
@@ -1058,7 +1058,7 @@ $("#search-form input[name=query]").addEventListener("input", (event) => {
   clearTimeout(searchTimer);
   const value = event.target.value;
   if (value.trim().length < 2) return runSearch(value);
-  searchTimer = setTimeout(() => runSearch(value), 300);
+  searchTimer = setTimeout(() => runSearch(value), 120);
 });
 async function requestFromButton(event) {
   const button = event.target.closest("[data-request]");

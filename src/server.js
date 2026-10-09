@@ -237,6 +237,19 @@ function seerrFailure(res, error) {
   console.warn(`Seerr call failed: ${error.message}`);
   res.status(502).json({ error: `Seerr could not be reached. ${error.message}` });
 }
+// Typing in the search box fires many searches. Permissions rarely change, so
+// search reuses a user's lookup for 20 seconds; requesting always checks fresh.
+const accessCache = new Map();
+async function cachedAccess(user) {
+  const hit = accessCache.get(user.id);
+  if (hit && hit.expires > Date.now()) return hit.access;
+  const access = await requestAccess(user);
+  if (!access.error) {
+    if (accessCache.size > 500) accessCache.clear();
+    accessCache.set(user.id, { access, expires: Date.now() + 20000 });
+  }
+  return access;
+}
 async function requestAccess(user) {
   if (demo) return { id: 1, movie: true, tv: true };
   try {
@@ -521,7 +534,7 @@ app.get("/api/seerr/search", requireUser, async (req, res) => {
       .status(503)
       .json({ error: "Connect Seerr in the server settings to search." });
   try {
-    const access = await requestAccess(req.user);
+    const access = await cachedAccess(req.user);
     if (access.error) return res.status(403).json({ error: access.error });
     res.json({
       results: await seerrSearch(query, page, access.id),

@@ -1527,7 +1527,7 @@ test("search is live: results follow typing after a pause, stale answers are ign
   await login(page);
   const box = page.getByPlaceholder("Search movies and shows");
   await box.pressSequentially("or", { delay: 20 });
-  await page.waitForTimeout(450);
+  await page.waitForTimeout(350);
   await box.pressSequentially("bit", { delay: 20 });
   await expect(page.locator("#search-results .result-card h3").first()).toContainText(/orbit/i);
   await page.waitForTimeout(1500);
