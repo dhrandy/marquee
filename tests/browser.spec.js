@@ -268,11 +268,11 @@ test("demo search, request flow, requests list, and settings toggles", async ({
   await expect(page.locator("#search-results .result-card h3")).toHaveText([
     "Orbit Nine",
   ]);
-  page.once("dialog", (dialog) => dialog.accept());
   await page
     .locator("#search-results")
     .getByRole("button", { name: "Request", exact: true })
     .click();
+  await page.locator("#request-submit").click();
   await expect(
     page.locator("#search-results .result-card .poster-status"),
   ).toHaveAttribute("aria-label", "Processing");
@@ -533,11 +533,11 @@ test("search footers stay aligned with long titles, missing overviews, and after
     );
   let values = await centers();
   expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1);
-  page.once("dialog", (dialog) => dialog.accept());
   await page
     .locator("#search-results")
     .getByRole("button", { name: "Request", exact: true })
     .click();
+  await page.locator("#request-submit").click();
   await expect(
     page.locator("#search-results .result-card .poster-status"),
   ).toHaveCount(3);
@@ -1373,8 +1373,8 @@ for (const width of [1440, 393, 320, 280]) {
     await page
       .locator("#episode-detail")
       .screenshot({ path: `${shots}/marquee-popup-request-${width}.png` });
-    page.once("dialog", (dialog) => dialog.accept());
     await page.locator("#episode-request").click();
+    await page.locator("#request-submit").click();
     await expect(page.locator("#episode-request-status")).toHaveText(
       "Requested",
     );
@@ -1551,4 +1551,52 @@ test("weather forecast shows three readable day tiles on phones", async ({ page 
   expect(await days.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(14);
   const boxes = await days.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().right));
   expect(Math.max(...boxes)).toBeLessThanOrEqual(393);
+});
+
+for (const width of [1440, 393]) {
+  test(`request dialog: season picker and advanced options at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await login(page);
+    await page.getByPlaceholder("Search movies and shows").fill("north");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    let body = null;
+    await page.route("**/api/seerr/request", async (route) => {
+      body = route.request().postDataJSON();
+      await route.continue();
+    });
+    await page.locator("#search-results").getByRole("button", { name: "Request", exact: true }).first().click();
+    const dialog = page.locator("dialog#request-dialog[open]");
+    await expect(dialog.locator(".season-row input[data-season]")).toHaveCount(3);
+    await expect(dialog.locator('input[data-season="1"]')).toBeDisabled();
+    await expect(dialog.locator(".season-pill").first()).toHaveText("Available");
+    await expect(dialog.locator('input[data-season="2"]')).toBeChecked();
+    await dialog.locator("summary").click();
+    await expect(dialog.locator("#request-profile")).toHaveValue("2");
+    await expect(dialog.locator("#request-root")).toHaveValue("/tv");
+    const box = await dialog.boundingBox();
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(width);
+    await page.screenshot({ path: `${shots}/marquee-request-dialog-${width}.png` });
+    await dialog.locator('input[data-season="3"]').uncheck();
+    await dialog.locator("#request-profile").selectOption("3");
+    await dialog.locator("#request-submit").click();
+    await expect.poll(() => body).toEqual({
+      mediaType: "tv", mediaId: 102, seasons: [2],
+      serverId: 1, profileId: 3, rootFolder: "/tv",
+    });
+  });
+}
+
+test("request dialog can be cancelled and needs a season", async ({ page }) => {
+  await login(page);
+  await page.getByPlaceholder("Search movies and shows").fill("north");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page.locator("#search-results").getByRole("button", { name: "Request", exact: true }).first().click();
+  const dialog = page.locator("dialog#request-dialog[open]");
+  await dialog.locator('input[data-season="2"]').uncheck();
+  await dialog.locator('input[data-season="3"]').uncheck();
+  await expect(dialog.locator("#request-submit")).toBeDisabled();
+  await dialog.locator("#request-cancel").click();
+  await expect(page.locator("dialog#request-dialog[open]")).toHaveCount(0);
+  await expect(page.locator("#search-results .result-card .request-btn").first()).toBeVisible();
 });

@@ -388,6 +388,9 @@ export async function seerrIdentity(jellyfinId) {
     user.id === 1 || Boolean(user.permissions & (2 | 32 | bit));
   return {
     id: user.id,
+    // Seerr lets only admins, request managers and users with the "advanced
+    // request" permission pick a server, quality profile or root folder.
+    advanced: user.id === 1 || Boolean(user.permissions & (2 | 16 | 8192)),
     movie: permitted(262144) && !quota.movie.restricted,
     tv: permitted(524288) && !quota.tv.restricted,
     movieReason: quota.movie.restricted
@@ -490,7 +493,8 @@ export async function seerrPopular(userId) {
   return { movies, tv };
 }
 
-export async function seerrRequest(mediaType, mediaId, userId) {
+export async function seerrRequest(mediaType, mediaId, userId, options = {}) {
+  const { seasons, serverId, profileId, rootFolder } = options;
   return upstream(process.env.SEERR_URL, "/api/v1/request", {
     method: "POST",
     headers: { "X-Api-Key": process.env.SEERR_API_KEY },
@@ -498,9 +502,77 @@ export async function seerrRequest(mediaType, mediaId, userId) {
       mediaType,
       mediaId,
       userId,
-      ...(mediaType === "tv" ? { seasons: "all" } : {}),
+      ...(mediaType === "tv"
+        ? { seasons: Array.isArray(seasons) && seasons.length ? seasons : "all" }
+        : {}),
+      ...(Number.isSafeInteger(serverId) ? { serverId } : {}),
+      ...(Number.isSafeInteger(profileId) ? { profileId } : {}),
+      ...(typeof rootFolder === "string" && rootFolder ? { rootFolder } : {}),
     },
   });
+}
+
+// What the request dialog needs: seasons for a series (with what Seerr already
+// knows about each) and, for users allowed to change them, the quality
+// profiles and root folders of the default Seerr server.
+export async function seerrRequestOptions(type, id, userId, advanced) {
+  const headers = {
+    "X-Api-Key": process.env.SEERR_API_KEY,
+    "X-API-User": String(userId),
+  };
+  const out = { seasons: [], advanced: null };
+  if (type === "tv") {
+    const data = await upstream(process.env.SEERR_URL, `/api/v1/tv/${id}`, { headers });
+    const known = new Map(
+      (data.mediaInfo?.seasons || []).map((s) => [s.seasonNumber, s.status]),
+    );
+    const requested = new Set();
+    for (const request of data.mediaInfo?.requests || [])
+      if ([1, 2].includes(request.status))
+        for (const s of request.seasons || []) requested.add(s.seasonNumber);
+    out.seasons = (data.seasons || [])
+      .filter((s) => Number.isInteger(s.seasonNumber) && s.seasonNumber > 0)
+      .map((s) => {
+        const status = known.get(s.seasonNumber);
+        return {
+          number: s.seasonNumber,
+          episodes: Number.isInteger(s.episodeCount) ? s.episodeCount : 0,
+          // 5 available, 4 partial, 3 processing, 2 pending, 1 requested elsewhere, 0 none
+          status: [3, 4, 5].includes(status) ? status : requested.has(s.seasonNumber) || status === 2 ? 2 : 0,
+        };
+      });
+  }
+  if (advanced) {
+    const service = type === "movie" ? "radarr" : "sonarr";
+    try {
+      const servers = await upstream(process.env.SEERR_URL, `/api/v1/service/${service}`, { headers });
+      const server =
+        (Array.isArray(servers) &&
+          (servers.find((x) => x.isDefault && !x.is4k) || servers.find((x) => !x.is4k))) ||
+        null;
+      if (server && Number.isSafeInteger(server.id)) {
+        const detail = await upstream(process.env.SEERR_URL, `/api/v1/service/${service}/${server.id}`, { headers });
+        const profiles = (detail.profiles || [])
+          .filter((p) => Number.isSafeInteger(p.id) && typeof p.name === "string")
+          .map((p) => ({ id: p.id, name: p.name }));
+        const rootFolders = (detail.rootFolders || [])
+          .filter((f) => typeof f.path === "string")
+          .map((f) => ({ path: f.path, freeSpace: Number.isFinite(f.freeSpace) ? f.freeSpace : null }));
+        if (profiles.length || rootFolders.length)
+          out.advanced = {
+            serverId: server.id,
+            serverName: typeof server.name === "string" ? server.name : "",
+            profiles,
+            rootFolders,
+            defaultProfileId: profiles.some((p) => p.id === server.activeProfileId) ? server.activeProfileId : profiles[0]?.id ?? null,
+            defaultRootFolder: rootFolders.some((f) => f.path === server.activeDirectory) ? server.activeDirectory : rootFolders[0]?.path ?? null,
+          };
+      }
+    } catch {
+      // Advanced choices are optional; the request still works with Seerr's defaults.
+    }
+  }
+  return out;
 }
 
 export async function seerrRequests(userId) {

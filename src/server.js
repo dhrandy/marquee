@@ -16,6 +16,7 @@ import {
   jellyfinTmdb,
   seerrIdentity,
   seerrRequest,
+  seerrRequestOptions,
   seerrRequests,
   testService,
   serviceUrl,
@@ -251,7 +252,7 @@ async function cachedAccess(user) {
   return access;
 }
 async function requestAccess(user) {
-  if (demo) return { id: 1, movie: true, tv: true };
+  if (demo) return { id: 1, movie: true, tv: true, advanced: true };
   try {
     return await seerrIdentity(user.id);
   } catch (error) {
@@ -272,6 +273,7 @@ function publicAccess(access) {
   return {
     movie: access.movie,
     tv: access.tv,
+    advanced: access.advanced === true,
     reason: access.error || "",
     movieReason: access.movieReason || "",
     tvReason: access.tvReason || "",
@@ -565,13 +567,80 @@ app.get("/api/seerr/requests", requireUser, async (req, res) => {
     seerrFailure(res, error);
   }
 });
-app.post("/api/seerr/request", requireUser, async (req, res) => {
-  const { mediaType, mediaId } = req.body || {};
+app.get("/api/seerr/request-options", requireUser, async (req, res) => {
+  const mediaType = req.query.mediaType;
+  const mediaId = Number(req.query.mediaId);
   if (
     !["movie", "tv"].includes(mediaType) ||
     !Number.isInteger(mediaId) ||
     mediaId < 1 ||
     mediaId > 1e9
+  )
+    return res.status(400).json({ error: "Invalid request." });
+  if (demo)
+    return res.json({
+      seasons:
+        mediaType === "tv"
+          ? [
+              { number: 1, episodes: 10, status: 5 },
+              { number: 2, episodes: 8, status: 0 },
+              { number: 3, episodes: 12, status: 0 },
+            ]
+          : [],
+      advanced: {
+        serverId: 1,
+        serverName: "Demo",
+        profiles: [
+          { id: 1, name: "Any" },
+          { id: 2, name: "HD - 720p/1080p" },
+          { id: 3, name: "Ultra-HD" },
+        ],
+        rootFolders: [
+          { path: mediaType === "tv" ? "/tv" : "/movies", freeSpace: 2e12 },
+          { path: "/media/archive", freeSpace: 5e11 },
+        ],
+        defaultProfileId: 2,
+        defaultRootFolder: mediaType === "tv" ? "/tv" : "/movies",
+      },
+    });
+  try {
+    const access = await requestAccess(req.user);
+    if (!access[mediaType])
+      return res
+        .status(403)
+        .json({ error: access.error || access[`${mediaType}Reason`] });
+    res.json(
+      await seerrRequestOptions(mediaType, mediaId, access.id, access.advanced),
+    );
+  } catch (error) {
+    seerrFailure(res, error);
+  }
+});
+app.post("/api/seerr/request", requireUser, async (req, res) => {
+  const { mediaType, mediaId, seasons, serverId, profileId, rootFolder } =
+    req.body || {};
+  if (
+    !["movie", "tv"].includes(mediaType) ||
+    !Number.isInteger(mediaId) ||
+    mediaId < 1 ||
+    mediaId > 1e9
+  )
+    return res.status(400).json({ error: "Invalid request." });
+  const wantsSeasons = seasons !== undefined;
+  const wantsAdvanced =
+    serverId !== undefined || profileId !== undefined || rootFolder !== undefined;
+  if (
+    (wantsSeasons &&
+      (mediaType !== "tv" ||
+        !Array.isArray(seasons) ||
+        seasons.length < 1 ||
+        seasons.length > 200 ||
+        !seasons.every((n) => Number.isInteger(n) && n >= 1 && n <= 1000))) ||
+    (wantsAdvanced &&
+      ((serverId !== undefined && !Number.isSafeInteger(serverId)) ||
+        (profileId !== undefined && !Number.isSafeInteger(profileId)) ||
+        (rootFolder !== undefined &&
+          (typeof rootFolder !== "string" || !rootFolder || rootFolder.length > 300))))
   )
     return res.status(400).json({ error: "Invalid request." });
   if (demo) return res.json({ ok: true });
@@ -581,7 +650,25 @@ app.post("/api/seerr/request", requireUser, async (req, res) => {
       return res
         .status(403)
         .json({ error: access.error || access[`${mediaType}Reason`] });
-    const result = await seerrRequest(mediaType, mediaId, access.id);
+    const options = {};
+    if (wantsSeasons) options.seasons = [...new Set(seasons)].sort((a, b) => a - b);
+    if (wantsAdvanced) {
+      if (!access.advanced)
+        return res.status(403).json({
+          error: "Seerr does not let your account change the quality profile or folder.",
+        });
+      // Only values Seerr itself offers for its default server are accepted.
+      const offered = (await seerrRequestOptions(mediaType, mediaId, access.id, true)).advanced;
+      if (
+        !offered ||
+        (serverId !== undefined && serverId !== offered.serverId) ||
+        (profileId !== undefined && !offered.profiles.some((p) => p.id === profileId)) ||
+        (rootFolder !== undefined && !offered.rootFolders.some((f) => f.path === rootFolder))
+      )
+        return res.status(400).json({ error: "That quality profile or folder is not available." });
+      Object.assign(options, { serverId: offered.serverId, profileId, rootFolder });
+    }
+    const result = await seerrRequest(mediaType, mediaId, access.id, options);
     res.json({ ok: true, status: result.status ?? null });
   } catch (error) {
     const denied = /Service returned (403|409)/.test(error.message);

@@ -342,6 +342,28 @@ const service = http.createServer(async (req, res) => {
       }),
     );
   }
+  if (url.pathname === "/api/v1/tv/77")
+    return res.end(
+      JSON.stringify({
+        seasons: [
+          { seasonNumber: 0, episodeCount: 2 },
+          { seasonNumber: 1, episodeCount: 10 },
+          { seasonNumber: 2, episodeCount: 8 },
+        ],
+        mediaInfo: { seasons: [{ seasonNumber: 1, status: 5 }], requests: [] },
+      }),
+    );
+  if (url.pathname === "/api/v1/service/radarr")
+    return res.end(JSON.stringify([
+      { id: 9, name: "4K", is4k: true, isDefault: false },
+      { id: 3, name: "HD", is4k: false, isDefault: true, activeProfileId: 6, activeDirectory: "/movies" },
+    ]));
+  if (url.pathname === "/api/v1/service/radarr/3")
+    return res.end(JSON.stringify({
+      server: { id: 3 },
+      profiles: [{ id: 5, name: "Any", extra: "x" }, { id: 6, name: "HD" }],
+      rootFolders: [{ id: 1, path: "/movies", freeSpace: 100 }, { id: 2, path: "/other", freeSpace: 50 }],
+    }));
   if (url.pathname === "/api/v1/request" && req.method === "POST") {
     let body = "";
     for await (const chunk of req) body += chunk;
@@ -549,6 +571,36 @@ try {
     const sent = calls.find((c) => c.path === "seerr-request-body");
     assert.deepEqual(sent.body, { mediaType: "movie", mediaId: 7, userId: 4 });
     assert.equal(sent.apiKey, "seerr-mock");
+    const postReq = (c, body) =>
+      fetch(`${base}/api/seerr/request`, {
+        method: "POST",
+        headers: { Origin: base, "Content-Type": "application/json", Cookie: c },
+        body: JSON.stringify(body),
+      });
+    const optsUrl = `${base}/api/seerr/request-options?mediaType=`;
+    const tvOpts = await (await fetch(`${optsUrl}tv&mediaId=77`, { headers: { Cookie: cookie } })).json();
+    assert.deepEqual(tvOpts.seasons, [
+      { number: 1, episodes: 10, status: 5 },
+      { number: 2, episodes: 8, status: 0 },
+    ]);
+    const movieOpts = await (await fetch(`${optsUrl}movie&mediaId=7`, { headers: { Cookie: cookie } })).json();
+    if (me.requestAccess.advanced) {
+      assert.deepEqual(movieOpts.advanced.profiles, [{ id: 5, name: "Any" }, { id: 6, name: "HD" }]);
+      assert.equal(movieOpts.advanced.serverId, 3);
+      assert.equal(movieOpts.advanced.defaultProfileId, 6);
+      assert.equal(movieOpts.advanced.defaultRootFolder, "/movies");
+      assert.equal((await postReq(cookie, { mediaType: "movie", mediaId: 7, profileId: 99, serverId: 3 })).status, 400);
+      assert.equal((await postReq(cookie, { mediaType: "movie", mediaId: 7, profileId: 5, serverId: 3, rootFolder: "/other" })).status, 200);
+      const last = calls.filter((c) => c.path === "seerr-request-body").pop();
+      assert.deepEqual(last.body, { mediaType: "movie", mediaId: 7, userId: 4, serverId: 3, profileId: 5, rootFolder: "/other" });
+    } else {
+      assert.equal(movieOpts.advanced, null);
+      assert.equal((await postReq(cookie, { mediaType: "movie", mediaId: 7, profileId: 5 })).status, 403);
+    }
+    assert.equal((await postReq(cookie, { mediaType: "tv", mediaId: 77, seasons: [] })).status, 400);
+    assert.equal((await postReq(cookie, { mediaType: "movie", mediaId: 7, seasons: [1] })).status, 400);
+    assert.equal((await postReq(cookie, { mediaType: "tv", mediaId: 77, seasons: [2, 2] })).status, 200);
+    assert.deepEqual(calls.filter((c) => c.path === "seerr-request-body").pop().body, { mediaType: "tv", mediaId: 77, userId: 4, seasons: [2] });
     const bobLogin = await signin("bob");
     const bobCookie = bobLogin.headers.get("set-cookie").split(";")[0];
     const bobMe = await (

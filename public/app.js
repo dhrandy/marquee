@@ -1060,11 +1060,116 @@ $("#search-form input[name=query]").addEventListener("input", (event) => {
   if (value.trim().length < 2) return runSearch(value);
   searchTimer = setTimeout(() => runSearch(value), 120);
 });
+function seasonPill(status) {
+  if (status === 5) return '<span class="season-pill available">Available</span>';
+  if (status === 4) return '<span class="season-pill available">Partially available</span>';
+  if (status === 3) return '<span class="season-pill pending">Processing</span>';
+  if (status === 2) return '<span class="season-pill pending">Requested</span>';
+  return '<span class="season-pill">Not requested</span>';
+}
+// Resolves with extra request fields, or null if the user cancels.
+function askRequestOptions(button) {
+  return new Promise(async (resolve) => {
+    const dialog = $("#request-dialog");
+    const isTv = button.dataset.mediaType === "tv";
+    $("#request-title").textContent = `Request ${button.dataset.title}`;
+    const status = $("#request-status");
+    const seasonsBox = $("#request-seasons");
+    const advanced = $("#request-advanced");
+    const submit = $("#request-submit");
+    status.textContent = "Loading options...";
+    seasonsBox.hidden = true;
+    seasonsBox.innerHTML = "";
+    advanced.hidden = true;
+    advanced.open = false;
+    submit.disabled = true;
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      if (dialog.open) dialog.close();
+      resolve(value);
+    };
+    let options = { seasons: [], advanced: null };
+    const sync = () => {
+      const picked = all("#request-seasons input[data-season]:checked");
+      submit.disabled = isTv && options.seasons.length > 0 && !picked.length;
+      const toggle = $("#request-all");
+      if (toggle) {
+        const open = all("#request-seasons input[data-season]:not(:disabled)");
+        toggle.checked = open.length > 0 && open.every((box) => box.checked);
+        toggle.disabled = !open.length;
+      }
+    };
+    $("#request-form").onsubmit = (event) => {
+      event.preventDefault();
+      if (submit.disabled) return;
+      const out = {};
+      if (isTv && options.seasons.length)
+        out.seasons = all("#request-seasons input[data-season]:checked").map((box) => Number(box.dataset.season));
+      if (options.advanced && !advanced.hidden) {
+        const profile = Number($("#request-profile").value);
+        const root = $("#request-root").value;
+        const a = options.advanced;
+        // Only send choices that differ from Seerr's defaults.
+        if (profile !== a.defaultProfileId || root !== a.defaultRootFolder)
+          Object.assign(out, { serverId: a.serverId, profileId: profile, rootFolder: root });
+      }
+      finish(out);
+    };
+    $("#request-cancel").onclick = $("#request-close").onclick = () => finish(null);
+    dialog.oncancel = () => finish(null);
+    dialog.onclose = () => finish(null);
+    dialog.showModal();
+    try {
+      options = await api(`/api/seerr/request-options?mediaType=${button.dataset.mediaType}&mediaId=${button.dataset.mediaId}`);
+    } catch (error) {
+      status.textContent = error.message;
+      return;
+    }
+    status.textContent = "";
+    if (isTv && options.seasons.length) {
+      seasonsBox.innerHTML =
+        `<div class="season-row season-head"><input type="checkbox" id="request-all" aria-label="Select all seasons" /><span>Season</span><span># of episodes</span><span>Status</span></div>` +
+        options.seasons
+          .map((s) => {
+            const locked = s.status >= 2;
+            return `<label class="season-row${locked ? " is-locked" : ""}"><input type="checkbox" data-season="${s.number}"${locked ? " disabled" : " checked"} /><span>Season ${s.number}</span><span>${s.episodes}</span>${seasonPill(s.status)}</label>`;
+          })
+          .join("");
+      seasonsBox.hidden = false;
+      seasonsBox.onchange = (event) => {
+        if (event.target.id === "request-all")
+          for (const box of all("#request-seasons input[data-season]:not(:disabled)")) box.checked = event.target.checked;
+        sync();
+      };
+    }
+    const a = options.advanced;
+    if (a && state.requestAccess.advanced) {
+      $("#request-profile").innerHTML = a.profiles
+        .map((p) => `<option value="${p.id}"${p.id === a.defaultProfileId ? " selected" : ""}>${escape(p.name)}</option>`)
+        .join("");
+      $("#request-root").innerHTML = a.rootFolders
+        .map((f) => `<option value="${escape(f.path)}"${f.path === a.defaultRootFolder ? " selected" : ""}>${escape(f.path)}${f.freeSpace ? ` (${Math.round(f.freeSpace / 1e9)} GB free)` : ""}</option>`)
+        .join("");
+      advanced.hidden = false;
+    }
+    sync();
+    if (isTv && options.seasons.length && submit.disabled)
+      status.textContent = "Every season is already requested or available.";
+  });
+}
 async function requestFromButton(event) {
   const button = event.target.closest("[data-request]");
   if (!button) return;
   const title = button.dataset.title;
-  if (!confirm(`Request ${title}?`)) return;
+  const needsDialog =
+    button.dataset.mediaType === "tv" || state.requestAccess.advanced === true;
+  let extra = {};
+  if (needsDialog) {
+    extra = await askRequestOptions(button);
+    if (!extra) return;
+  } else if (!confirm(`Request ${title}?`)) return;
   button.disabled = true;
   try {
     const result = await api("/api/seerr/request", {
@@ -1072,6 +1177,7 @@ async function requestFromButton(event) {
       body: JSON.stringify({
         mediaType: button.dataset.mediaType,
         mediaId: Number(button.dataset.mediaId),
+        ...extra,
       }),
     });
     const requestedState = { availability: result.status === 1 ? 2 : 3, requested: true };
