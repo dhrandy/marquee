@@ -145,6 +145,17 @@ test("screenshots for review", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("shelf rows are not focus targets, so only the picked card can show a focus ring", async ({ page }) => {
+  await login(page);
+  const row = page.locator("#recent");
+  expect(await row.evaluate((el) => el.tabIndex)).toBe(-1);
+  const card = page.locator("#recent .recent-detail").nth(1);
+  await card.click();
+  await page.keyboard.press("Escape");
+  expect(await row.evaluate((el) => el.matches(":focus, :focus-visible"))).toBe(false);
+  expect(await page.locator("#recent :focus-visible").count()).toBeLessThanOrEqual(1);
+});
+
 test("login preview", async ({ page }) => {
   await page.route("**/api/config", (route) =>
     route.fulfill({ json: { demo: false, name: "Marquee" } }),
