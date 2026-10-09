@@ -1149,3 +1149,7 @@ body.colorblind .legend .premiere { color:#ffe66b; }
 .episode-actions #episode-play { margin:0; }
 #episode-request { background:var(--purple); color:#1b1730; padding:10px 14px; border-radius:8px; }
 #episode-request-status { font-size:14px; color:#e2e5ed; }
+
+/* Certification at the lower right, without changing poster size. */
+.content-rating { position:absolute; right:20px; bottom:18px; margin:0; z-index:1; background:#10121cee; }
+.episode-body:has(.content-rating:not([hidden])) { padding-bottom:58px; }
