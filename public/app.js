@@ -523,7 +523,8 @@ function showDetail(event) {
     : [];
   cast.textContent = names.length ? `Cast: ${names.join(", ")}` : "";
   cast.hidden = !names.length;
-  $("#episode-overview").textContent =
+  // Same text twice: desktop shows it under the title, phones keep it in the body.
+  $("#episode-overview").textContent = $("#episode-overview-top").textContent =
     event.overview || "Overview not available yet.";
   $("#episode-genres").innerHTML = (event.genres || [])
     .map((genre) => `<span>${escape(genre)}</span>`)

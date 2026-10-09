@@ -1217,3 +1217,17 @@ button[aria-label="Close settings"] {
   background: #a991ee; color: #171322;
 }
 button[aria-label="Close settings"]:hover { background: #b9a3f7; }
+
+/* Desktop popups: the title block starts at the top of the poster with the overview right
+   under the subtitle. Phones keep the original layout (overview in the body). */
+#episode-overview-top { display: none; }
+@media (min-width: 601px) {
+  .episode-hero { align-items: flex-start; }
+  .episode-heading { padding: 4px 56px 0 0; }
+  .episode-heading h2 { line-height: 1.15; }
+  #episode-subtitle { margin: 8px 0 0; }
+  #episode-overview-top { display: block; margin: 14px 0 0; max-width: 62ch; color: #e2e5ed; font-size: 15px; line-height: 1.6; }
+  .episode-body #episode-overview { display: none; }
+  .detail-fact { align-items: center; }
+  .episode-body #episode-genres { margin-top: 4px; }
+}

@@ -179,6 +179,23 @@ test("library and calendar popups show the same facts panel as Seerr popups", as
   await expect(page.locator("#episode-facts")).toBeHidden();
 });
 
+test("popup overview sits under the title on desktop and stays in the body on phones", async ({ page }) => {
+  await login(page);
+  for (const [width, topVisible] of [[1440, true], [393, false]]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.locator("#calendar [data-event]").first().click();
+    await expect(page.locator("#episode-overview-top")).toBeVisible({ visible: topVisible });
+    await expect(page.locator("#episode-overview")).toBeVisible({ visible: !topVisible });
+    if (topVisible) {
+      const title = await page.locator("#episode-subtitle").boundingBox();
+      const top = await page.locator("#episode-overview-top").boundingBox();
+      expect(top.y).toBeGreaterThan(title.y);
+      expect(top.y - (title.y + title.height)).toBeLessThan(40);
+    }
+    await page.keyboard.press("Escape");
+  }
+});
+
 test("login preview", async ({ page }) => {
   await page.route("**/api/config", (route) =>
     route.fulfill({ json: { demo: false, name: "Marquee" } }),
