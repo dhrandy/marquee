@@ -394,6 +394,25 @@ function showDetail(event) {
   $("#episode-title").textContent =
     `${event.title}${event.year ? ` (${event.year})` : ""}`;
   $("#episode-subtitle").textContent = event.subtitle;
+  const requestButton = $("#episode-request");
+  requestButton.hidden = !(
+    Number.isSafeInteger(event.mediaId) &&
+    event.mediaId > 0 &&
+    state.requestAccess[event.mediaType] &&
+    event.availability !== 5 &&
+    event.availability !== 2 &&
+    !event.requested
+  );
+  requestButton.disabled = false;
+  delete requestButton.dataset.request;
+  if (!requestButton.hidden) {
+    requestButton.dataset.request = "";
+    requestButton.dataset.mediaId = event.mediaId;
+    requestButton.dataset.mediaType = event.mediaType;
+    requestButton.dataset.title = event.title;
+  }
+  $("#episode-request-status").hidden = true;
+  $("#episode-request-status").textContent = "";
   const contentRating = $("#episode-content-rating");
   contentRating.textContent =
     typeof event.contentRating === "string" ? event.contentRating : "";
@@ -615,11 +634,18 @@ $("#popular-collapse").addEventListener("click", () => {
 });
 async function openMediaDetail(card, status) {
   try {
-    showDetail(
-      await api(
-        `/api/seerr/details/${card.dataset.detailType}/${card.dataset.detailId}`,
-      ),
+    const detail = await api(
+      `/api/seerr/details/${card.dataset.detailType}/${card.dataset.detailId}`,
     );
+    if (state.demo) {
+      const action = card
+        .closest(".result-card")
+        ?.querySelector("[data-request]");
+      detail.mediaType = card.dataset.detailType;
+      detail.mediaId = Number(card.dataset.detailId);
+      detail.requested = !action;
+    }
+    showDetail(detail);
   } catch (error) {
     status.textContent = error.message;
   }
@@ -879,7 +905,7 @@ $("#search-form").addEventListener("submit", async (event) => {
     $("#search-results").innerHTML = "";
   }
 });
-$("#search-section").addEventListener("click", async (event) => {
+async function requestFromButton(event) {
   const button = event.target.closest("[data-request]");
   if (!button) return;
   const title = button.dataset.title;
@@ -893,16 +919,41 @@ $("#search-section").addEventListener("click", async (event) => {
         mediaId: Number(button.dataset.mediaId),
       }),
     });
-    const done = document.createElement("span");
-    done.className = "requested-label";
-    done.textContent = "Requested";
-    button.replaceWith(done);
+    if (button.id === "episode-request") {
+      button.hidden = true;
+      delete button.dataset.request;
+      $("#episode-request-status").textContent = "Requested";
+      $("#episode-request-status").hidden = false;
+      for (const other of all(".request-btn[data-request]")) {
+        if (
+          other.dataset.mediaId === button.dataset.mediaId &&
+          other.dataset.mediaType === button.dataset.mediaType
+        ) {
+          const done = document.createElement("span");
+          done.className = "requested-label";
+          done.textContent = "Requested";
+          other.replaceWith(done);
+        }
+      }
+    } else {
+      const done = document.createElement("span");
+      done.className = "requested-label";
+      done.textContent = "Requested";
+      button.replaceWith(done);
+    }
     loadRequests();
   } catch (error) {
     button.disabled = false;
-    $("#search-status").textContent = error.message;
+    const status =
+      button.id === "episode-request"
+        ? $("#episode-request-status")
+        : $("#search-status");
+    status.textContent = error.message;
+    status.hidden = false;
   }
-});
+}
+$("#search-section").addEventListener("click", requestFromButton);
+$("#episode-detail").addEventListener("click", requestFromButton);
 (async () => {
   const config = await api("/api/config");
   state.demo = config.demo;

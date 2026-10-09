@@ -1144,3 +1144,8 @@ body.colorblind .legend .premiere { color:#ffe66b; }
 .content-rating { display:inline-block; font-size:13px; line-height:1.5; font-weight:600; padding:2px 7px; border:1px solid #c5cad6; border-radius:4px; color:#edf0f7; background:#10121cbc; margin:0 0 12px; }
 
 #episode-cast { font-size:13px; line-height:1.5; color:#c5cad6; overflow-wrap:anywhere; }
+
+.episode-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.episode-actions #episode-play { margin:0; }
+#episode-request { background:var(--purple); color:#1b1730; padding:10px 14px; border-radius:8px; }
+#episode-request-status { font-size:14px; color:#e2e5ed; }

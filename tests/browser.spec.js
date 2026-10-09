@@ -1296,3 +1296,35 @@ for (const width of [1440, 393, 320, 280]) {
     await expect(page.locator("#episode-content-rating")).toHaveText("");
   });
 }
+
+for (const width of [1440, 393, 320, 280]) {
+  test(`top ten popup requests use the same confirmed flow at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await login(page);
+    const card = page
+      .locator("#popular-section .result-card")
+      .filter({ has: page.locator("[data-request]") })
+      .first();
+    await card.locator("[data-detail-id]").click();
+    await expect(page.locator("#episode-request")).toBeVisible();
+    await expect(page.locator("#episode-play")).toBeHidden();
+    await page
+      .locator("#episode-detail")
+      .screenshot({ path: `${shots}/marquee-popup-request-${width}.png` });
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.locator("#episode-request").click();
+    await expect(page.locator("#episode-request-status")).toHaveText(
+      "Requested",
+    );
+    await expect(page.locator("#episode-request")).toBeHidden();
+    await page.locator("#episode-close").click();
+    const owned = page
+      .locator("#popular-section .result-card")
+      .filter({ has: page.locator(".owned") })
+      .first();
+    await owned.locator("[data-detail-id]").click();
+    await expect(page.locator("#episode-request")).toBeHidden();
+  });
+}
