@@ -7,6 +7,11 @@ A small self-hosted media home screen: recently added at the top, a release cale
 <img src="docs/images/desktop.png" alt="Marquee desktop demo with poster shelf and monthly calendar" width="100%">
 
 <details>
+<summary>Full dashboard example (requester names removed)</summary>
+<img src="docs/images/dashboard-redacted.png" alt="Marquee full dashboard with recent titles, agenda, Seerr search, top ten and Requests; requester names removed" width="100%">
+</details>
+
+<details>
 <summary>Mobile demo</summary>
 <p align="center"><img src="docs/images/mobile.png" alt="Marquee mobile demo with readable calendar list" width="300"></p>
 </details>
