@@ -185,8 +185,22 @@ export function demoSearch(query) {
       availability: 4,
       requested: false,
     },
+    {
+      id: 105,
+      mediaType: "tv",
+      title: "Quiet Harbor",
+      year: "2026",
+      poster: "moons",
+      overview: "A ferry town keeps one secret per season.",
+      availability: null,
+      requested: false,
+    },
   ];
-  return pool.filter((item) => !q || item.title.toLowerCase().includes(q));
+  // Quiet Harbor only shows up when searched for by name, so it stays out of
+  // the default result set the layout tests count.
+  return pool.filter((item) =>
+    item.id === 105 ? q.includes("harbor") : !q || item.title.toLowerCase().includes(q),
+  );
 }
 
 export const demoRequests = [

@@ -1202,14 +1202,14 @@ body.colorblind .poster-status.blocked, body.colorblind .poster-status.deleted {
 
 /* Icon-only square buttons: fixed box, SVG glyph centered by flex so font metrics can't shift it. */
 .date-nav > #prev, .date-nav > #next, .shelf-controls button, .recent-controls button,
-#episode-close, button[aria-label="Close settings"] {
+#episode-close, #request-close, button[aria-label="Close settings"] {
   display: inline-flex; align-items: center; justify-content: center;
   flex: 0 0 auto; box-sizing: border-box; line-height: 0; padding: 0;
   width: 36px; height: 36px;
 }
 #episode-close { width: 42px; height: 42px; }
 .date-nav > #prev svg, .date-nav > #next svg, .shelf-controls button svg, .recent-controls button svg,
-#episode-close svg, button[aria-label="Close settings"] svg {
+#episode-close svg, #request-close svg, button[aria-label="Close settings"] svg {
   display: block; flex: 0 0 auto; width: 20px; height: 20px; fill: none; stroke: currentColor;
   stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
 }

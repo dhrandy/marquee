@@ -1557,7 +1557,7 @@ for (const width of [1440, 393]) {
   test(`request dialog: season picker and advanced options at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await login(page);
-    await page.getByPlaceholder("Search movies and shows").fill("north");
+    await page.getByPlaceholder("Search movies and shows").fill("harbor");
     await page.getByRole("button", { name: "Search", exact: true }).click();
     let body = null;
     await page.route("**/api/seerr/request", async (route) => {
@@ -1581,7 +1581,7 @@ for (const width of [1440, 393]) {
     await dialog.locator("#request-profile").selectOption("3");
     await dialog.locator("#request-submit").click();
     await expect.poll(() => body).toEqual({
-      mediaType: "tv", mediaId: 102, seasons: [2],
+      mediaType: "tv", mediaId: 105, seasons: [2],
       serverId: 1, profileId: 3, rootFolder: "/tv",
     });
   });
@@ -1589,7 +1589,7 @@ for (const width of [1440, 393]) {
 
 test("request dialog can be cancelled and needs a season", async ({ page }) => {
   await login(page);
-  await page.getByPlaceholder("Search movies and shows").fill("north");
+  await page.getByPlaceholder("Search movies and shows").fill("harbor");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await page.locator("#search-results").getByRole("button", { name: "Request", exact: true }).first().click();
   const dialog = page.locator("dialog#request-dialog[open]");
