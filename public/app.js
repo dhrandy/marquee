@@ -510,12 +510,16 @@ function showDetail(event) {
   contentRating.title = event.contentRatingRegion
     ? `Content rating (${event.contentRatingRegion})`
     : "Content rating";
-  $("#episode-meta").textContent = [
+  // Desktop shows genres and the meta line under the overview; phones keep them in the body.
+  const metaParts = [
     event.network,
     event.runtime ? `${event.runtime} min` : null,
     statusLabel[event.status] || event.subtitle,
-  ]
-    .filter(Boolean)
+  ].filter(Boolean);
+  $("#episode-meta").textContent = metaParts.join(" · ");
+  // The subtitle is already printed above on desktop, so don't repeat it in the top line.
+  $("#episode-meta-top").textContent = metaParts
+    .filter((part) => part !== event.subtitle)
     .join(" · ");
   const cast = $("#episode-cast");
   const names = Array.isArray(event.cast)
@@ -526,7 +530,20 @@ function showDetail(event) {
   // Same text twice: desktop shows it under the title, phones keep it in the body.
   $("#episode-overview").textContent = $("#episode-overview-top").textContent =
     event.overview || "Overview not available yet.";
-  $("#episode-genres").innerHTML = (event.genres || [])
+  {
+    // Desktop only (the control is hidden by CSS on phones): long overviews are clamped
+    // so the facts and actions stay in the same place from title to title.
+    const top = $("#episode-overview-top");
+    const more = $("#episode-more");
+    top.classList.add("clamped");
+    more.hidden = true;
+    more.textContent = "More";
+    more.setAttribute("aria-expanded", "false");
+    requestAnimationFrame(() => {
+      more.hidden = !(top.scrollHeight > top.clientHeight + 1);
+    });
+  }
+  $("#episode-genres").innerHTML = $("#episode-genres-top").innerHTML = (event.genres || [])
     .map((genre) => `<span>${escape(genre)}</span>`)
     .join("");
   $("#episode-rating").textContent = ratingText(event.rating);
@@ -575,6 +592,11 @@ $("#calendar").addEventListener("keydown", (event) => {
     event.preventDefault();
     openEpisode(card.dataset.event);
   }
+});
+$("#episode-more").addEventListener("click", (e) => {
+  const open = $("#episode-overview-top").classList.toggle("clamped") === false;
+  e.currentTarget.textContent = open ? "Less" : "More";
+  e.currentTarget.setAttribute("aria-expanded", String(open));
 });
 $("#episode-close").addEventListener("click", () =>
   $("#episode-detail").close(),

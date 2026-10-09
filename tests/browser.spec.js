@@ -187,10 +187,17 @@ test("popup overview sits under the title on desktop and stays in the body on ph
     await expect(page.locator("#episode-overview-top")).toBeVisible({ visible: topVisible });
     await expect(page.locator("#episode-overview")).toBeVisible({ visible: !topVisible });
     if (topVisible) {
-      const title = await page.locator("#episode-subtitle").boundingBox();
-      const top = await page.locator("#episode-overview-top").boundingBox();
-      expect(top.y).toBeGreaterThan(title.y);
-      expect(top.y - (title.y + title.height)).toBeLessThan(40);
+      // Overview follows the subtitle, meta and genre rows with no big gap.
+      const gap = await page.evaluate(() => {
+        const bottoms = ["#episode-subtitle", "#episode-meta-top", "#episode-genres-top"]
+          .map((s) => document.querySelector(s).getBoundingClientRect())
+          .filter((r) => r.height > 0)
+          .map((r) => r.bottom);
+        const top = document.querySelector("#episode-overview-top").getBoundingClientRect();
+        return top.y - Math.max(...bottoms);
+      });
+      expect(gap).toBeGreaterThan(0);
+      expect(gap).toBeLessThan(40);
     }
     await page.keyboard.press("Escape");
   }
@@ -1450,3 +1457,32 @@ for (const width of [1440,393,320,280]) {
     await expect(page.locator("#episode-facts")).toHaveText("");
   });
 }
+
+test("desktop popup puts meta and genres under the title and clamps long overviews; phones keep the body layout", async ({ page }) => {
+  await page.route("**/api/recent", async (route) => {
+    const res = await route.fetch();
+    const data = await res.json();
+    const long = "A long overview sentence that keeps going to test clamping. ".repeat(14);
+    for (const item of data.items) item.detail.overview = long;
+    await route.fulfill({ response: res, json: data });
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await login(page);
+  await page.locator("#recent .recent-detail").first().click();
+  await expect(page.locator("#episode-genres-top")).toBeVisible();
+  await expect(page.locator("#episode-meta-top")).toBeVisible();
+  await expect(page.locator("#episode-genres")).toBeHidden();
+  const more = page.locator("#episode-more");
+  await expect(more).toBeVisible();
+  const clamped = await page.locator("#episode-overview-top").evaluate((el) => el.clientHeight);
+  await more.click();
+  await expect(more).toHaveText("Less");
+  expect(await page.locator("#episode-overview-top").evaluate((el) => el.clientHeight)).toBeGreaterThan(clamped);
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 393, height: 850 });
+  await page.locator("#recent .recent-detail").first().click();
+  await expect(page.locator("#episode-genres")).toBeVisible();
+  await expect(page.locator("#episode-meta")).toBeVisible();
+  await expect(page.locator("#episode-genres-top")).toBeHidden();
+  await expect(page.locator("#episode-more")).toBeHidden();
+});
