@@ -159,7 +159,7 @@ function buildSettings() {
     search: "Search and requests",
     requests: "Request status list",
     popular: "Top 10 movies and TV",
-    ratings: "Show source ratings",
+    ratings: "Show ratings",
     colorblind: "Colorblind-friendly status colors",
     jellyfinLink: "Jellyfin shortcut",
     legend: "Calendar status legend",
@@ -254,18 +254,18 @@ function fixBrokenPosters() {
     ),
   );
 }
-function ratingText(rating) {
+function ratingText(rating, showSource = true) {
   return rating &&
     typeof rating.value === "number" &&
     Number.isFinite(rating.value) &&
     rating.value > 0 &&
     rating.value <= 10 &&
     ["TMDB", "IMDb", "Jellyfin community"].includes(rating.source)
-    ? `★ ${rating.value.toFixed(1)}/10 · ${rating.source}`
+    ? `★ ${rating.value.toFixed(1)}/10${showSource && rating.source !== "Jellyfin community" ? ` · ${rating.source}` : ""}`
     : "";
 }
 function ratingHtml(rating) {
-  const text = ratingText(rating);
+  const text = ratingText(rating, false);
   return text
     ? `<p class="media-rating" ${state.prefs.ratings ? "" : "hidden"}>${escape(text)}</p>`
     : "";

@@ -991,7 +991,7 @@ for (const width of [1440, 393, 320, 280]) {
 }
 
 for (const width of [1440, 393, 280]) {
-  test(`source ratings are honest and hideable at ${width}px`, async ({
+  test(`card scores have no source label and remain hideable at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 1000 });
@@ -1018,14 +1018,14 @@ for (const width of [1440, 393, 280]) {
     await page.goto("/");
     await page.getByRole("button", { name: "Explore demo" }).click();
     await expect(page.locator("#recent .media-rating")).toHaveText(
-      "★ 8.2/10 · Jellyfin community",
+      "★ 8.2/10",
     );
     await page
       .locator("#recent-section")
       .screenshot({ path: `${shots}/marquee-ratings-card-${width}.png` });
     await page.locator(".recent-detail").click();
     await expect(page.locator("#episode-rating")).toHaveText(
-      "★ 8.2/10 · Jellyfin community",
+      "★ 8.2/10",
     );
     await page
       .locator("#episode-detail")
