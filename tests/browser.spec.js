@@ -1275,6 +1275,8 @@ for (const width of [1440, 393, 320, 280]) {
       "Cast: Alex Sample",
     );
     await expect(page.locator("#episode-content-rating")).toHaveText("PG-13");
+    await expect(page.getByRole("link", { name: "Find trailer on YouTube", exact: true })).toBeVisible();
+    expect(await page.locator("#episode-trailer img").evaluate(el => el.complete && el.naturalWidth > 0)).toBe(true);
     await expect(page.locator("#episode-content-rating")).toHaveAttribute(
       "title",
       "Content rating (US)",
