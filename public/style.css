@@ -1158,3 +1158,16 @@ body.colorblind .legend .premiere { color:#ffe66b; }
 .episode-actions #episode-trailer { display:inline-flex; align-items:center; justify-content:center; min-width:48px; min-height:42px; padding:10px 12px; box-sizing:border-box; }
 #episode-trailer img { display:block; width:32px; height:22px; object-fit:contain; }
 #episode-trailer:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+
+/* Seerr status symbols live on the poster, never as a second action. */
+.poster-status { position:absolute; top:8px; right:8px; display:flex; align-items:center; justify-content:center; width:24px; height:24px; border:1px solid #ffffff80; border-radius:50%; color:#fff; box-shadow:0 2px 8px #0008; z-index:1; pointer-events:none; }
+.poster-status svg { width:20px; height:20px; }
+.poster-status.processing { background:#6366f1e6; }
+.poster-status.available, .poster-status.partial { background:#22a565e6; }
+.poster-status.pending { background:#bd8b13ed; }
+.poster-status.blocked, .poster-status.deleted { background:#ba3948ed; }
+body.colorblind .poster-status.available, body.colorblind .poster-status.partial { background:#12679e; }
+body.colorblind .poster-status.pending { background:#765919; }
+body.colorblind .poster-status.blocked, body.colorblind .poster-status.deleted { background:#9b5c17; }
+.episode-poster-wrap { position:relative; flex-shrink:0; }
+#episode-poster-status .poster-status { top:6px; right:6px; }

@@ -216,8 +216,8 @@ test("demo search, request flow, requests list, and settings toggles", async ({
     .getByRole("button", { name: "Request", exact: true })
     .click();
   await expect(
-    page.locator("#search-results .result-card .requested-label"),
-  ).toHaveText("Requested");
+    page.locator("#search-results .result-card .poster-status"),
+  ).toHaveAttribute("aria-label", "Processing");
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.locator('[data-pref="requests"]').uncheck();
   await page.getByRole("button", { name: "Close settings" }).click();
@@ -398,7 +398,7 @@ for (const width of [1440, 393, 320, 280]) {
             .getBoundingClientRect();
           const action = card
             .querySelector(".result-action > *")
-            .getBoundingClientRect();
+            ?.getBoundingClientRect() || footer;
           return {
             top: box.top,
             bottom: box.bottom,
@@ -481,7 +481,7 @@ test("search footers stay aligned with long titles, missing overviews, and after
     .getByRole("button", { name: "Request", exact: true })
     .click();
   await expect(
-    page.locator("#search-results .result-card .requested-label"),
+    page.locator("#search-results .result-card .poster-status"),
   ).toHaveCount(2);
   values = await centers();
   expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1);
@@ -561,9 +561,9 @@ test("Seerr request buttons reflect movie/TV access and escape denial text", asy
   await page.getByPlaceholder("Search movies and shows").fill("o");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator("#search-results .request-btn")).toHaveCount(1);
-  await expect(page.locator("#search-results .request-unavailable")).toHaveText(
-    "TV requests are not permitted by Seerr.",
-  );
+  await expect(page.locator("#search-results .request-unavailable")).toHaveCount(0);
+  await page.evaluate(() => renderSearch([{ id: 444, mediaType: "tv", title: "New show", availability: 1 }]));
+  await expect(page.locator("#search-results .request-unavailable")).toHaveText("TV requests are not permitted by Seerr.");
 });
 
 for (const width of [1440, 393, 320, 280]) {
@@ -1324,9 +1324,56 @@ for (const width of [1440, 393, 320, 280]) {
     await page.locator("#episode-close").click();
     const owned = page
       .locator("#popular-section .result-card")
-      .filter({ has: page.locator(".owned") })
+      .filter({ has: page.locator('.poster-status[aria-label="In your library"]') })
       .first();
     await owned.locator("[data-detail-id]").click();
     await expect(page.locator("#episode-request")).toBeHidden();
+  });
+}
+
+for (const width of [1440, 393, 320, 280]) {
+  test(`request states agree in cards and popup at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await login(page);
+    for (const mediaType of ["movie", "tv"]) {
+      for (const [availability, requested, label] of [[2, false, "Pending"], [3, false, "Processing"], [4, false, "Partially available"], [5, false, "In your library"], [null, true, "Requested"]]) {
+        await page.evaluate(({ mediaType, availability, requested }) => {
+          const item = { id: 42, mediaId: 42, mediaType, availability, requested, title: "Fictional Processing Film", subtitle: "Movie", poster: "north" };
+          document.querySelector("#search-results").innerHTML = resultCardHtml(item);
+          showDetail({ ...item, poster: "/art/north.svg" });
+        }, { mediaType, availability, requested });
+        await expect(page.locator("#search-results .result-action")).toHaveText("");
+        await expect(page.locator("#search-results .poster-status")).toHaveAttribute("aria-label", label);
+        await expect(page.locator("#search-results [data-request]")).toHaveCount(0);
+        await expect(page.locator("#episode-request")).toBeHidden();
+        await expect(page.locator("#episode-poster-status .poster-status")).toHaveAttribute("aria-label", label);
+        if (availability === 3 && mediaType === "movie") {
+          await page.locator("#episode-detail").screenshot({ path: `${shots}/marquee-processing-popup-${width}.png` });
+          await page.locator("#episode-close").click();
+          await page.locator("#search-results .result-card").screenshot({ path: `${shots}/marquee-processing-card-${width}.png` });
+        } else await page.locator("#episode-close").click();
+      }
+    }
+    await page.evaluate(() => showDetail({ mediaType: "movie", mediaId: 42, title: "New film", availability: 1, requested: false }));
+    await expect(page.locator("#episode-request")).toBeVisible();
+    await expect(page.locator("#episode-poster-status .poster-status")).toHaveCount(0);
+  });
+}
+
+for (const width of [1440, 393]) {
+  test(`status icon gallery preview at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await login(page);
+    await page.evaluate(() => {
+      const items = [
+        { availability: 5, title: "In the library" },
+        { availability: 3, title: "Processing film" },
+        { availability: 2, title: "Pending approval" },
+        { availability: 4, title: "Partial series" },
+        { availability: 1, title: "New film" },
+      ];
+      document.querySelector("#popular-movies").innerHTML = items.map((item, i) => `<div class="ranked-poster"><span class="popular-rank">${i + 1}</span>${resultCardHtml({ ...item, id: 60 + i, mediaType: "movie", poster: ["north", "signal", "orbit", "hours", "coast"][i] })}</div>`).join("");
+    });
+    await page.locator("#popular-section").screenshot({ path: `${shots}/marquee-status-icons-${width}.png` });
   });
 }

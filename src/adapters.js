@@ -421,8 +421,9 @@ export async function seerrDetails(type, id, userId) {
       ? data.mediaInfo.status
       : null,
     requested:
-      Array.isArray(data.mediaInfo?.requests) &&
-      data.mediaInfo.requests.length > 0,
+      [2, 3, 4, 5].includes(data.mediaInfo?.status) ||
+      (Array.isArray(data.mediaInfo?.requests) &&
+        data.mediaInfo.requests.length > 0),
     cast: topCast(data.credits?.cast),
     contentRating: seerrContentRating(data, type),
     contentRatingRegion: "US",

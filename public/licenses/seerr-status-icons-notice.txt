@@ -1,0 +1,5 @@
+Status symbols follow Seerr's StatusBadgeMini mapping:
+https://raw.githubusercontent.com/seerr-team/seerr/develop/src/components/Common/StatusBadgeMini/index.tsx
+SVG paths are Heroicons (Tailwind Labs), MIT licensed:
+https://github.com/tailwindlabs/heroicons
+See heroicons-MIT.txt for the copyright and license.

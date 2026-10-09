@@ -390,18 +390,35 @@ function openEpisode(id) {
   if (!event) return;
   showDetail(event);
 }
+function mediaActionLabel(item) {
+  if (item.availability === 5) return "In your library";
+  if (item.availability === 3) return "Processing";
+  if (item.availability === 4) return "Partially available";
+  if (item.availability === 6) return "Blocklisted";
+  if (item.availability === 7) return "Deleted";
+  if (item.availability === 2) return "Pending";
+  if (item.requested) return "Requested";
+  return "";
+}
+const seerrStatusIcons = {"clock": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\" data-slot=\"icon\">\n  <path fill-rule=\"evenodd\" d=\"M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z\" clip-rule=\"evenodd\"/>\n</svg>", "bell": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\" data-slot=\"icon\">\n  <path fill-rule=\"evenodd\" d=\"M5.25 9a6.75 6.75 0 0 1 13.5 0v.75c0 2.123.8 4.057 2.118 5.52a.75.75 0 0 1-.297 1.206c-1.544.57-3.16.99-4.831 1.243a3.75 3.75 0 1 1-7.48 0 24.585 24.585 0 0 1-4.831-1.244.75.75 0 0 1-.298-1.205A8.217 8.217 0 0 0 5.25 9.75V9Zm4.502 8.9a2.25 2.25 0 1 0 4.496 0 25.057 25.057 0 0 1-4.496 0Z\" clip-rule=\"evenodd\"/>\n</svg>", "minus-small": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\" data-slot=\"icon\">\n  <path fill-rule=\"evenodd\" d=\"M5.25 12a.75.75 0 0 1 .75-.75h12a.75.75 0 0 1 0 1.5H6a.75.75 0 0 1-.75-.75Z\" clip-rule=\"evenodd\"/>\n</svg>", "eye-slash": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\" data-slot=\"icon\">\n  <path d=\"M3.53 2.47a.75.75 0 0 0-1.06 1.06l18 18a.75.75 0 1 0 1.06-1.06l-18-18ZM22.676 12.553a11.249 11.249 0 0 1-2.631 4.31l-3.099-3.099a5.25 5.25 0 0 0-6.71-6.71L7.759 4.577a11.217 11.217 0 0 1 4.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113Z\"/>\n  <path d=\"M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A3.75 3.75 0 0 1 15.75 12ZM12.53 15.713l-4.243-4.244a3.75 3.75 0 0 0 4.244 4.243Z\"/>\n  <path d=\"M6.75 12c0-.619.107-1.213.304-1.764l-3.1-3.1a11.25 11.25 0 0 0-2.63 4.31c-.12.362-.12.752 0 1.114 1.489 4.467 5.704 7.69 10.675 7.69 1.5 0 2.933-.294 4.242-.827l-2.477-2.477A5.25 5.25 0 0 1 6.75 12Z\"/>\n</svg>", "trash": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\" data-slot=\"icon\">\n  <path fill-rule=\"evenodd\" d=\"M16.5 4.478v.227a48.816 48.816 0 0 1 3.878.512.75.75 0 1 1-.256 1.478l-.209-.035-1.005 13.07a3 3 0 0 1-2.991 2.77H8.084a3 3 0 0 1-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 0 1-.256-1.478A48.567 48.567 0 0 1 7.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 0 1 3.369 0c1.603.051 2.815 1.387 2.815 2.951Zm-6.136-1.452a51.196 51.196 0 0 1 3.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 0 0-6 0v-.113c0-.794.609-1.428 1.364-1.452Zm-.355 5.945a.75.75 0 1 0-1.5.058l.347 9a.75.75 0 1 0 1.499-.058l-.346-9Zm5.48.058a.75.75 0 1 0-1.498-.058l-.347 9a.75.75 0 0 0 1.5.058l.345-9Z\" clip-rule=\"evenodd\"/>\n</svg>", "check-circle": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 20 20\" fill=\"currentColor\" aria-hidden=\"true\" data-slot=\"icon\">\n  <path fill-rule=\"evenodd\" d=\"M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z\" clip-rule=\"evenodd\"/>\n</svg>"};
+function statusBadgeHtml(item) {
+  const label = mediaActionLabel(item);
+  if (!label) return "";
+  const [icon, cls] = ({2:["bell","pending"],3:["clock","processing"],4:["minus-small","partial"],5:["check-circle","available"],6:["eye-slash","blocked"],7:["trash","deleted"]})[item.availability] || ["clock","processing"];
+  return `<span class="poster-status ${cls}" role="img" aria-label="${label}" title="${label}">${seerrStatusIcons[icon]}</span>`;
+}
 function showDetail(event) {
   $("#episode-title").textContent =
     `${event.title}${event.year ? ` (${event.year})` : ""}`;
   $("#episode-subtitle").textContent = event.subtitle;
   const requestButton = $("#episode-request");
+  const actionLabel = mediaActionLabel(event);
+  $("#episode-poster-status").innerHTML = statusBadgeHtml(event);
   requestButton.hidden = !(
     Number.isSafeInteger(event.mediaId) &&
     event.mediaId > 0 &&
     state.requestAccess[event.mediaType] &&
-    event.availability !== 5 &&
-    event.availability !== 2 &&
-    !event.requested
+    !actionLabel
   );
   requestButton.disabled = false;
   delete requestButton.dataset.request;
@@ -612,15 +629,13 @@ async function loadWeather() {
   }
 }
 function resultCardHtml(r) {
-  const action =
-    r.availability === 5
-      ? '<span class="owned">In your library</span>'
-      : r.requested || r.availability === 2
-        ? '<span class="requested-label">Requested</span>'
-        : state.requestAccess[r.mediaType]
-          ? `<button class="request-btn" data-request data-media-type="${r.mediaType}" data-media-id="${r.id}" data-title="${escape(r.title)}">Request</button>`
-          : `<span class="request-unavailable">${escape(state.requestAccess.reason || state.requestAccess[`${r.mediaType}Reason`] || "Requests disabled in Seerr")}</span>`;
-  return `<article class="result-card"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy"></div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${availabilityText(r.availability) ? ` · ${availabilityText(r.availability)}` : ""}</p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
+  const label = mediaActionLabel(r);
+  const action = label
+    ? ""
+    : state.requestAccess[r.mediaType]
+      ? `<button class="request-btn" data-request data-media-type="${r.mediaType}" data-media-id="${r.id}" data-title="${escape(r.title)}">Request</button>`
+      : `<span class="request-unavailable">${escape(state.requestAccess.reason || state.requestAccess[`${r.mediaType}Reason`] || "Requests disabled in Seerr")}</span>`;
+  return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}</div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${availabilityText(r.availability) ? ` · ${availabilityText(r.availability)}` : ""}</p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
 }
 function renderSearch(results) {
   $("#search-results").innerHTML = results.length
@@ -644,6 +659,8 @@ async function openMediaDetail(card, status) {
       detail.mediaType = card.dataset.detailType;
       detail.mediaId = Number(card.dataset.detailId);
       detail.requested = !action;
+      const availability = card.closest(".result-card")?.dataset.availability;
+      detail.availability = availability ? Number(availability) : null;
     }
     showDetail(detail);
   } catch (error) {
@@ -912,16 +929,18 @@ async function requestFromButton(event) {
   if (!confirm(`Request ${title}?`)) return;
   button.disabled = true;
   try {
-    await api("/api/seerr/request", {
+    const result = await api("/api/seerr/request", {
       method: "POST",
       body: JSON.stringify({
         mediaType: button.dataset.mediaType,
         mediaId: Number(button.dataset.mediaId),
       }),
     });
+    const requestedState = { availability: result.status === 1 ? 2 : 3, requested: true };
     if (button.id === "episode-request") {
       button.hidden = true;
       delete button.dataset.request;
+      $("#episode-poster-status").innerHTML = statusBadgeHtml(requestedState);
       $("#episode-request-status").textContent = "Requested";
       $("#episode-request-status").hidden = false;
       for (const other of all(".request-btn[data-request]")) {
@@ -929,17 +948,15 @@ async function requestFromButton(event) {
           other.dataset.mediaId === button.dataset.mediaId &&
           other.dataset.mediaType === button.dataset.mediaType
         ) {
-          const done = document.createElement("span");
-          done.className = "requested-label";
-          done.textContent = "Requested";
-          other.replaceWith(done);
+          other.closest(".result-card").querySelector(".poster-art").insertAdjacentHTML("beforeend", statusBadgeHtml(requestedState));
+          other.closest(".result-card").dataset.availability = String(requestedState.availability);
+          other.remove();
         }
       }
     } else {
-      const done = document.createElement("span");
-      done.className = "requested-label";
-      done.textContent = "Requested";
-      button.replaceWith(done);
+      button.closest(".result-card").querySelector(".poster-art").insertAdjacentHTML("beforeend", statusBadgeHtml(requestedState));
+      button.closest(".result-card").dataset.availability = String(requestedState.availability);
+      button.remove();
     }
     loadRequests();
   } catch (error) {

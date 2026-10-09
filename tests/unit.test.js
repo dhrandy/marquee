@@ -285,3 +285,13 @@ test("cast uses billed actors, skips crew and caps four distinct names", () => {
   );
   assert.deepEqual(topCast(null), []);
 });
+
+test("Seerr active availability cannot become requestable when requests are omitted", () => {
+  for (const mediaType of ["movie", "tv"]) {
+    for (const status of [2, 3, 4, 5]) {
+      const [item] = normalizeSeerrResults({ results: [{ id: 42, mediaType, mediaInfo: { status } }] });
+      assert.equal(item.requested, true);
+      assert.equal(item.availability, status);
+    }
+  }
+});

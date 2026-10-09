@@ -137,7 +137,8 @@ export function normalizeSeerrResults(data) {
         ? r.mediaInfo.status
         : null,
       requested:
-        Array.isArray(r.mediaInfo?.requests) && r.mediaInfo.requests.length > 0,
+        [2, 3, 4, 5].includes(r.mediaInfo?.status) ||
+        (Array.isArray(r.mediaInfo?.requests) && r.mediaInfo.requests.length > 0),
     }))
     .slice(0, 40);
 }
