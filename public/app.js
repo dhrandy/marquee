@@ -723,15 +723,15 @@ async function loadWeather() {
     };
     $("#weather-content").textContent =
       `${city.label} · ${Math.round(data.current.temperature_2m)}°${data.current_units.temperature_2m.replace("°", "")} · ${codes[data.current.weather_code] || "Mixed conditions"}`;
-    $("#weather-forecast").textContent = data.daily.time
+    $("#weather-forecast").innerHTML = data.daily.time
       .map(
         (date, i) =>
-          `${new Date(`${date}T12:00:00`).toLocaleDateString([], { weekday: "short" })} ${Math.round(data.daily.temperature_2m_max[i])}° / ${Math.round(data.daily.temperature_2m_min[i])}°`,
+          `<span class="forecast-day"><b>${escape(new Date(`${date}T12:00:00`).toLocaleDateString([], { weekday: "short" }))}</b><span>${Math.round(data.daily.temperature_2m_max[i])}° <small>/ ${Math.round(data.daily.temperature_2m_min[i])}°</small></span></span>`,
       )
-      .join("     ·     ");
+      .join("");
   } catch (error) {
     $("#weather-content").textContent = error.message;
-    $("#weather-forecast").textContent = "";
+    $("#weather-forecast").innerHTML = "";
   }
 }
 function resultCardHtml(r) {

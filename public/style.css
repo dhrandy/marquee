@@ -688,6 +688,10 @@ dialog small {
   color: var(--muted);
   font-size: 10px;
 }
+.weather-forecast { display: flex; gap: 22px; margin-top: 6px; color: var(--muted); font-size: 13px; }
+.forecast-day { display: inline-flex; gap: 6px; align-items: baseline; white-space: nowrap; }
+.forecast-day b { font-weight: 600; color: #c5cad6; }
+.forecast-day small { font-size: inherit; opacity: .75; }
 @media (max-width: 600px) {
   .weather {
     align-items: start;
@@ -697,10 +701,11 @@ dialog small {
   .weather h2 {
     font-size: 22px;
   }
-  .weather p {
-    font-size: 10px;
-    line-height: 1.8;
-  }
+  /* Three equal day tiles on phones, readable type instead of one tiny line. */
+  .weather-forecast { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; width: 100%; font-size: 15px; }
+  .forecast-day { flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border: 1px solid #ffffff1f; border-radius: 8px; background: #ffffff08; }
+  .forecast-day b { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .forecast-day small { font-size: 13px; }
 }
 #search-section,
 #requests-section {

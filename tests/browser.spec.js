@@ -1536,3 +1536,19 @@ test("search is live: results follow typing after a pause, stale answers are ign
   await box.fill("");
   await expect(page.locator("#search-results .result-card")).toHaveCount(0);
 });
+
+test("weather forecast shows three readable day tiles on phones", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 900 });
+  await login(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByPlaceholder("City name").fill("Sample");
+  await page.getByRole("button", { name: "Find city", exact: true }).click();
+  await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
+  await page.locator('[data-pref="weather"]').check();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  const days = page.locator("#weather-forecast .forecast-day");
+  await expect(days).toHaveCount(3);
+  expect(await days.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(14);
+  const boxes = await days.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().right));
+  expect(Math.max(...boxes)).toBeLessThanOrEqual(393);
+});
