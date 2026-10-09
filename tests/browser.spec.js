@@ -1513,3 +1513,26 @@ test("calendar movie entries open the same popup with a facts panel", async ({ p
   await page.keyboard.press("Escape");
   await expect(page.locator("#episode-detail")).toBeHidden();
 });
+
+test("search is live: results follow typing after a pause, stale answers are ignored", async ({ page }) => {
+  const seen = [];
+  await page.route("**/api/seerr/search*", async (route) => {
+    const q = new URL(route.request().url()).searchParams.get("query");
+    seen.push(q);
+    // The first query answers slowly, so it must not overwrite the newer one.
+    if (q === "or") await new Promise((r) => setTimeout(r, 1200));
+    const res = await route.fetch();
+    await route.fulfill({ response: res }).catch(() => {});
+  });
+  await login(page);
+  const box = page.getByPlaceholder("Search movies and shows");
+  await box.pressSequentially("or", { delay: 20 });
+  await page.waitForTimeout(450);
+  await box.pressSequentially("bit", { delay: 20 });
+  await expect(page.locator("#search-results .result-card h3").first()).toContainText(/orbit/i);
+  await page.waitForTimeout(1500);
+  await expect(page.locator("#search-results .result-card h3").first()).toContainText(/orbit/i);
+  expect(seen).toEqual(["or", "orbit"]);
+  await box.fill("");
+  await expect(page.locator("#search-results .result-card")).toHaveCount(0);
+});
