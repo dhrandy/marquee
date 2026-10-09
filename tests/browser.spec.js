@@ -1624,3 +1624,31 @@ for (const width of [1440, 393]) {
     await page.screenshot({ path: `${shots}/marquee-search-redesign-popup-${width}.png` });
   });
 }
+
+test("search can be cleared with the X button and with Escape", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+  const input = page.getByPlaceholder("Search movies and shows");
+  await expect(page.locator("#search-clear")).toBeHidden();
+  await input.fill("o");
+  await input.press("Enter");
+  await expect(page.locator("#search-results .result-card")).toHaveCount(3);
+  await expect(page.locator("#search-clear")).toBeVisible();
+  await page.screenshot({ path: `${shots}/marquee-search-exit.png`, clip: { x: 0, y: 90, width: 900, height: 260 } });
+  await page.locator("#search-clear").click();
+  await expect(page.locator("#search-results .result-card")).toHaveCount(0);
+  await expect(input).toHaveValue("");
+  await expect(page.locator("#search-clear")).toBeHidden();
+  await input.fill("o");
+  await input.press("Enter");
+  await expect(page.locator("#search-results .result-card")).toHaveCount(3);
+  await input.press("Escape");
+  await expect(page.locator("#search-results .result-card")).toHaveCount(0);
+  await expect(input).toHaveValue("");
+  await page.setViewportSize({ width: 393, height: 800 });
+  await input.fill("o");
+  await input.press("Enter");
+  await expect(page.locator("#search-results .result-card")).toHaveCount(3);
+  const box = await page.locator("#search-form").boundingBox();
+  expect(box.x + box.width).toBeLessThanOrEqual(393);
+});

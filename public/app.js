@@ -1077,6 +1077,31 @@ async function runSearch(query, force = false) {
     clearTimeout(slow);
   }
 }
+// Leave search: empty the box and the results and go back to the normal page.
+function clearSearch() {
+  clearTimeout(searchTimer);
+  searchController?.abort();
+  searchSeq++;
+  const input = $("#search-form input[name=query]");
+  input.value = "";
+  $("#search-results").innerHTML = "";
+  $("#search-status").textContent = "";
+  $("#search-clear").hidden = true;
+  input.blur();
+}
+function syncSearchClear() {
+  $("#search-clear").hidden =
+    !$("#search-form input[name=query]").value && !$("#search-results").children.length;
+}
+$("#search-clear").addEventListener("click", clearSearch);
+$("#search-form input[name=query]").addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    clearSearch();
+  }
+});
+new MutationObserver(syncSearchClear).observe($("#search-results"), { childList: true });
+$("#search-form input[name=query]").addEventListener("input", syncSearchClear);
 $("#search-form").addEventListener("submit", (event) => {
   event.preventDefault();
   runSearch(new FormData(event.target).get("query") || "", true);

@@ -1319,3 +1319,8 @@ button[aria-label="Close settings"]:hover { background: #b9a3f7; }
 .row-cert { display: inline-block; font-size: 11px; font-weight: 600; line-height: 1.4; padding: 0 6px; margin-left: 6px; border: 1px solid #c5cad6; border-radius: 4px; color: #edf0f7; vertical-align: 1px; }
 /* Cap the search block so rows don't stretch across wide screens. */
 #search-section { max-width: 760px; }
+
+.search-clear { flex: 0 0 auto; width: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: #10121b; color: var(--muted); }
+.search-clear[hidden] { display: none; }
+.search-clear:hover { color: var(--ink); border-color: var(--purple); }
+.search-clear svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
