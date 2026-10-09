@@ -74,6 +74,7 @@ const service = http.createServer(async (req, res) => {
               Overview: "Synthetic overview",
               Genres: ["Adventure"],
               Studios: [{ Name: "Example Network" }],
+              OfficialRating: "TV-MA",
               RunTimeTicks: 25200000000,
               ProductionYear: 2026,
               LocationType: "FileSystem",
@@ -131,6 +132,7 @@ const service = http.createServer(async (req, res) => {
             SeasonId: "season-1",
             Name: "<script>alert(1)</script>",
             SeriesName: `${user} private series`,
+            OfficialRating: "TV-MA",
             Type: "Episode",
             ParentIndexNumber: user === "missing-season" ? undefined : 2,
             IndexNumber: 1,
@@ -142,6 +144,7 @@ const service = http.createServer(async (req, res) => {
             SeasonId: "season-1",
             Name: "Second episode",
             SeriesName: `${user} private series`,
+            OfficialRating: "TV-MA",
             Type: "Episode",
             ParentIndexNumber: 2,
             IndexNumber: 2,
@@ -303,6 +306,17 @@ const service = http.createServer(async (req, res) => {
     return res.end(
       JSON.stringify({
         title: "Requested Film",
+        releases: {
+          results: [
+            { iso_3166_1: "US", release_dates: [{ certification: "PG-13" }] },
+          ],
+        },
+        credits: {
+          cast: [
+            { name: "Alex Sample", order: 0 },
+            { name: "Morgan Example", order: 1 },
+          ],
+        },
         voteAverage: 8.4,
         voteCount: 50,
         posterPath: "/abc.jpg",
@@ -383,6 +397,7 @@ try {
     const text = await result.text();
     const data = JSON.parse(text);
     assert.equal(data.items.length, 1);
+    assert.equal(data.items[0].detail.contentRating, "TV-MA");
     assert.equal(data.items[0].title, "alice private series");
     assert.equal(
       data.items[0].subtitle,
@@ -908,6 +923,8 @@ try {
     ).json();
     assert.equal(data.title, "Requested Film");
     assert.equal(data.subtitle, "Movie");
+    assert.equal(data.contentRating, "PG-13");
+    assert.deepEqual(data.cast, ["Alex Sample", "Morgan Example"]);
     assert.deepEqual(data.rating, { value: 8.4, source: "TMDB" });
     assert.deepEqual(data.genres, ["Drama"]);
     assert.equal(data.network, "Sample Studio");

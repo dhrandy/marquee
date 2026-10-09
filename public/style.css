@@ -1140,3 +1140,7 @@ body.colorblind .legend .premiere { color:#ffe66b; }
 .episode-body { position:relative; padding-top:0; }
 .episode-meta, #episode-rating { color:#c5cad6; }
 #episode-trailer { background:rgba(12,15,24,.45); }
+
+.content-rating { display:inline-block; font-size:13px; line-height:1.5; font-weight:600; padding:2px 7px; border:1px solid #c5cad6; border-radius:4px; color:#edf0f7; background:#10121cbc; margin:0 0 12px; }
+
+#episode-cast { font-size:13px; line-height:1.5; color:#c5cad6; overflow-wrap:anywhere; }

@@ -1249,3 +1249,50 @@ for (const width of [393, 320, 280]) {
       .screenshot({ path: `${shots}/marquee-settings-16px-${width}.png` });
   });
 }
+
+for (const width of [1440, 393, 320, 280]) {
+  test(`content rating badge is readable and clears missing data at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await login(page);
+    await page.evaluate(() =>
+      showDetail({
+        title: "Fictional Film",
+        subtitle: "Movie",
+        cast: ["Alex Sample", "Morgan Example", "Casey Demo", "Jamie Fiction"],
+        contentRating: "PG-13",
+        contentRatingRegion: "US",
+        poster: "/art/north.svg",
+        backdrop: "/art/north.svg",
+        genres: ["Adventure"],
+        runtime: 104,
+        overview: "A fictional journey begins.",
+        playLink: "https://media.example.test/",
+      }),
+    );
+    await expect(page.locator("#episode-cast")).toContainText(
+      "Cast: Alex Sample",
+    );
+    await expect(page.locator("#episode-content-rating")).toHaveText("PG-13");
+    await expect(page.locator("#episode-content-rating")).toHaveAttribute(
+      "title",
+      "Content rating (US)",
+    );
+    expect(
+      await page
+        .locator("#episode-detail")
+        .evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+    await page
+      .locator("#episode-detail")
+      .screenshot({ path: `${shots}/marquee-content-rating-${width}.png` });
+    await page.locator("#episode-close").click();
+    await page.evaluate(() =>
+      showDetail({ title: "Unknown rating", subtitle: "Movie" }),
+    );
+    await expect(page.locator("#episode-cast")).toBeHidden();
+    await expect(page.locator("#episode-content-rating")).toBeHidden();
+    await expect(page.locator("#episode-content-rating")).toHaveText("");
+  });
+}

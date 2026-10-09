@@ -34,6 +34,7 @@ export function normalizeEpisodes(rows, now = new Date()) {
       monitored: Boolean(row.monitored && (row.series?.monitored ?? true)),
       premiere: row.episodeNumber === 1 && row.seasonNumber > 0,
       year: row.series?.year || null,
+      contentRating: normalizedContentRating(row.series?.certification),
       rating:
         normalizedRating(
           row.series?.ratings?.tmdb?.value,
@@ -81,6 +82,7 @@ export function normalizeMovies(rows, now = new Date()) {
       entries.push({
         id: `movie-${row.id}-cinema`,
         type: "movie",
+        contentRating: normalizedContentRating(row.certification),
         title: row.title,
         subtitle: `${studio} · In cinemas`,
         date: row.inCinemas,
@@ -91,6 +93,7 @@ export function normalizeMovies(rows, now = new Date()) {
       entries.push({
         id: `movie-${row.id}-digital`,
         type: "movie",
+        contentRating: normalizedContentRating(row.certification),
         title: row.title,
         subtitle: `${studio} · Digital release`,
         date: home,
@@ -169,4 +172,41 @@ export function normalizeSeerrRequests(data) {
       ),
     }))
     .slice(0, 10);
+}
+
+export function normalizedContentRating(value) {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text && text.length <= 30 && /^[A-Za-z0-9 +().:/-]+$/.test(text)
+    ? text
+    : null;
+}
+export function seerrContentRating(data, type) {
+  if (type === "movie") {
+    const releases =
+      data.releases?.results?.find((r) => r.iso_3166_1 === "US")
+        ?.release_dates || [];
+    return normalizedContentRating(
+      releases.find((r) => normalizedContentRating(r.certification))
+        ?.certification,
+    );
+  }
+  return normalizedContentRating(
+    data.contentRatings?.results?.find((r) => r.iso_3166_1 === "US")?.rating,
+  );
+}
+
+export function topCast(people, jellyfin = false) {
+  if (!Array.isArray(people)) return [];
+  const actors = jellyfin
+    ? people.filter((p) => p.Type === "Actor")
+    : [...people].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+  return [
+    ...new Set(
+      actors
+        .map((p) => (jellyfin ? p.Name : p.name))
+        .filter((n) => typeof n === "string" && n.trim() && n.length <= 120)
+        .map((n) => n.trim()),
+    ),
+  ].slice(0, 4);
 }

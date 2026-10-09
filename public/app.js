@@ -394,6 +394,13 @@ function showDetail(event) {
   $("#episode-title").textContent =
     `${event.title}${event.year ? ` (${event.year})` : ""}`;
   $("#episode-subtitle").textContent = event.subtitle;
+  const contentRating = $("#episode-content-rating");
+  contentRating.textContent =
+    typeof event.contentRating === "string" ? event.contentRating : "";
+  contentRating.hidden = !contentRating.textContent;
+  contentRating.title = event.contentRatingRegion
+    ? `Content rating (${event.contentRatingRegion})`
+    : "Content rating";
   $("#episode-meta").textContent = [
     event.network,
     event.runtime ? `${event.runtime} min` : null,
@@ -401,6 +408,12 @@ function showDetail(event) {
   ]
     .filter(Boolean)
     .join(" · ");
+  const cast = $("#episode-cast");
+  const names = Array.isArray(event.cast)
+    ? event.cast.filter((n) => typeof n === "string").slice(0, 4)
+    : [];
+  cast.textContent = names.length ? `Cast: ${names.join(", ")}` : "";
+  cast.hidden = !names.length;
   $("#episode-overview").textContent =
     event.overview || "Overview not available yet.";
   $("#episode-genres").innerHTML = (event.genres || [])

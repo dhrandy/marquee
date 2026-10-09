@@ -224,3 +224,64 @@ test("ratings reject absent, zero, invalid and unrated scores", async () => {
     source: "TMDB",
   });
 });
+
+import { normalizedContentRating, seerrContentRating } from "../src/model.js";
+test("content ratings retain supplied certifications and never guess missing values", () => {
+  assert.equal(normalizedContentRating(" PG-13 "), "PG-13");
+  assert.equal(normalizedContentRating("TV-MA"), "TV-MA");
+  assert.equal(normalizedContentRating("<img src=x>"), null);
+  assert.equal(normalizedContentRating(undefined), null);
+  assert.equal(
+    seerrContentRating(
+      {
+        releases: {
+          results: [
+            { iso_3166_1: "GB", release_dates: [{ certification: "15" }] },
+            {
+              iso_3166_1: "US",
+              release_dates: [{ certification: "" }, { certification: "R" }],
+            },
+          ],
+        },
+      },
+      "movie",
+    ),
+    "R",
+  );
+  assert.equal(
+    seerrContentRating(
+      { contentRatings: { results: [{ iso_3166_1: "US", rating: "TV-14" }] } },
+      "tv",
+    ),
+    "TV-14",
+  );
+  assert.equal(seerrContentRating({}, "movie"), null);
+});
+
+import { topCast } from "../src/model.js";
+test("cast uses billed actors, skips crew and caps four distinct names", () => {
+  assert.deepEqual(
+    topCast(
+      [
+        { Type: "Director", Name: "Crew" },
+        { Type: "Actor", Name: "Alex Sample" },
+        { Type: "Actor", Name: "Alex Sample" },
+      ],
+      true,
+    ),
+    ["Alex Sample"],
+  );
+  assert.deepEqual(
+    topCast([
+      { order: 3, name: "Third" },
+      { order: 0, name: "First" },
+    ]),
+    ["First", "Third"],
+  );
+  assert.equal(
+    topCast(Array.from({ length: 9 }, (_, i) => ({ name: `Sample ${i}` })))
+      .length,
+    4,
+  );
+  assert.deepEqual(topCast(null), []);
+});

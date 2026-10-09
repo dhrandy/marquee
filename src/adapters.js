@@ -2,6 +2,9 @@ import {
   normalizeEpisodes,
   normalizeMovies,
   normalizedRating,
+  normalizedContentRating,
+  topCast,
+  seerrContentRating,
   normalizeSeerrResults,
   normalizeSeerrRequests,
 } from "./model.js";
@@ -119,7 +122,7 @@ export async function recentItems(user) {
       Limit: String(pageSize),
       StartIndex: String(startIndex),
       Fields:
-        "DateCreated,Overview,Genres,Studios,RunTimeTicks,CommunityRating",
+        "DateCreated,Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People",
       EnableUserData: "true",
       EnableTotalRecordCount: "true",
     });
@@ -225,6 +228,8 @@ export async function recentItems(user) {
         tagline: "",
         rating: normalizedRating(item.CommunityRating, "Jellyfin community"),
         detail: {
+          contentRating: normalizedContentRating(item.OfficialRating),
+          cast: topCast(item.People, true),
           rating: normalizedRating(item.CommunityRating, "Jellyfin community"),
           title: item.SeriesName || item.Name,
           year: item.ProductionYear ? String(item.ProductionYear) : "",
@@ -410,6 +415,9 @@ export async function seerrDetails(type, id, userId) {
       ? `/api/seerr/image?path=${encodeURIComponent(value)}`
       : null;
   return {
+    cast: topCast(data.credits?.cast),
+    contentRating: seerrContentRating(data, type),
+    contentRatingRegion: "US",
     title: data.title || data.name || "Untitled",
     year: String(data.releaseDate || data.firstAirDate || "").slice(0, 4),
     subtitle: type === "movie" ? "Movie" : "TV series",
