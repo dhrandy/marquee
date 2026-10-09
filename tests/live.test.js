@@ -617,8 +617,9 @@ try {
     });
     assert.equal(req.status, 200);
     const sent = calls.find((c) => c.path === "seerr-request-body");
-    assert.deepEqual(sent.body, { mediaType: "movie", mediaId: 7, userId: 4 });
+    assert.deepEqual(sent.body, { mediaType: "movie", mediaId: 7 });
     assert.equal(sent.apiKey, "seerr-mock");
+    assert.equal(sent.actor, "4");
     const postReq = (c, body) =>
       fetch(`${base}/api/seerr/request`, {
         method: "POST",
@@ -640,7 +641,7 @@ try {
       assert.equal((await postReq(cookie, { mediaType: "movie", mediaId: 7, profileId: 99, serverId: 3 })).status, 400);
       assert.equal((await postReq(cookie, { mediaType: "movie", mediaId: 7, profileId: 5, serverId: 3, rootFolder: "/other" })).status, 200);
       const last = calls.filter((c) => c.path === "seerr-request-body").pop();
-      assert.deepEqual(last.body, { mediaType: "movie", mediaId: 7, userId: 4, serverId: 3, profileId: 5, rootFolder: "/other" });
+      assert.deepEqual(last.body, { mediaType: "movie", mediaId: 7, serverId: 3, profileId: 5, rootFolder: "/other" });
     } else {
       assert.equal(movieOpts.advanced, null);
       assert.equal((await postReq(cookie, { mediaType: "movie", mediaId: 7, profileId: 5 })).status, 403);
@@ -648,7 +649,7 @@ try {
     assert.equal((await postReq(cookie, { mediaType: "tv", mediaId: 77, seasons: [] })).status, 400);
     assert.equal((await postReq(cookie, { mediaType: "movie", mediaId: 7, seasons: [1] })).status, 400);
     assert.equal((await postReq(cookie, { mediaType: "tv", mediaId: 77, seasons: [2, 2] })).status, 200);
-    assert.deepEqual(calls.filter((c) => c.path === "seerr-request-body").pop().body, { mediaType: "tv", mediaId: 77, userId: 4, seasons: [2] });
+    assert.deepEqual(calls.filter((c) => c.path === "seerr-request-body").pop().body, { mediaType: "tv", mediaId: 77, seasons: [2] });
     const bobLogin = await signin("bob");
     const bobCookie = bobLogin.headers.get("set-cookie").split(";")[0];
     const bobMe = await (
@@ -814,9 +815,11 @@ try {
     assert.deepEqual(sent.body, {
       mediaType: "tv",
       mediaId: 12,
-      userId: 6,
       seasons: "all",
     });
+    // The request is made AS the linked Seerr user so Seerr applies that
+    // user's own approval rules; a client-supplied userId is ignored.
+    assert.equal(sent.actor, "6");
     const missing = await cookieFor("unimported");
     const denied = await postRequest(missing, {
       mediaType: "movie",

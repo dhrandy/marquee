@@ -544,11 +544,16 @@ export async function seerrRequest(mediaType, mediaId, userId, options = {}) {
   const { seasons, serverId, profileId, rootFolder } = options;
   return upstream(process.env.SEERR_URL, "/api/v1/request", {
     method: "POST",
-    headers: { "X-Api-Key": process.env.SEERR_API_KEY },
+    // Act AS the user (X-API-User), not as the admin API key with a userId in
+    // the body: Seerr decides auto-approval from the acting user, so the admin
+    // key made every request approve itself and skip the user's own rules.
+    headers: {
+      "X-Api-Key": process.env.SEERR_API_KEY,
+      "X-API-User": String(userId),
+    },
     body: {
       mediaType,
       mediaId,
-      userId,
       ...(mediaType === "tv"
         ? { seasons: Array.isArray(seasons) && seasons.length ? seasons : "all" }
         : {}),
