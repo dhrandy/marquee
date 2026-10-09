@@ -578,3 +578,17 @@ export async function testService(name) {
     return { ok: false, error: error.message };
   }
 }
+
+// Resolve a Jellyfin movie or series to its TMDB id so popups can show the
+// same facts panel as Seerr titles. Returns null when Jellyfin has no TMDB id.
+export async function jellyfinTmdb(user, itemId) {
+  const item = await upstream(
+    process.env.JELLYFIN_URL,
+    `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(itemId)}`,
+    { headers: jellyfinHeaders(user.token) },
+  );
+  const type = item.Type === "Movie" ? "movie" : item.Type === "Series" ? "tv" : null;
+  const id = Number(item.ProviderIds?.Tmdb);
+  if (!type || !Number.isSafeInteger(id) || id < 1 || id > 1e9) return null;
+  return { type, id };
+}

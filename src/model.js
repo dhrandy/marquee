@@ -34,6 +34,10 @@ export function normalizeEpisodes(rows, now = new Date()) {
       monitored: Boolean(row.monitored && (row.series?.monitored ?? true)),
       premiere: row.episodeNumber === 1 && row.seasonNumber > 0,
       year: row.series?.year || null,
+      tmdbId:
+        Number.isSafeInteger(row.series?.tmdbId) && row.series.tmdbId > 0 && row.series.tmdbId <= 1e9
+          ? row.series.tmdbId
+          : null,
       contentRating: normalizedContentRating(row.series?.certification),
       rating:
         normalizedRating(
@@ -212,7 +216,7 @@ export function topCast(people, jellyfin = false) {
   ].slice(0, 4);
 }
 
-// Facts shown only for Seerr detail popups. Missing data stays missing.
+// Facts for the detail popups (looked up through Seerr). Missing data stays missing.
 export function seerrFacts(data, type, ratings = {}) {
   const score = (v, max) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : null;
   const day = (v) => {

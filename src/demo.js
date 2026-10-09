@@ -93,6 +93,7 @@ export function demoEvents(start, end) {
         demoLocal: true,
         monitored,
         premiere: type === "tv" && /S[0-9]+E01/.test(subtitle),
+        tmdbId: type === "tv" ? 9100 : null,
         year: 2026,
         network: "Sample Network",
         runtime: 48,
@@ -221,3 +222,11 @@ export const demoRequests = [
 demoRequests.forEach((item, i) => {
   item.tmdbId = 9000 + i;
 });
+
+export const demoFacts = {
+  status: "Released",
+  productionCountries: [{ code: "US", name: "United States" }],
+  originalLanguage: "en",
+  releases: [{ type: "Theatrical", date: "2026-09-11", region: "US" }],
+  scores: { critics: 82, audience: 75, imdb: 7.4, tmdb: 71 },
+};

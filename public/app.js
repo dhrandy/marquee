@@ -309,6 +309,7 @@ $("#recent").addEventListener("click", (event) => {
       ? `/api/image/${encodeURIComponent(item.backdropId)}?type=Backdrop`
       : null,
     playLink: item.link,
+    factsUrl: `/api/library/${encodeURIComponent(item.id)}/facts`,
     // Everything on the shelf is already in the library, so show the same
     // "available" poster badge the Seerr popups use.
     availability: 5,
@@ -394,7 +395,10 @@ function openEpisode(id) {
     (event) => event.id === id && event.type === "tv",
   );
   if (!event) return;
-  showDetail(event);
+  showDetail({
+    ...event,
+    factsUrl: event.tmdbId ? `/api/seerr/details/tv/${event.tmdbId}` : null,
+  });
 }
 function mediaActionLabel(item) {
   if (item.availability === 5) return "In your library";
@@ -439,7 +443,43 @@ function renderDetailFacts(facts) {
   panel.innerHTML = html;
   panel.hidden = !html;
 }
+function ratingHidden(rating, facts) {
+  const tmdb = facts?.scores?.tmdb;
+  return (
+    !state.prefs.ratings ||
+    !ratingText(rating) ||
+    (tmdb !== null && tmdb !== undefined)
+  );
+}
+// Library and calendar items don't carry the facts panel (scores, status,
+// release dates...). Look it up once per popup open, only for the title shown.
+const factsCache = new Map();
+let factsRequest = 0;
+async function loadMissingFacts(event) {
+  const source = event.factsUrl;
+  if (event.facts || !source) return;
+  const request = ++factsRequest;
+  try {
+    if (!factsCache.has(source))
+      factsCache.set(
+        source,
+        api(source).then((data) => data.facts || null),
+      );
+    const facts = await factsCache.get(source);
+    if (!facts) {
+      factsCache.delete(source);
+      return;
+    }
+    // Ignore the answer if another popup was opened in the meantime.
+    if (request !== factsRequest || !$("#episode-detail").open) return;
+    renderDetailFacts(facts);
+    $("#episode-rating").hidden = ratingHidden(event.rating, facts);
+  } catch {
+    factsCache.delete(source);
+  }
+}
 function showDetail(event) {
+  factsRequest++;
   renderDetailFacts(event.facts);
   $("#episode-title").textContent =
     `${event.title}${event.year ? ` (${event.year})` : ""}`;
@@ -489,8 +529,7 @@ function showDetail(event) {
     .map((genre) => `<span>${escape(genre)}</span>`)
     .join("");
   $("#episode-rating").textContent = ratingText(event.rating);
-  $("#episode-rating").hidden =
-    !state.prefs.ratings || !ratingText(event.rating) || Boolean(event.facts?.scores?.tmdb !== null && event.facts?.scores?.tmdb !== undefined);
+  $("#episode-rating").hidden = ratingHidden(event.rating, event.facts);
   const image = $("#episode-backdrop");
   const poster = $("#episode-poster");
   const hero = $(".episode-hero");
@@ -523,6 +562,7 @@ function showDetail(event) {
   $("#episode-trailer").href =
     `https://www.youtube.com/results?search_query=${encodeURIComponent(event.title + " official trailer")}`;
   $("#episode-detail").showModal();
+  loadMissingFacts(event);
 }
 $("#calendar").addEventListener("click", (event) => {
   const card = event.target.closest("[data-event]");

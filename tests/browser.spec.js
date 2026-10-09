@@ -156,6 +156,29 @@ test("shelf rows are not focus targets, so only the picked card can show a focus
   expect(await page.locator("#recent :focus-visible").count()).toBeLessThanOrEqual(1);
 });
 
+test("library and calendar popups show the same facts panel as Seerr popups", async ({ page }) => {
+  await login(page);
+  const lookups = [];
+  page.on("request", (r) => {
+    if (/\/facts$|seerr\/details/.test(r.url())) lookups.push(r.url());
+  });
+  for (const selector of ["#recent .recent-detail", "#calendar [data-event]"]) {
+    lookups.length = 0;
+    await page.locator(selector).first().click();
+    await expect(page.locator("#episode-facts .detail-fact").first()).toBeVisible();
+    await expect(page.locator("#episode-facts .detail-score")).toHaveCount(4);
+    expect(lookups).toHaveLength(1);
+    await page.keyboard.press("Escape");
+  }
+  // A failed lookup just leaves the panel hidden.
+  await page.route("**/api/library/*/facts", (route) =>
+    route.fulfill({ json: { facts: null } }),
+  );
+  await page.locator("#recent .recent-detail").nth(1).click();
+  await expect(page.locator("#episode-detail")).toBeVisible();
+  await expect(page.locator("#episode-facts")).toBeHidden();
+});
+
 test("login preview", async ({ page }) => {
   await page.route("**/api/config", (route) =>
     route.fulfill({ json: { demo: false, name: "Marquee" } }),

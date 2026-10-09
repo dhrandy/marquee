@@ -13,13 +13,14 @@ import {
   seerrSearch,
   seerrPopular,
   seerrDetails,
+  jellyfinTmdb,
   seerrIdentity,
   seerrRequest,
   seerrRequests,
   testService,
   serviceUrl,
 } from "./adapters.js";
-import { demoEvents, demoRequests, demoSearch, titles } from "./demo.js";
+import { demoEvents, demoRequests, demoSearch, titles, demoFacts } from "./demo.js";
 import { validateRange } from "./model.js";
 import { compress } from "./compress.js";
 
@@ -394,6 +395,7 @@ app.get("/api/seerr/details/:type/:id", requireUser, async (req, res) => {
         "A discovery draws old friends into a story that changes their lives.",
       poster: "/art/north.svg",
       backdrop: "/art/north.svg",
+      facts: demoFacts,
     });
   try {
     const access = await requestAccess(req.user);
@@ -403,6 +405,25 @@ app.get("/api/seerr/details/:type/:id", requireUser, async (req, res) => {
     res
       .status(502)
       .json({ error: "Details are temporarily unavailable from Seerr." });
+  }
+});
+app.get("/api/library/:id/facts", requireUser, async (req, res) => {
+  if (demo) return res.json({ facts: demoFacts });
+  // Only items already shown on the user's shelf can be looked up.
+  if (
+    !req.user.allowedImages.has(req.params.id) ||
+    !/^[a-zA-Z0-9-]+$/.test(req.params.id)
+  )
+    return res.sendStatus(404);
+  try {
+    const tmdb = await jellyfinTmdb(req.user, req.params.id);
+    if (!tmdb) return res.json({ facts: null });
+    const access = await requestAccess(req.user);
+    if (access.error) return res.json({ facts: null });
+    const detail = await seerrDetails(tmdb.type, tmdb.id, access.id);
+    res.json({ facts: detail.facts });
+  } catch {
+    res.json({ facts: null });
   }
 });
 app.get("/api/seerr/popular", requireUser, async (req, res) => {
