@@ -15,6 +15,7 @@ import {
   seerrDetails,
   jellyfinTmdb,
   seerrIdentity,
+  seerrContentRatings,
   seerrFranchise,
   seerrPersonCredits,
   seerrRequest,
@@ -570,7 +571,13 @@ app.get("/api/seerr/search", requireUser, async (req, res) => {
         }
     }
     // Newest first; titles without a date go last.
-    results.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    // An exact title match goes first; the rest newest to oldest.
+    const exact = (r) => r.title.trim().toLowerCase() === query.replace(/\s+/g, " ").trim().toLowerCase();
+    results.sort(
+      (a, b) =>
+        Number(exact(b)) - Number(exact(a)) ||
+        (b.date || "").localeCompare(a.date || ""),
+    );
     res.json({
       results: results.slice(0, 60),
       requestAccess: publicAccess(access),
@@ -598,6 +605,28 @@ app.get("/api/seerr/requests", requireUser, async (req, res) => {
     res.json({ requests: await seerrRequests(access.id) });
   } catch (error) {
     seerrFailure(res, error);
+  }
+});
+app.get("/api/seerr/content-ratings", requireUser, async (req, res) => {
+  const items = String(req.query.items || "")
+    .split(",")
+    .slice(0, 30)
+    .map((x) => x.split(":"))
+    .filter(([t, i]) => ["movie", "tv"].includes(t) && /^\d{1,9}$/.test(i))
+    .map(([type, id]) => ({ type, id: Number(id) }));
+  if (!items.length) return res.json({ ratings: {} });
+  if (demo) {
+    const demoCerts = ["PG-13", "R", "TV-MA", "PG", "TV-14"];
+    return res.json({
+      ratings: Object.fromEntries(items.map((x, n) => [`${x.type}:${x.id}`, demoCerts[n % demoCerts.length]])),
+    });
+  }
+  try {
+    const access = await cachedAccess(req.user);
+    if (access.error) return res.json({ ratings: {} });
+    res.json({ ratings: await seerrContentRatings(items, access.id) });
+  } catch {
+    res.json({ ratings: {} });
   }
 });
 app.get("/api/seerr/request-options", requireUser, async (req, res) => {

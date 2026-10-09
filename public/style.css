@@ -1286,3 +1286,36 @@ button[aria-label="Close settings"]:hover { background: #b9a3f7; }
 #search-results .result-card:nth-child(4) { animation-delay: 90ms; }
 #search-results .result-card:nth-child(n+5) { animation-delay: 120ms; }
 @media (prefers-reduced-motion: reduce) { #search-results .result-card { animation: none; } }
+
+/* Search sits at the top as a list: thumb, title, meta, rating, action. */
+#search-section { margin-top: 0; margin-bottom: 28px; }
+#popular-wrap { margin-top: 36px; }
+#popular-wrap .popular-section { margin-top: 0; }
+#search-section .search-bar { max-width: none; }
+.search-results { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.search-results .result-card {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; grid-template-areas: "poster title action" "poster meta action" "poster rating action";
+  column-gap: 14px; row-gap: 2px; align-items: center; padding: 8px 12px 8px 8px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel); cursor: pointer;
+}
+.search-results .result-card:hover { border-color: var(--purple); }
+.search-results .result-card .poster-art { grid-area: poster; width: 56px; align-self: start; }
+.search-results .result-card h3 { grid-area: title; margin: 0; font-size: 16px; align-self: end; overflow-wrap: anywhere; }
+.search-results .result-card .result-meta { grid-area: meta; margin: 0; }
+.search-results .result-card .media-rating, .search-results .result-card .rating { grid-area: rating; margin: 0; }
+.search-results .result-card .result-overview { display: none; }
+.search-results .result-card .result-action { grid-area: action; margin: 0; min-height: 0; justify-content: flex-end; }
+.search-results .result-card .request-btn { width: auto; padding: 8px 16px; }
+.search-results .result-card .result-action > span { text-align: right; max-width: 160px; }
+@media (max-width: 600px) {
+  .search-results .result-card { grid-template-columns: 48px minmax(0, 1fr) auto; column-gap: 10px; }
+  .search-results .result-card .poster-art { width: 48px; }
+  .search-results .result-card h3 { font-size: 15px; }
+}
+/* In rows the status badge sits at the bottom right of the row, clear of the poster. */
+.search-results .result-card { position: relative; }
+.search-results .result-card .poster-art { position: static; }
+.search-results .result-card .poster-status { top: auto; right: 12px; bottom: 10px; }
+.row-cert { display: inline-block; font-size: 11px; font-weight: 600; line-height: 1.4; padding: 0 6px; margin-left: 6px; border: 1px solid #c5cad6; border-radius: 4px; color: #edf0f7; vertical-align: 1px; }
+/* Cap the search block so rows don't stretch across wide screens. */
+#search-section { max-width: 760px; }

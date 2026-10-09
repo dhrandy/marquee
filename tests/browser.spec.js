@@ -433,53 +433,25 @@ test("settings connection tests report results", async ({ page }) => {
 });
 
 for (const width of [1440, 393, 320, 280]) {
-  test(`search cards have aligned footers and no overflow at ${width}px`, async ({
-    page,
-  }) => {
+  test(`search results are rows that fit at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await login(page);
     await page.getByPlaceholder("Search movies and shows").fill("o");
     await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(page.locator("#search-results .result-card")).toHaveCount(3);
-    const section = page.locator("#search-section");
-    await section.scrollIntoViewIfNeeded();
-    await page.mouse.move(0, 0);
-    await page.evaluate(() => document.fonts.ready);
-    await page.waitForTimeout(300);
-    const geometry = await page
-      .locator("#search-results .result-card")
-      .evaluateAll((cards) =>
-        cards.map((card) => {
-          const box = card.getBoundingClientRect();
-          const footer = card
-            .querySelector(".result-action")
-            .getBoundingClientRect();
-          const action = card
-            .querySelector(".result-action > *")
-            ?.getBoundingClientRect() || footer;
-          return {
-            top: box.top,
-            bottom: box.bottom,
-            footerBottom: footer.bottom,
-            actionCenter: action.top + action.height / 2,
-          };
-        }),
-      );
-    for (const card of geometry) {
-      expect(Math.abs(card.bottom - card.footerBottom)).toBeLessThan(1);
-      for (const other of geometry.filter(
-        (other) => Math.abs(other.top - card.top) < 1,
-      )) {
-        expect(Math.abs(other.bottom - card.bottom)).toBeLessThan(1);
-        expect(Math.abs(other.actionCenter - card.actionCenter)).toBeLessThan(
-          1,
-        );
-      }
+    await page.waitForTimeout(400);
+    const rows = await page.locator("#search-results .result-card").evaluateAll((cards) =>
+      cards.map((c) => {
+        const r = c.getBoundingClientRect();
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, overflow: c.scrollWidth > c.clientWidth + 1 };
+      }),
+    );
+    for (const row of rows) {
+      expect(row.overflow).toBe(false);
+      expect(row.left).toBeGreaterThanOrEqual(0);
+      expect(row.right).toBeLessThanOrEqual(width);
     }
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth),
-    ).toBeLessThanOrEqual(width);
-    await section.screenshot({ path: `${shots}/marquee-search-${width}.png` });
+    for (let i = 1; i < rows.length; i++) expect(rows[i].top).toBeGreaterThanOrEqual(rows[i - 1].bottom);
   });
 }
 
@@ -1635,3 +1607,20 @@ test("request dialog still lets you request when the options cannot load", async
   await dialog.locator("#request-submit").click();
   await expect.poll(() => body).toEqual({ mediaType: "tv", mediaId: 105 });
 });
+
+for (const width of [1440, 393]) {
+  test(`search redesign preview at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width > 500 ? 900 : 850 });
+    await login(page);
+    await page.getByPlaceholder("Search movies and shows").fill("o");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await expect(page.locator("#search-results .result-card")).toHaveCount(3);
+    await expect(page.locator("#search-results .row-cert")).toHaveCount(3);
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${shots}/marquee-search-redesign-${width}.png` });
+    await page.locator("#search-results .result-card h3").first().click();
+    await expect(page.locator("#episode-detail[open]")).toBeVisible();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${shots}/marquee-search-redesign-popup-${width}.png` });
+  });
+}

@@ -755,3 +755,30 @@ export async function jellyfinTmdb(user, itemId) {
   if (!type || !Number.isSafeInteger(id) || id < 1 || id > 1e9) return null;
   return { type, id };
 }
+
+// MPAA / TV rating for search rows. Seerr only returns it on a title's own
+// page, so look titles up one by one and remember the answer for a day.
+const certCache = new Map();
+export async function seerrContentRatings(items, userId) {
+  const headers = { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) };
+  const out = {};
+  await Promise.all(
+    items.slice(0, 30).map(async ({ type, id }) => {
+      const key = `${type}:${id}`;
+      const hit = certCache.get(key);
+      if (hit && hit.until > Date.now()) {
+        out[key] = hit.value;
+        return;
+      }
+      try {
+        const data = await upstream(process.env.SEERR_URL, `/api/v1/${type}/${id}`, { headers });
+        const value = seerrContentRating(data, type) || "";
+        certCache.set(key, { value, until: Date.now() + 86400000 });
+        out[key] = value;
+      } catch {
+        out[key] = "";
+      }
+    }),
+  );
+  return out;
+}

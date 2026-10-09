@@ -49,6 +49,17 @@
       </header>
       <main>
         <p id="global-error" role="alert" hidden></p>
+        <section id="search-section">
+          <div class="section-heading">
+            <div><span class="eyebrow">FIND SOMETHING TO WATCH</span><h2>Search and request</h2></div>
+          </div>
+          <form id="search-form" class="search-bar">
+            <input name="query" maxlength="120" placeholder="Search movies and shows" autocomplete="off" required />
+            <button type="submit" class="search-btn">Search</button>
+          </form>
+          <p id="search-status" role="status"></p>
+          <div id="search-results" class="search-results"></div>
+        </section>
         <section id="weather" class="weather" hidden>
           <div>
             <span class="eyebrow">OUTSIDE YOUR WINDOW</span>
@@ -110,16 +121,7 @@
             <div id="calendar" aria-live="polite"></div>
           </div>
         </section>
-        <section id="search-section">
-          <div class="section-heading">
-            <div><span class="eyebrow">FIND SOMETHING TO WATCH</span><h2>Search and request</h2></div>
-          </div>
-          <form id="search-form" class="search-bar">
-            <input name="query" maxlength="120" placeholder="Search movies and shows" autocomplete="off" required />
-            <button type="submit" class="search-btn">Search</button>
-          </form>
-          <p id="search-status" role="status"></p>
-          <div id="search-results" class="search-results"></div>
+        <section id="popular-wrap">
           <div id="popular-section" class="popular-section"><div class="popular-heading"><div class="popular-title"><span class="eyebrow">POPULAR RIGHT NOW</span><button id="popular-collapse" aria-expanded="true" aria-controls="popular-content" aria-label="Collapse popular titles" title="Collapse"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><p>Top 10 from Seerr · availability follows its latest library scan</p></div><p id="popular-status" role="status"></p><div id="popular-content"><div class="shelf-heading"><h3>Top 10 movies</h3><div class="shelf-controls"><button data-shelf="popular-movies" data-direction="-1" aria-label="Previous popular movies"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button><button data-shelf="popular-movies" data-direction="1" aria-label="Next popular movies"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4 6 6-6 6" /></svg></button></div></div><div id="popular-movies" class="popular-row"></div><div class="shelf-heading"><h3>Top 10 TV shows</h3><div class="shelf-controls"><button data-shelf="popular-tv" data-direction="-1" aria-label="Previous popular TV shows"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button><button data-shelf="popular-tv" data-direction="1" aria-label="Next popular TV shows"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4 6 6-6 6" /></svg></button></div></div><div id="popular-tv" class="popular-row"></div></div></div>
         </section>
         <section id="requests-section">

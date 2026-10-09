@@ -123,7 +123,7 @@ function applyPrefs() {
   $("#recent-section").hidden = !state.prefs.recent;
   $("#calendar-section").hidden = !state.prefs.calendar;
   $("#search-section").hidden = !state.prefs.search;
-  $("#popular-section").hidden = !state.prefs.popular;
+  $("#popular-section").hidden = !state.prefs.popular || !state.prefs.search;
   $("#popular-content").hidden = Boolean(state.prefs.popularCollapsed);
   $("#popular-collapse").setAttribute(
     "aria-label",
@@ -752,6 +752,24 @@ function renderSearch(results) {
     ? results.map(resultCardHtml).join("")
     : '<p class="empty">Nothing found. Try another title.</p>';
   fixBrokenPosters();
+  addRowRatings(results);
+}
+// Content ratings (R, PG-13, TV-MA...) arrive a moment later so results never wait for them.
+async function addRowRatings(results) {
+  const items = results.slice(0, 30).map((r) => `${r.mediaType}:${r.id}`);
+  if (!items.length) return;
+  const seq = searchSeq;
+  try {
+    const { ratings } = await api(`/api/seerr/content-ratings?items=${items.join(",")}`);
+    if (seq !== searchSeq) return;
+    for (const card of all("#search-results .result-card")) {
+      const poster = card.querySelector("[data-detail-id]");
+      const value = ratings[`${poster.dataset.detailType}:${poster.dataset.detailId}`];
+      const meta = card.querySelector(".result-meta");
+      if (value && meta && !meta.querySelector(".row-cert"))
+        meta.insertAdjacentHTML("beforeend", `<span class="row-cert" title="Content rating">${escape(value)}</span>`);
+    }
+  } catch {}
 }
 $("#popular-collapse").addEventListener("click", () => {
   state.prefs.popularCollapsed = !state.prefs.popularCollapsed;
@@ -783,7 +801,10 @@ for (const [container, status] of [
   ["#requests", "#global-error"],
 ]) {
   $(container).addEventListener("click", (event) => {
-    const card = event.target.closest("[data-detail-id]");
+    let card = event.target.closest("[data-detail-id]");
+    // Search rows open the popup from anywhere on the row except the button.
+    if (!card && container === "#search-results" && !event.target.closest("button, a"))
+      card = event.target.closest(".result-card")?.querySelector("[data-detail-id]");
     if (card) openMediaDetail(card, $(status));
   });
   $(container).addEventListener("keydown", (event) => {
