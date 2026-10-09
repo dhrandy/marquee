@@ -1,5 +1,5 @@
 import express from "express";
-import { trustedProxies, allowedOrigin } from "./security.js";
+import { proxyTrust, allowedOrigin } from "./security.js";
 import crypto from "node:crypto";
 import path from "node:path";
 import fs from "node:fs/promises";
@@ -93,7 +93,7 @@ const apiAttempts = new Map();
 const ttl = 8 * 60 * 60 * 1000;
 const port = Number(process.env.PORT || 8739);
 
-app.set("trust proxy", trustedProxies(process.env.TRUSTED_PROXIES));
+app.set("trust proxy", proxyTrust(process.env.TRUSTED_PROXIES, process.env.TRUST_PROXY));
 app.disable("x-powered-by");
 app.use((req, res, next) => {
   res.set({

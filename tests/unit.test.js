@@ -309,7 +309,7 @@ test("Seerr facts validate scores, releases and country data without guesses", a
   assert.equal(empty.productionCountries.length,0);
 });
 
-import { trustedProxies, allowedOrigin } from "../src/security.js";
+import { trustedProxies, proxyTrust, allowedOrigin } from "../src/security.js";
 test("proxy trust requires explicit IPs and HTTPS origins stay strict",()=>{
  assert.equal(trustedProxies(),false);
  assert.deepEqual(trustedProxies("127.0.0.1, ::1, 192.0.2.4/32"),["127.0.0.1","::1","192.0.2.4/32"]);
@@ -317,4 +317,10 @@ test("proxy trust requires explicit IPs and HTTPS origins stay strict",()=>{
  assert.equal(allowedOrigin("https://example.test","example.test",true),true);
  for(const origin of ["http://example.test","null",undefined,"https://example.test.evil.test"])assert.equal(allowedOrigin(origin,"example.test",true),false);
  assert.equal(allowedOrigin("http://example.test","example.test",false),true);
+});
+
+test("single-proxy option is explicit and strict allowlist wins",()=>{
+ assert.equal(proxyTrust(),false);assert.equal(proxyTrust("","0"),false);assert.equal(proxyTrust("","1"),1);
+ assert.deepEqual(proxyTrust("127.0.0.1","1"),["127.0.0.1"]);
+ for(const invalid of ["true","2","-1","all"])assert.throws(()=>proxyTrust("",invalid));
 });

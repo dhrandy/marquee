@@ -159,6 +159,7 @@ services:
       # false only for a trusted plain-HTTP LAN; keep true behind HTTPS.
       COOKIE_SECURE: ${COOKIE_SECURE}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
       JELLYFIN_URL: ${JELLYFIN_URL}
       SONARR_URL: ${SONARR_URL}
       SONARR_API_KEY: ${SONARR_API_KEY}
@@ -226,6 +227,7 @@ services:
       DEMO_MODE: ${DEMO_MODE}
       COOKIE_SECURE: ${COOKIE_SECURE}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
       JELLYFIN_URL: ${JELLYFIN_URL}
       SONARR_URL: ${SONARR_URL}
       SONARR_API_KEY: ${SONARR_API_KEY}
@@ -279,6 +281,8 @@ DEMO_MODE=false
 COOKIE_SECURE=true
 # Proxy IP/CIDR allowlist as seen by the container. Empty means no forwarded headers trusted.
 TRUSTED_PROXIES=
+# Simple single-proxy alternative. 1 only when every backend connection comes through your proxy.
+TRUST_PROXY=0
 
 # Internal vs external URLs: the container talks to your services over your
 # Docker/LAN network (internal). Deep links people tap on their phones use the
@@ -314,7 +318,7 @@ Dockhand users can put these variables in the stack's Environment tab instead of
 
 ### Reverse proxy
 
-Terminate HTTPS at your preferred reverse proxy and forward to port 8739. Preserve the original Host header for same-origin write checks. Do not cache `/api/` responses. Do not expose the HTTP port directly to the internet. Users should always submit Jellyfin passwords over HTTPS. With `COOKIE_SECURE=true`, all writes require an exact HTTPS Origin; local HTTP origins work only when explicitly false. Set `TRUSTED_PROXIES` to a comma-separated list of the proxy IPs or narrow CIDRs as seen by the container. The default is empty (forwarded headers ignored). Never trust all addresses or an arbitrary hop count. Your proxy must overwrite incoming X-Forwarded-For with the real client IP, preserve Host, and be the only path to the backend port. Do not whitelist a shared gateway reachable by untrusted clients. Private deployment addresses belong in your local environment, not the public repo.
+Terminate HTTPS at your preferred reverse proxy and forward to port 8739. Preserve the original Host header for same-origin write checks. Do not cache `/api/` responses. Do not expose the HTTP port directly to the internet. Users should always submit Jellyfin passwords over HTTPS. With `COOKIE_SECURE=true`, all writes require an exact HTTPS Origin; local HTTP origins work only when explicitly false. Set `TRUSTED_PROXIES` to a comma-separated list of the proxy IPs or narrow CIDRs as seen by the container. The default is empty (forwarded headers ignored). Alternatively set `TRUST_PROXY=1` for exactly one proxy hop; no IP lookup is needed. Its default is `0` (off); other hop counts and `true` are rejected. A nonempty `TRUSTED_PROXIES` allowlist takes precedence. Never trust all addresses. Your proxy must overwrite incoming X-Forwarded-For with the real client IP, preserve Host, and be the only path to the backend port. Do not whitelist a shared gateway reachable by untrusted clients. The compose files publish the backend on host interfaces by default; they do not enforce proxy-only access. For one-hop trust, firewall/bind/network rules must prevent ALL direct backend access, including untrusted LAN clients and containers. If a caller can connect directly, they can spoof their client IP and bypass login throttling. Keep trust off or use the strict allowlist until access is restricted. Private deployment addresses belong in your local environment, not the public repo.
 
 ## Connection settings
 
@@ -337,7 +341,7 @@ The recent Jellyfin shelf and Seerr request list are per-user. **The Sonarr/Rada
 
 Passwords are sent to Jellyfin and are not stored or logged. Jellyfin access tokens and opaque sessions stay in server memory. Cookies are HttpOnly, SameSite Strict, secure by default, and expire after eight hours. Sign-out removes the local session. It does not revoke the Jellyfin access token upstream; server restarts drop stored tokens.
 
-Media APIs and image proxies require a session. Images are limited to item IDs returned for that viewer. API keys never go to the browser. Service URLs are administrator configuration, not user-editable request destinations. Login is rate-limited per client IP. Forwarded client IPs are used only from explicitly configured `TRUSTED_PROXIES`; without that allowlist, only the direct socket IP is trusted. Authenticated API traffic is capped at 240 calls per user per minute (weather/city search at 30). Image downloads are bounded while streaming; remote calendar art permits only fixed HTTPS TVDB/TMDB hosts without credentials, ports or redirects. The app rejects cross-origin writes, escapes media titles, sends security headers, and blocks indexing with a robots rule and headers. These do not replace authentication.
+Media APIs and image proxies require a session. Images are limited to item IDs returned for that viewer. API keys never go to the browser. Service URLs are administrator configuration, not user-editable request destinations. Login is rate-limited per client IP. Forwarded client IPs are used through the strict `TRUSTED_PROXIES` allowlist or opt-in `TRUST_PROXY=1` for isolated single-proxy deployments. Both default off; otherwise only the direct socket IP is trusted. Authenticated API traffic is capped at 240 calls per user per minute (weather/city search at 30). Image downloads are bounded while streaming; remote calendar art permits only fixed HTTPS TVDB/TMDB hosts without credentials, ports or redirects. The app rejects cross-origin writes, escapes media titles, sends security headers, and blocks indexing with a robots rule and headers. These do not replace authentication.
 
 Demo mode must not be enabled for private live deployments: it allows anyone to open the sample dashboard without Jellyfin credentials. Demo adapters are separate from the live adapters and cannot expose live data.
 

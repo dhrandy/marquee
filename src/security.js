@@ -1,6 +1,6 @@
 import { isIP } from "node:net";
 
-// Trust only explicitly named proxy IPs/CIDRs, never a hop count or all senders.
+// Explicit IP/CIDR allowlist is stricter than the opt-in single-proxy mode.
 export function trustedProxies(value = "") {
   const entries = value.split(",").map(s => s.trim()).filter(Boolean);
   for (const entry of entries) {
@@ -12,6 +12,12 @@ export function trustedProxies(value = "") {
     }
   }
   return entries.length ? entries : false;
+}
+
+export function proxyTrust(allowlist = "", singleHop = "") {
+  const strict = trustedProxies(allowlist);
+  if (!["", "0", "1"].includes(singleHop)) throw new Error("TRUST_PROXY must be 0 (off) or 1 (single proxy hop).");
+  return strict || (singleHop === "1" ? 1 : false);
 }
 
 export function allowedOrigin(origin, host, secure) {
