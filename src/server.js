@@ -236,6 +236,11 @@ app.post("/api/logout", requireUser, async (req, res) => {
 // tokens), so say what actually failed instead of a generic message.
 function seerrFailure(res, error) {
   console.warn(`Seerr call failed: ${error.message}`);
+  const status = /Service answered HTTP (401|403)/.exec(error.message)?.[1];
+  if (status)
+    return res.status(403).json({
+      error: `Seerr refused this account (HTTP ${status}). Check this user's permissions in Seerr.`,
+    });
   res.status(502).json({ error: `Seerr could not be reached. ${error.message}` });
 }
 // Typing in the search box fires many searches. Permissions rarely change, so
@@ -671,7 +676,7 @@ app.post("/api/seerr/request", requireUser, async (req, res) => {
     const result = await seerrRequest(mediaType, mediaId, access.id, options);
     res.json({ ok: true, status: result.status ?? null });
   } catch (error) {
-    const denied = /Service returned (403|409)/.test(error.message);
+    const denied = /Service answered HTTP (403|409)/.test(error.message);
     console.warn(`Seerr request failed: ${error.message}`);
     res.status(denied ? 403 : 502).json({
       error: denied

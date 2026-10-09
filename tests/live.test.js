@@ -252,6 +252,10 @@ const service = http.createServer(async (req, res) => {
       }),
     );
   }
+  if (url.pathname === "/api/v1/search" && url.searchParams.get("query") === "forbidden") {
+    res.statusCode = 403;
+    return res.end("{}");
+  }
   if (url.pathname === "/api/v1/search")
     return res.end(
       JSON.stringify({
@@ -528,6 +532,11 @@ try {
       ).status,
       400,
     );
+    const refused = await fetch(`${base}/api/seerr/search?query=forbidden`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(refused.status, 403);
+    assert.match((await refused.json()).error, /refused this account \(HTTP 403\)/);
     const img = await fetch(
       `${base}/api/seerr/image?path=${encodeURIComponent("/abc.jpg")}`,
       { headers: { Cookie: cookie } },
