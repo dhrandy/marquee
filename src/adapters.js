@@ -718,7 +718,7 @@ export async function seerrRequests(userId, mine = false) {
   return normalizeSeerrRequests(data);
 }
 
-export async function testService(name) {
+export async function testService(name, { includeVersion = false } = {}) {
   const services = {
     jellyfin: {
       base: process.env.JELLYFIN_URL,
@@ -750,7 +750,7 @@ export async function testService(name) {
       headers: service.key ? { "X-Api-Key": service.key } : {},
     });
     if (name === "maintainerr" && !Array.isArray(data)) throw new Error("Maintainerr did not return a collections list.");
-    return { ok: true };
+    return { ok: true, ...(name === "jellyfin" && includeVersion ? { version: typeof data?.Version === "string" && data.Version.length <= 80 ? data.Version : null } : {}) };
   } catch (error) {
     return { ok: false, error: error.message };
   }

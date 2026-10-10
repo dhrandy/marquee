@@ -1330,7 +1330,20 @@ $("#weather-units").addEventListener("change", (event) => {
   persist();
   saveWeather();
 });
-$("#settings-button").addEventListener("click", () => { buildSectionOrder(); $("#settings").showModal(); });
+let jellyfinVersionRequest = 0;
+async function loadJellyfinVersion() {
+  const request = ++jellyfinVersionRequest;
+  const target = $("#jellyfin-version");
+  target.textContent = "Jellyfin server version: checking…";
+  try {
+    const result = await api("/api/jellyfin-version");
+    if (request !== jellyfinVersionRequest) return;
+    target.textContent = result.demo ? "Jellyfin server version: demo mode (no server connected)" : `Jellyfin server version: ${result.version || "unavailable"}`;
+  } catch {
+    if (request === jellyfinVersionRequest) target.textContent = "Jellyfin server version: unavailable";
+  }
+}
+$("#settings-button").addEventListener("click", () => { buildSectionOrder(); $("#settings").showModal(); loadJellyfinVersion(); });
 $("#default-view").addEventListener("change", (event) => {
   state.prefs.defaultView = event.target.value;
   delete state.prefs.lastView;
@@ -1347,6 +1360,7 @@ all("[data-test]").forEach((button) =>
         method: "POST",
         body: JSON.stringify({ service: name }),
       });
+      if (name === "jellyfin") loadJellyfinVersion();
       $("#connection-result").className = result.ok ? "conn-ok" : "conn-fail";
       $("#connection-result").textContent = result.ok
         ? `${label}: connected.`

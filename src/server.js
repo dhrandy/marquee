@@ -644,6 +644,11 @@ app.get("/api/seerr/search", requireUser, async (req, res) => {
     seerrFailure(res, error);
   }
 });
+app.get("/api/jellyfin-version", requireUser, async (req, res) => {
+  if (demo) return res.json({ version: null, demo: true });
+  const result = await testService("jellyfin", { includeVersion: true });
+  res.json({ version: result.ok ? result.version : null });
+});
 app.post("/api/test-connection", requireUser, async (req, res) => {
   const { service } = req.body || {};
   if (!["jellyfin", "sonarr", "radarr", "seerr", "maintainerr"].includes(service))

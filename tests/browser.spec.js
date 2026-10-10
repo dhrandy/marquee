@@ -2593,3 +2593,27 @@ test("watchlist heart removes a favorite without opening popout or requesting me
   await page.locator("#watchlist-content .watchlist-remove").click();
   expect((await posted).postDataJSON().saved).toBe(false); await expect(page.locator("#watchlist-content .poster-card")).toHaveCount(0); await expect(page.locator("#episode-detail")).not.toBeVisible();
 });
+
+for (const width of [1440,393]) {
+  test(`Jellyfin version Settings preview at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height:900 }); await login(page);
+    await page.route("**/api/jellyfin-version", route => route.fulfill({ json: {version:"10.11.2"} }));
+    await page.getByRole("button", {name:"Settings",exact:true}).click();
+    await expect(page.locator("#jellyfin-version")).toHaveText("Jellyfin server version: 10.11.2");
+    await page.locator("#jellyfin-version").scrollIntoViewIfNeeded();
+    await page.locator("#settings").screenshot({path:`${shots}/marquee-jellyfin-version-${width}.png`});
+  });
+}
+test("Jellyfin version has honest demo, unavailable and text-only states", async ({ page }) => {
+  await login(page); await page.getByRole("button", {name:"Settings",exact:true}).click();
+  await expect(page.locator("#jellyfin-version")).toContainText("demo mode (no server connected)");
+  await page.getByRole("button", {name:"Close settings"}).click();
+  await page.route("**/api/jellyfin-version", route => route.fulfill({json:{version:null}}));
+  await page.getByRole("button", {name:"Settings",exact:true}).click();
+  await expect(page.locator("#jellyfin-version")).toHaveText("Jellyfin server version: unavailable");
+  await page.getByRole("button", {name:"Close settings"}).click();
+  await page.route("**/api/jellyfin-version", route => route.fulfill({json:{version:"<img src=x onerror=alert(1)>"}}));
+  await page.getByRole("button", {name:"Settings",exact:true}).click();
+  await expect(page.locator("#jellyfin-version")).toContainText("<img src=x onerror=alert(1)>");
+  await expect(page.locator("#jellyfin-version img")).toHaveCount(0);
+});

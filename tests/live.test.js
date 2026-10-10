@@ -914,6 +914,13 @@ try {
     for (const call of pages)
       assert.match(call.authorization, /token-bulk-viewer/);
   });
+  await test("Settings reads connected Jellyfin version without disclosing server info", async () => {
+    assert.equal((await fetch(`${base}/api/jellyfin-version`)).status, 401);
+    const response = await signin("alice");
+    const cookie = response.headers.get("set-cookie").split(";")[0];
+    const result = await fetch(`${base}/api/jellyfin-version`, { headers: { Cookie: cookie } });
+    assert.deepEqual(await result.json(), { version: "10.10.0" });
+  });
   await test("Sonarr status and calendar use the normalized API URL and key", async () => {
     const login = await signin("alice");
     const cookie = login.headers.get("set-cookie").split(";")[0];
