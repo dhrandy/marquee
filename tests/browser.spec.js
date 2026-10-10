@@ -690,8 +690,11 @@ for (const width of [1440, 393, 320, 280]) {
     await login(page);
     await expect(page.locator("#popular-movies .result-card")).toHaveCount(10);
     await expect(page.locator("#popular-tv .result-card")).toHaveCount(10);
-    await expect(page.locator("#popular-movies")).toContainText("Available");
-    await expect(page.locator("#popular-movies")).toContainText("Requested");
+    await expect(page.locator("#popular-movies .poster-status").first()).toHaveAttribute("aria-label", "In your library");
+    await expect(page.locator("#popular-movies .row-cert")).toHaveCount(0);
+    await expect(page.locator("#popular-tv .row-cert")).toHaveCount(0);
+    for (const meta of await page.locator("#popular-section .result-meta").allTextContents()) expect(meta).not.toMatch(/Available|Processing|Requested/);
+    await expect(page.locator("#popular-movies .result-meta").first()).toHaveText("Movie · 2026");
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -2322,7 +2325,7 @@ for (const width of [1440, 393, 280]) {
   await expect(page.locator("#requests-section")).toBeVisible();
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.locator("#tab-order").selectOption("home");
-    await expect(page.locator("#page-nav button").first()).toHaveText("Home");
+    await expect(page.locator("#page-nav button").first()).toHaveText("On Jellyfin");
     await page.locator("#tab-order-settings").screenshot({ path: `${shots}/marquee-nav-settings-${width}.png` });
     await page.getByRole("button", { name: "Close settings" }).click();
     await page.reload(); await expect(page.locator('button[data-page="home"]')).toHaveAttribute("aria-current", "page");

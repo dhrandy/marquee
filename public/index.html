@@ -49,7 +49,7 @@
       </header>
       <nav id="page-nav" class="page-nav" aria-label="Main navigation">
         <button type="button" data-page="discover" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"/></svg><span>Discover</span></button>
-        <button type="button" data-page="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M5 10v10h14V10M9 20v-7h6v7"/></svg><span>Home</span></button>
+        <button type="button" data-page="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M5 10v10h14V10M9 20v-7h6v7"/></svg><span>On Jellyfin</span></button>
       </nav>
       <main>
         <div class="view-intro"><span id="view-kicker" class="eyebrow">FIND YOUR NEXT FAVORITE</span><h1 id="view-title">Something good is waiting.</h1><p id="view-description">Explore the latest arrivals, see what's next, and find your next watch.</p></div>
@@ -163,7 +163,7 @@
       <div class="settings-group" id="section-order-settings">
         <h3>Shelf order within tabs</h3>
         <p>Drag the handles to arrange shelves within their tabs, top to bottom. Arrow buttons work too.</p>
-        <small>Saved to your Jellyfin account on the server, even when display sync is off. Discover and Home keep their assigned shelves; dragging does not change tabs. Hidden sections keep their place. Search and weather share a row when side by side.</small>
+        <small>Saved to your Jellyfin account on the server, even when display sync is off. Discover and On Jellyfin keep their assigned shelves; dragging does not change tabs. Hidden sections keep their place. Search and weather share a row when side by side.</small>
         <ol id="section-order-list" aria-label="Dashboard section order"></ol>
         <div class="order-footer"><button id="reset-section-order" type="button">Reset order</button><span id="section-order-status" role="status"></span></div>
       </div>
@@ -205,7 +205,7 @@
         <div class="settings-input-row"><input id="display-name" maxlength="40" value="Marquee" /><button id="save-display-name">Save name</button></div>
         <p id="display-name-status" role="status"></p>
       </div>
-      <div id="tab-order-settings" class="settings-group"><span class="eyebrow">YOUR STARTING POINT</span><h3>Tab order &amp; startup</h3><p>Choose which tab comes first and opens when you sign in. This does not move any shelves.</p><label>First tab<select id="tab-order"><option value="discover">Discover, then Home</option><option value="home">Home, then Discover</option></select></label></div>
+      <div id="tab-order-settings" class="settings-group"><span class="eyebrow">YOUR STARTING POINT</span><h3>Tab order &amp; startup</h3><p>Choose which tab comes first and opens when you sign in. This does not move any shelves.</p><label>First tab<select id="tab-order"><option value="discover">Discover, then On Jellyfin</option><option value="home">On Jellyfin, then Discover</option></select></label></div>
       <div class="connections">
         <h3>Connections</h3>
         <p>Test each service with the server's saved settings.</p>

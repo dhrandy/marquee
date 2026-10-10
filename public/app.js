@@ -186,7 +186,7 @@ function applyDashboardPage() {
     if (element) element.classList.toggle("page-away", !visible.includes(key));
   }
   $("#nothing").hidden = visible.some(key => sectionElement(key) && !sectionElement(key).hidden);
-  $("#nothing").textContent = home ? "Your Home shelves are off. Turn on a personal shelf or Requests in Settings." : "Your Discover sections are off. Turn one on in Settings.";
+  $("#nothing").textContent = home ? "Your On Jellyfin shelves are off. Turn on a personal shelf or Requests in Settings." : "Your Discover sections are off. Turn one on in Settings.";
   $("#page-nav").append(...(state.prefs.firstTab === "home" ? [$('button[data-page="home"]'), $('button[data-page="discover"]')] : [$('button[data-page="discover"]'), $('button[data-page="home"]')]));
   $("#tab-order").value = state.prefs.firstTab || "discover";
   all("button[data-page]").forEach(button => { if (button.dataset.page === dashboardPage) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current"); });
@@ -1041,18 +1041,18 @@ async function loadWeather() {
     $("#weather-forecast").innerHTML = "";
   }
 }
-function resultCardHtml(r) {
+function resultCardHtml(r, includeContentRating = false) {
   const label = mediaActionLabel(r);
   const action = label
     ? ""
     : state.requestAccess[r.mediaType]
       ? `<button class="request-btn" data-request data-media-type="${r.mediaType}" data-media-id="${r.id}" data-title="${escape(r.title)}">Request</button>`
       : `<span class="request-unavailable">${escape(state.requestAccess.reason || state.requestAccess[`${r.mediaType}Reason`] || "Requests disabled in Seerr")}</span>`;
-  return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}${watchedBadgeHtml(r)}</div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${availabilityText(r.availability) ? ` · ${availabilityText(r.availability)}` : ""}<span class="row-cert row-cert-pending" aria-hidden="true"></span></p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
+  return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}${watchedBadgeHtml(r)}</div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${includeContentRating ? `<span class="row-cert row-cert-pending" aria-hidden="true"></span>` : ""}</p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
 }
 function renderSearch(results) {
   $("#search-results").innerHTML = results.length
-    ? results.map(resultCardHtml).join("")
+    ? results.map(r => resultCardHtml(r, true)).join("")
     : '<p class="empty">Nothing found. Try another title.</p>';
   fixBrokenPosters();
   addRowRatings(results);
@@ -1167,7 +1167,7 @@ async function loadRecommendations() {
   try {
     const { seed, items } = await api("/api/recommendations");
     $("#recommendation-seed").textContent = seed ? `Because you watched ${seed}` : "Watch a movie or show in Jellyfin to get suggestions.";
-    $("#recommendations-content").innerHTML = items.length ? items.map(resultCardHtml).join("") : '<p class="empty">No suggestions yet.</p>';
+    $("#recommendations-content").innerHTML = items.length ? items.map(r => resultCardHtml(r)).join("") : '<p class="empty">No suggestions yet.</p>';
     $("#recommendations-status").textContent = ""; fixBrokenPosters();
   } catch (error) { $("#recommendations-status").textContent = error.message; }
 }

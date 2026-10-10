@@ -1322,7 +1322,7 @@ button[aria-label="Close settings"]:hover { background: #b9a3f7; }
 .search-results .result-card { position: relative; }
 .search-results .result-card .poster-art { position: static; }
 .search-results .result-card .poster-status { top: auto; right: 12px; bottom: 10px; }
-.row-cert-pending { min-width: 30px; color: transparent; background: #ffffff14; border-color: transparent; }
+.row-cert-pending { visibility: hidden; min-width: 30px; color: transparent; background: #ffffff14; border-color: transparent; }
 .row-cert { display: inline-block; font-size: 11px; font-weight: 600; line-height: 1.4; padding: 0 6px; margin-left: 6px; border: 1px solid #c5cad6; border-radius: 4px; color: #edf0f7; vertical-align: 1px; }
 /* Cap the search block so rows don't stretch across wide screens. */
 #search-section { max-width: 760px; }
@@ -1479,3 +1479,7 @@ main > #search-section .search-bar { max-width: 560px; }
   #dashboard[data-page="discover"] .home-top-row .weather { padding-top: 22px; }
   #dashboard[data-page="discover"] .home-top-row .view-intro h1 { font-size: 40px; max-width: 600px; }
 }
+
+.page-nav button span { white-space: nowrap; }
+.page-nav button svg { flex-shrink: 0; }
+@media (max-width: 340px) { .page-nav { padding-left: 10px; padding-right: 10px; } .page-nav button { gap: 6px; padding-left: 5px; padding-right: 5px; font-size: 13px; } }
