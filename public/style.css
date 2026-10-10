@@ -1392,7 +1392,7 @@ main > section:not([hidden]), .personal-section:not([hidden]) {
 #section-order-list li { display: flex; align-items: center; gap: 8px; padding: 8px; margin: 5px 0; border: 1px solid var(--line); border-radius: 8px; background: #ffffff04; }
 #section-order-list button { width: 36px; min-width: 36px; height: 36px; padding: 0; font-size: 20px; }
 #section-order-list .order-handle { touch-action: none; cursor: grab; background: transparent; border-color: transparent; font-size: 27px; color: var(--muted); }
-.order-name { flex: 1; font-size: 14px; }
+.order-name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
 .order-name small { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
 #section-order-list .dragging { opacity: .55; }
 #section-order-list .drop-target { border-color: var(--purple); background: #ac8fff20; }
@@ -1410,3 +1410,13 @@ main > #search-section .search-bar { max-width: 560px; }
 .watched-badge { position: absolute; left: 8px; top: 8px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 1px solid #ffffff60; border-radius: 5px; color: #fff; background: #191f2ded; box-shadow: 0 2px 6px #0006; font-size: 10px; line-height: 1; font-weight: 600; z-index: 1; pointer-events: none; }
 .watched-badge svg { width: 13px; height: 13px; fill: none; stroke: #c4b5fd; stroke-width: 2.5; }
 #episode-poster-status .watched-badge { top: auto; bottom: 6px; left: 6px; }
+
+#episode-save { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 9px; }
+#episode-save svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+#episode-save.favorited { color: #eaa3bd; border-color: #eaa3bd80; }
+#episode-save.favorited svg { fill: currentColor; }
+.request-filter { display: flex; align-items: center; gap: 10px; margin: 0 0 16px; font-size: 13px; color: var(--muted); }
+.request-filter select { min-width: 170px; }
+#recommendation-seed { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+
+.request-filter select { padding: 8px 10px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 16px; }

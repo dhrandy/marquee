@@ -53,6 +53,7 @@ export async function upstream(
           ? " Check its URL and API key or credentials."
           : ""),
     );
+  if (response.status === 204) return {};
   try {
     return await response.json();
   } catch {
@@ -241,6 +242,7 @@ export async function recentItems(user) {
       const imageId = item.SeriesId || item.Id;
       return {
         id: imageId,
+        favoriteId: imageId, favorite: item.Type === "Episode" ? null : item.UserData?.IsFavorite === true,
         watched: played,
         watchedScope: item.Type === "Episode" ? "season" : "movie",
         title: item.SeriesName || item.Name,
@@ -665,10 +667,10 @@ export async function seerrRequestOptions(type, id, userId, advanced) {
   return out;
 }
 
-export async function seerrRequests(userId) {
+export async function seerrRequests(userId, mine = false) {
   const data = await upstream(
     process.env.SEERR_URL,
-    `/api/v1/request?take=10&skip=0&sort=added&filter=all`,
+    `/api/v1/request?take=10&skip=0&sort=added&filter=all${mine ? `&requestedBy=${encodeURIComponent(userId)}` : ""}`,
     {
       headers: {
         "X-Api-Key": process.env.SEERR_API_KEY,
@@ -835,7 +837,7 @@ export async function personalItems(user, kind) {
     const ticks = item.UserData?.PlaybackPositionTicks || 0;
     const progress = item.RunTimeTicks > 0 ? Math.max(0, Math.min(100, Math.round(ticks / item.RunTimeTicks * 100))) : 0;
     return {
-      id: item.SeriesId || item.Id, title: item.SeriesName || item.Name,
+      id: item.SeriesId || item.Id, favoriteId: item.SeriesId || item.Id, favorite: item.Type === "Episode" ? null : item.UserData?.IsFavorite === true, title: item.SeriesName || item.Name,
       watched: typeof item.UserData?.Played === "boolean" ? item.UserData.Played : null, watchedScope: item.Type === "Episode" ? "episode" : item.Type === "Series" ? "series" : item.Type === "Season" ? "season" : "movie",
       subtitle: personalItemSubtitle(item),
       image: Boolean(item.ImageTags?.Primary || item.SeriesId), art: "placeholder", link: jellyfinLink(item.Id),
@@ -859,17 +861,62 @@ export async function withWatched(user, items) {
       if (!["movie", "tv"].includes(type) || !Number.isSafeInteger(id) || !item.title) continue;
       item.watchedScope = type === "tv" ? "series" : "movie";
       const key = `${user.id}:${user.token}:${type}:${id}`, hit = watchedCache.get(key);
-      if (hit && hit.until > Date.now()) { item.watched = hit.played; continue; }
+      if (hit && hit.until > Date.now()) { Object.assign(item, hit.value); continue; }
       try {
         const query = new URLSearchParams({ UserId: user.id, SearchTerm: item.title, Recursive: "true", IncludeItemTypes: type === "movie" ? "Movie" : "Series", Fields: "ProviderIds", EnableUserData: "true", Limit: "50" });
         const data = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
         const matches = (data.Items || []).filter(candidate => Number(candidate.ProviderIds?.Tmdb) === id && candidate.Type === (type === "movie" ? "Movie" : "Series"));
         const played = matches.length && matches.every(candidate => typeof candidate.UserData?.Played === "boolean") ? matches.every(candidate => candidate.UserData.Played) : null;
+        item.favoriteId = matches.length === 1 ? matches[0].Id : null; item.favorite = matches.length === 1 ? matches[0].UserData?.IsFavorite === true : null;
         item.watched = played; item.watchedScope = type === "tv" ? "series" : "movie";
         if (watchedCache.size > 500) watchedCache.clear();
-        watchedCache.set(key, { played, until: Date.now() + 60000 });
+        watchedCache.set(key, { value: { watched: played, favoriteId: item.favoriteId, favorite: item.favorite, watchedScope: item.watchedScope }, until: Date.now() + 60000 });
       } catch { /* Watched is optional; unknown never becomes unwatched or watched. */ }
     }
   }));
   return result;
+}
+
+export async function favoriteState(user, itemId) {
+  const item = await upstream(process.env.JELLYFIN_URL, `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(itemId)}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+  if (!["Movie", "Series"].includes(item.Type)) throw new Error("Only library movies or series can be favorited here.");
+  return { favoriteId: item.Id || itemId, favorite: item.UserData?.IsFavorite === true };
+}
+export async function setFavorite(user, itemId, saved) {
+  await favoriteState(user, itemId); // Verify the user can access this movie/series before writing.
+  await upstream(process.env.JELLYFIN_URL, `/Users/${encodeURIComponent(user.id)}/FavoriteItems/${encodeURIComponent(itemId)}`, { method: saved ? "POST" : "DELETE", headers: jellyfinHeaders(user.token, user.deviceId) });
+  watchedCache.clear();
+}
+export async function favoriteItems(user) {
+  const items = []; let start = 0;
+  while (items.length < 500) {
+    const query = new URLSearchParams({ UserId: user.id, IsFavorite: "true", Recursive: "true", IncludeItemTypes: "Movie,Series", Fields: "Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People,ProviderIds", EnableUserData: "true", EnableImages: "true", SortBy: "SortName", Limit: "100", StartIndex: String(start) });
+    const data = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+    const page = data.Items || []; items.push(...page); start += page.length;
+    if (page.length < 100 || (Number.isFinite(data.TotalRecordCount) && start >= data.TotalRecordCount)) break;
+  }
+  return items.slice(0, 500).filter(item => ["Movie", "Series"].includes(item.Type) && item.UserData?.IsFavorite === true).map(item => ({
+    id: item.Id, favoriteId: item.Id, favorite: true, title: item.Name, subtitle: personalItemSubtitle(item), image: Boolean(item.ImageTags?.Primary), art: "placeholder", link: jellyfinLink(item.Id),
+    watched: typeof item.UserData?.Played === "boolean" ? item.UserData.Played : null, watchedScope: item.Type === "Series" ? "series" : "movie",
+    backdropId: item.BackdropImageTags?.length ? item.Id : null,
+    detail: { title: item.Name, subtitle: item.Type === "Series" ? "TV series" : "Movie", year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], cast: topCast(item.People, true), contentRating: normalizedContentRating(item.OfficialRating), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
+  }));
+}
+
+export async function recommendations(user, seerrUserId) {
+  const query = new URLSearchParams({ UserId: user.id, Recursive: "true", IncludeItemTypes: "Movie,Series,Episode", IsPlayed: "true", SortBy: "DatePlayed", SortOrder: "Descending", Fields: "ProviderIds", EnableUserData: "true", Limit: "10" });
+  const history = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+  let seed = null;
+  for (const item of history.Items || []) {
+    if (item.UserData?.Played !== true) continue;
+    let source = item;
+    if (item.Type === "Episode" && item.SeriesId) source = await upstream(process.env.JELLYFIN_URL, `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(item.SeriesId)}`, { headers: jellyfinHeaders(user.token, user.deviceId) }).catch(() => null);
+    if (!source || !["Movie", "Series"].includes(source.Type)) continue;
+    const id = Number(source.ProviderIds?.Tmdb);
+    if (Number.isSafeInteger(id) && id > 0) { seed = { id, type: source.Type === "Movie" ? "movie" : "tv", title: source.Name }; break; }
+  }
+  if (!seed) return { seed: null, items: [] };
+  const data = await upstream(process.env.SEERR_URL, `/api/v1/${seed.type}/${seed.id}/recommendations?page=1`, { headers: { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(seerrUserId) } });
+  const items = normalizeSeerrResults({ results: (data.results || []).map(item => ({ ...item, mediaType: seed.type })) }).filter(item => item.id !== seed.id).slice(0, 12);
+  return { seed: seed.title, items: await withWatched(user, items) };
 }

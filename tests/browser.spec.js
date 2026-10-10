@@ -1843,9 +1843,9 @@ test("personal shelves are opt-in, collapsible and account-scoped watchlist save
   await page.getByPlaceholder("Search movies and shows").fill("o");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator("#search-results .result-card")).toHaveCount(3);
-  await page.locator("#search-results [data-detail-id]").first().click();
-  await page.getByRole("button", { name: "Save to watchlist", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Remove from watchlist", exact: true })).toBeVisible();
+  await page.locator("#continueWatching-content [data-personal]").first().click();
+  await page.getByRole("button", { name: "Add to Jellyfin favorites", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Remove from Jellyfin favorites", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close episode details" }).click();
   await expect(page.locator("#watchlist-content .poster-card")).toHaveCount(1);
   expect(requests).toBe(0);
@@ -1922,7 +1922,7 @@ for (const width of [1440, 393]) {
     await page.setViewportSize({ width, height: 950 });
     await login(page);
     await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await expect(page.locator("#section-order-list li")).toHaveCount(9);
+    await expect(page.locator("#section-order-list li")).toHaveCount(10);
     const handle = page.getByRole("button", { name: "Drag Release calendar", exact: true });
     const target = page.locator('#section-order-list li[data-order-key="search"]');
     await handle.scrollIntoViewIfNeeded();
@@ -2199,5 +2199,31 @@ for (const width of [1440, 393]) {
     await expect(page.locator("#episode-poster-status .watched-badge")).toBeVisible();
     await expect(page.locator('#episode-poster-status [aria-label="In your library"]')).toBeVisible();
     await page.locator("#episode-detail").screenshot({ path: `/downloads/marquee-watched-popup-${width}.png` });
+  });
+}
+
+for (const width of [1440, 393]) {
+  test(`favorites heart, recommendations and my requests preview at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 }); await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[data-pref="watchlist"]').check();
+    await page.locator('[data-pref="recommendations"]').check();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#recommendation-seed")).toContainText("Because you watched");
+    await page.locator("#recent .recent-detail").nth(1).click();
+    // Demo library fixture has a known parent series identity, no Seerr dependency.
+    await page.evaluate(() => { currentDetail.favoriteId = "demo-series"; currentDetail.favorite = false; setDetailSave(currentDetail); });
+    await expect(page.locator("#episode-save")).toHaveAttribute("aria-pressed", "false");
+    await page.locator("#episode-detail").screenshot({ path: `/downloads/marquee-heart-empty-${width}.png` });
+    await page.getByRole("button", { name: "Add to Jellyfin favorites", exact: true }).click();
+    await expect(page.locator("#episode-save")).toHaveAttribute("aria-pressed", "true");
+    await page.locator("#episode-detail").screenshot({ path: `/downloads/marquee-heart-filled-${width}.png` });
+    await page.getByRole("button", { name: "Close episode details" }).click();
+    await expect(page.locator("#watchlist-content .poster-card")).toHaveCount(1);
+    await page.locator("#watchlist-section").screenshot({ path: `/downloads/marquee-favorites-row-${width}.png` });
+    await page.locator("#recommendations-section").screenshot({ path: `/downloads/marquee-recommendations-${width}.png` });
+    await page.locator("#requests-filter").selectOption("mine");
+    await expect(page.locator("#requests .request-row")).toHaveCount(1);
+    await page.locator("#requests-section").screenshot({ path: `/downloads/marquee-myrequests-${width}.png` });
   });
 }

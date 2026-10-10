@@ -125,6 +125,7 @@
             <div id="calendar" aria-live="polite"></div>
           </div>
         </section>
+        <section id="recommendations-section" hidden><div class="section-heading"><div><span class="eyebrow">PICKED FOR YOU</span><h2>Recommendations</h2><p id="recommendation-seed"></p></div></div><p id="recommendations-status" role="status"></p><div id="recommendations-content" class="popular-row"></div></section>
         <section id="popular-wrap">
           <div id="popular-section" class="popular-section"><div class="section-heading popular-heading"><div><span class="eyebrow">TOP 10 FROM SEERR</span><h2>Popular right now</h2><p>Availability follows its latest library scan</p></div><button id="popular-collapse" aria-expanded="true" aria-controls="popular-content" aria-label="Collapse popular titles" title="Collapse"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><p id="popular-status" role="status"></p><div id="popular-content"><div class="shelf-heading"><h3>Top 10 movies</h3><div class="shelf-controls"><button data-shelf="popular-movies" data-direction="-1" aria-label="Previous popular movies"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button><button data-shelf="popular-movies" data-direction="1" aria-label="Next popular movies"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4 6 6-6 6" /></svg></button></div></div><div id="popular-movies" class="popular-row"></div><div class="shelf-heading"><h3>Top 10 TV shows</h3><div class="shelf-controls"><button data-shelf="popular-tv" data-direction="-1" aria-label="Previous popular TV shows"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button><button data-shelf="popular-tv" data-direction="1" aria-label="Next popular TV shows"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4 6 6-6 6" /></svg></button></div></div><div id="popular-tv" class="popular-row"></div></div></div>
         </section>
@@ -132,7 +133,7 @@
           <div class="section-heading">
             <div><span class="eyebrow">THE QUIET QUEUE</span><h2>Requests</h2></div>
           </div>
-          <div id="requests" class="requests-list"></div>
+          <label class="request-filter">Show<select id="requests-filter"><option value="all">Everyone's requests</option><option value="mine">My requests</option></select></label><div id="requests" class="requests-list"></div>
         </section>
         <p id="nothing" hidden>Both sections are hidden. Open Settings to show them again.</p>
         <footer><span>Your Media. Your Server. Your Way.</span><span id="updated"></span></footer>

@@ -4,7 +4,7 @@ export const displayPreferenceDefaults = {
   shelfNavigation: true, search: true, hideUnmonitored: false,
   requests: true, popular: true, ratings: true, jellyfinLink: true,
   popularCollapsed: false, defaultView: "auto", watchlist: false,
-  continueWatching: false, nextUp: false, watchlistCollapsed: false,
+  recommendations: false, myRequests: false, continueWatching: false, nextUp: false, watchlistCollapsed: false,
   continueWatchingCollapsed: false, nextUpCollapsed: false,
 };
 export function cleanDisplayPreferences(value) {
@@ -28,8 +28,9 @@ export function cleanDisplayPreferences(value) {
   return clean;
 }
 
-export const sectionOrderDefaults = ["search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "calendar", "popular", "requests"];
+export const sectionOrderDefaults = ["search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "calendar", "recommendations", "popular", "requests"];
 export function cleanSectionOrder(value) {
+  if (Array.isArray(value) && value.length === sectionOrderDefaults.length - 1 && !value.includes("recommendations") && new Set(value).size === value.length && value.every(key => sectionOrderDefaults.includes(key))) { value = [...value]; value.splice(value.indexOf("popular"), 0, "recommendations"); }
   if (!Array.isArray(value) || value.length !== sectionOrderDefaults.length || new Set(value).size !== value.length || value.some(key => !sectionOrderDefaults.includes(key))) return null;
   return [...value];
 }

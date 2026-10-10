@@ -8,7 +8,7 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import {
   authenticate,
-  withWatched,
+  recommendations, withWatched, favoriteItems, favoriteState, setFavorite,
   recentItems,
   personalItems,
   calendar,
@@ -371,30 +371,29 @@ app.post("/api/section-order", requireUser, async (req, res) => {
   } catch { res.status(500).json({ error: "Could not save section order. Check the settings volume is writable." }); }
 });
 app.get("/api/watchlist", requireUser, async (req, res) => {
-  const items = savedSettings.watchlistByUser?.[personalKey(req.user)] || [];
-  res.json({ items: demo ? items : await withWatched(req.user, items) });
+  try {
+    const items = demo ? savedSettings.demoFavorites?.[personalKey(req.user)] || [] : await favoriteItems(req.user);
+    for (const item of items) { req.user.state.allowedImages.add(item.id); if (item.backdropId) req.user.state.allowedImages.add(item.backdropId); }
+    res.json({ items });
+  } catch { res.status(502).json({ error: "Could not load your Jellyfin favorites." }); }
+});
+app.get("/api/favorite/:id", requireUser, async (req, res) => {
+  if (!/^[a-zA-Z0-9-]+$/.test(req.params.id)) return res.status(400).json({ error: "Invalid library item." });
+  try { res.json(demo ? { favoriteId: req.params.id, favorite: (savedSettings.demoFavorites?.[personalKey(req.user)] || []).some(item => item.id === req.params.id) } : await favoriteState(req.user, req.params.id)); }
+  catch { res.status(404).json({ error: "This movie or series is not available in your Jellyfin library." }); }
 });
 app.post("/api/watchlist", requireUser, async (req, res) => {
-  const { mediaType, mediaId, saved } = req.body;
-  if (!["movie", "tv"].includes(mediaType) || !Number.isSafeInteger(mediaId) || mediaId <= 0 || typeof saved !== "boolean")
-    return res.status(400).json({ error: "Choose a valid movie or TV show." });
+  const { itemId, saved } = req.body;
+  if (typeof itemId !== "string" || !/^[a-zA-Z0-9-]+$/.test(itemId) || itemId.length > 100 || typeof saved !== "boolean") return res.status(400).json({ error: "Choose a valid Jellyfin movie or series." });
   try {
-    let item;
-    if (saved) {
-      const access = await requestAccess(req.user);
-      if (access.error) return res.status(403).json({ error: access.error });
-      const detail = demo ? { title: "Demo watchlist title", year: "2026", poster: "/art/north.svg", overview: "Saved for later, without requesting." } : await seerrDetails(mediaType, mediaId, access.id);
-      item = { mediaType, mediaId, title: detail.title, year: detail.year || "", poster: detail.poster || null, overview: detail.overview || "" };
-    }
-    await saveSettings(current => {
-      const existing = current.watchlistByUser?.[personalKey(req.user)] || [];
-      const items = existing.filter(i => i.mediaType !== mediaType || i.mediaId !== mediaId);
-      if (saved && items.length >= 200) throw new Error("limit");
-      if (saved) items.unshift(item);
-      return { ...current, watchlistByUser: { ...current.watchlistByUser, [personalKey(req.user)]: items } };
+    if (demo) await saveSettings(current => {
+      const items = (current.demoFavorites?.[personalKey(req.user)] || []).filter(item => item.id !== itemId);
+      if (saved) items.push({ id: itemId, favoriteId: itemId, favorite: true, title: "Demo favorite", subtitle: "TV series", art: "north", detail: { title: "Demo favorite", subtitle: "TV series" } });
+      return { ...current, demoFavorites: { ...current.demoFavorites, [personalKey(req.user)]: items } };
     });
-    res.json({ items: savedSettings.watchlistByUser[personalKey(req.user)] });
-  } catch (error) { res.status(error.message === "limit" ? 400 : 502).json({ error: error.message === "limit" ? "Your watchlist holds up to 200 titles. Remove one first." : "Could not update your watchlist. Try again." }); }
+    else await setFavorite(req.user, itemId, saved);
+    res.json({ favoriteId: itemId, favorite: saved });
+  } catch { res.status(502).json({ error: "Could not update your Jellyfin favorite. Try again." }); }
 });
 app.get("/api/weather-settings", requireUser, (req, res) => {
   const value = savedSettings.weatherByUser[demo ? req.user.sid : req.user.id];
@@ -510,7 +509,7 @@ app.get("/api/library/:id/facts", requireUser, async (req, res) => {
     if (access.error) return res.json({ facts: null });
     const detail = await seerrDetails(tmdb.type, tmdb.id, access.id);
     const [marked] = await withWatched(req.user, [detail]);
-    res.json({ facts: detail.facts, mediaType: tmdb.type, mediaId: tmdb.id, watched: marked.watched });
+    res.json({ facts: detail.facts, mediaType: tmdb.type, mediaId: tmdb.id, watched: marked.watched, favoriteId: marked.favoriteId, favorite: marked.favorite });
   } catch {
     res.json({ facts: null });
   }
@@ -651,8 +650,16 @@ app.post("/api/test-connection", requireUser, async (req, res) => {
   if (demo) return res.json({ ok: true });
   res.json(await testService(service));
 });
+app.get("/api/recommendations", requireUser, async (req, res) => {
+  if (demo) return res.json({ seed: "North of Nowhere", items: demoSearch("") });
+  try {
+    const access = await requestAccess(req.user);
+    if (access.error) return res.status(403).json({ error: access.error });
+    res.json(await recommendations(req.user, access.id));
+  } catch { res.status(502).json({ error: "Recommendations are temporarily unavailable." }); }
+});
 app.get("/api/seerr/requests", requireUser, async (req, res) => {
-  if (demo) return res.json({ requests: demoRequests });
+  if (demo) return res.json({ requests: req.query.mine === "true" ? demoRequests.filter((_, index) => index === 0) : demoRequests });
   if (!process.env.SEERR_URL || !process.env.SEERR_API_KEY)
     return res
       .status(503)
@@ -660,7 +667,7 @@ app.get("/api/seerr/requests", requireUser, async (req, res) => {
   try {
     const access = await requestAccess(req.user);
     if (access.error) return res.status(403).json({ error: access.error });
-    res.json({ requests: await seerrRequests(access.id) });
+    res.json({ requests: await seerrRequests(access.id, req.query.mine === "true") });
   } catch (error) {
     seerrFailure(res, error);
   }
@@ -829,7 +836,7 @@ app.get("/api/seerr/image", requireUser, async (req, res) => {
 app.get("/api/personal/:kind", requireUser, async (req, res) => {
   if (!["continueWatching", "nextUp"].includes(req.params.kind)) return res.sendStatus(404);
   try {
-    const items = demo ? (req.params.kind === "nextUp" ? titles.filter(item => item.type === "tv") : titles).slice(0, 3).map((item, index) => ({ ...item, progress: req.params.kind === "continueWatching" ? 30 + index * 20 : 0, remaining: 25 + index * 8 })) : await personalItems(req.user, req.params.kind);
+    const items = demo ? (req.params.kind === "nextUp" ? titles.filter(item => item.type === "tv") : titles).slice(0, 3).map((item, index) => ({ ...item, favoriteId: item.id, favorite: false, progress: req.params.kind === "continueWatching" ? 30 + index * 20 : 0, remaining: 25 + index * 8 })) : await personalItems(req.user, req.params.kind);
     for (const item of items) {
       req.user.state.allowedImages.add(item.id);
       if (item.backdropId) req.user.state.allowedImages.add(item.backdropId);

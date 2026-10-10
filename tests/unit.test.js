@@ -360,3 +360,11 @@ test("shelf refresh intervals accept only supported numeric choices", async () =
   for (const shelfRefreshMinutes of [0, 1, 2, 5, 10, 15]) assert.deepEqual(cleanDisplayPreferences({ shelfRefreshMinutes }), { shelfRefreshMinutes });
   for (const shelfRefreshMinutes of [-1, 0.1, 100, "5", null]) assert.equal(cleanDisplayPreferences({ shelfRefreshMinutes }), null);
 });
+
+test("old section order keeps saved ordering and adds recommendations before popular", async () => {
+  const { cleanSectionOrder, sectionOrderDefaults } = await import("../src/personal.js");
+  const legacy = sectionOrderDefaults.filter(key => key !== "recommendations").reverse();
+  const upgraded = cleanSectionOrder(legacy);
+  assert.deepEqual(upgraded.filter(key => key !== "recommendations"), legacy);
+  assert.equal(upgraded.indexOf("recommendations") + 1, upgraded.indexOf("popular"));
+});

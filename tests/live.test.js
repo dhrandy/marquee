@@ -38,6 +38,17 @@ const service = http.createServer(async (req, res) => {
       }),
     );
   }
+  if (/^\/Users\/[^/]+\/FavoriteItems\//.test(url.pathname)) {
+    const [, , user, , id] = url.pathname.split("/");
+    assert.ok(req.headers.authorization.includes(`token-${user}`));
+    const key = `favorite-${user}-${id}`;
+    calls.push({ path: key, method: req.method });
+    res.writeHead(204); return res.end();
+  }
+  if (/^\/Users\/[^/]+\/Items\/(great-series|watched-film|series-alice)$/.test(url.pathname)) {
+    const user = url.pathname.split("/")[2], id = url.pathname.split("/").pop();
+    return res.end(JSON.stringify({ Id: id, Type: id === "watched-film" ? "Movie" : "Series", Name: "Favorite title", ProviderIds: { Tmdb: "7" }, UserData: { IsFavorite: calls.filter(c => c.path === `favorite-${user}-${id}`).at(-1)?.method === "POST" } }));
+  }
   if (/^\/Users\/[^/]+\/Items\/Resume$/.test(url.pathname) || url.pathname === "/Shows/NextUp") {
     const user = url.searchParams.get("UserId");
     assert.ok(req.headers.authorization.includes(`token-${user}`));
@@ -60,6 +71,14 @@ const service = http.createServer(async (req, res) => {
     if (!req.headers.authorization?.includes(`token-${user}`)) {
       res.writeHead(403);
       return res.end("{}");
+    }
+    if (url.searchParams.get("IsPlayed") === "true") {
+      assert.equal(url.searchParams.get("SortBy"), "DatePlayed");
+      return res.end(JSON.stringify({ Items: user === "bob" ? [] : [{ Id: "no-tmdb", Type: "Movie", Name: "Missing ID", UserData: { Played: true } }, { Id: "great-episode", Type: "Episode", SeriesId: "great-series", UserData: { Played: true } }] }));
+    }
+    if (url.searchParams.get("IsFavorite") === "true") {
+      const favorite = calls.filter(c => c.path?.startsWith(`favorite-${user}-`)).reduce((all, call) => { const id = call.path.slice(`favorite-${user}-`.length); all[id] = call.method === "POST"; return all; }, {});
+      return res.end(JSON.stringify({ Items: Object.entries(favorite).filter(([,saved]) => saved).map(([id]) => ({ Id: id, Type: "Series", Name: "Favorite title", UserData: { IsFavorite: true, Played: true }, ImageTags: { Primary: "tag" } })) }));
     }
     if (url.searchParams.has("SearchTerm") && url.searchParams.get("Fields") === "ProviderIds") {
       return res.end(JSON.stringify({ Items: [
@@ -337,8 +356,12 @@ const service = http.createServer(async (req, res) => {
         ],
       }),
     );
+  if (url.pathname === "/api/v1/tv/7/recommendations") {
+    assert.equal(req.headers["x-api-user"], "4"); assert.equal(url.searchParams.get("page"), "1");
+    return res.end(JSON.stringify({ results: [{ id: 7, name: "Seed excluded" }, { id: 9001, name: "A recommendation", first_air_date: "2024-01-01" }] }));
+  }
   if (url.pathname === "/api/v1/request" && req.method === "GET") {
-    assert.equal(url.searchParams.has("requestedBy"), false);
+    if (url.searchParams.has("requestedBy")) { assert.equal(url.searchParams.get("requestedBy"), "4"); return res.end(JSON.stringify({ results: [{ id: 99, type: "movie", requestedBy: { id: 4, displayName: "Sample viewer" }, media: { mediaType: "movie", tmdbId: 9001 } }] })); }
     assert.equal(req.headers["x-api-user"], "4");
     return res.end(
       JSON.stringify({
@@ -1194,19 +1217,32 @@ try {
       assert.deepEqual((await withWatched({ id: "alice", token: "token-alice" }, titles)).map(t => t.watched), [true, true, null]);
       assert.deepEqual((await withWatched({ id: "bob", token: "token-bob" }, titles)).map(t => t.watched), [false, false, null]);
     } finally { if (oldUrl === undefined) delete process.env.JELLYFIN_URL; else process.env.JELLYFIN_URL = oldUrl; }
+    const suggestions = await get("/api/recommendations", alice);
+    assert.equal(suggestions.seed, "Favorite title"); assert.equal(suggestions.items.length, 1);
+    assert.equal(suggestions.items[0].mediaType, "tv"); assert.equal(suggestions.items[0].id, 9001);
+    assert.deepEqual(await get("/api/recommendations", bob), { seed: null, items: [] });
+    const noMetadata = (await get("/api/personal/nextUp", alice)).items[0];
+    assert.equal(noMetadata.favoriteId, "series-alice");
+    assert.equal((await post("/api/watchlist", alice, { itemId: noMetadata.favoriteId, saved: true })).status, 200);
+    await post("/api/watchlist", alice, { itemId: noMetadata.favoriteId, saved: false });
     const before = calls.filter(c => c.path === "/api/v1/request").length;
-    assert.equal((await post("/api/watchlist", alice, { mediaType: "movie", mediaId: 9001, saved: true })).status, 200);
-    assert.equal((await get("/api/watchlist", alice)).items[0].title, "Requested Film");
+    assert.equal((await post("/api/watchlist", alice, { itemId: "great-series", saved: true })).status, 200);
+    assert.equal((await get("/api/watchlist", alice)).items[0].title, "Favorite title");
     assert.equal((await get("/api/watchlist", alice)).items[0].watched, true);
-    const order = ["calendar", "search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "popular", "requests"];
+    const order = ["calendar", "search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "recommendations", "popular", "requests"];
     assert.equal((await post("/api/section-order", alice, { order })).status, 200);
     assert.deepEqual((await get("/api/section-order", alice)).order, order);
     assert.notDeepEqual((await get("/api/section-order", bob)).order, order);
     assert.deepEqual((await get("/api/section-order", (await signin("alice")).headers.get("set-cookie"))).order, order);
     assert.equal((await post("/api/section-order", alice, { order: ["calendar", "calendar"] })).status, 400);
     assert.equal((await get("/api/watchlist", bob)).items.length, 0);
-    assert.equal(calls.filter(c => c.path === "/api/v1/request").length, before);
-    await post("/api/watchlist", alice, { mediaType: "movie", mediaId: 9001, saved: false });
+    assert.equal((await get("/api/favorite/great-series", alice)).favorite, true);
+    assert.equal((await get("/api/favorite/great-series", bob)).favorite, false);
+    assert.equal((await post("/api/watchlist", alice, { itemId: "not-a-library-item", saved: true })).status, 502);
+    const mine = await get("/api/seerr/requests?mine=true", alice);
+    assert.equal(mine.requests.length, 1); assert.equal(mine.requests[0].id, 99);
+    assert.equal(calls.filter(c => c.path === "/api/v1/request").length, before + 1);
+    await post("/api/watchlist", alice, { itemId: "great-series", saved: false });
     assert.equal((await get("/api/watchlist", alice)).items.length, 0);
   });
   await test("bad passwords are rejected, repeated attempts are limited", async () => {

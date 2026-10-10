@@ -27,7 +27,9 @@ During beta, updates are manual. Pull the latest image yourself when updating an
 
 ## Features
 
-- Optional private Watchlist saves movies and shows for later without sending a Seerr request. Save from a Seerr title popup; watchlist entries are stored per Jellyfin account in the settings volume and follow you across devices.
+- Watchlist shows your Jellyfin movie and series favorites. The shared popout heart adds/removes a library favorite; episode popouts favorite the parent series. No Seerr metadata is needed for library items. Non-library titles cannot be favorited. Old private Marquee watchlist data is retained but not automatically imported or displayed.
+- Optional Recommendations (off by default) uses a recently played Jellyfin movie/series and fetches related titles through the configured Seerr/TMDB service. Only the seed TMDB ID is sent, not a history dump. The row can be hidden and reordered.
+- Requests can show Everyone or My requests, using the linked Seerr account ID rather than a display-name match.
 - Continue watching and Next up shelves use the signed-in user's Jellyfin viewing history and library permissions. Continue watching shows progress and minutes remaining; its link opens that exact item's Jellyfin page to resume. Next up excludes resumable/rewatched episodes. Both shelves and Watchlist start hidden; enable them in Settings. Each shelf can collapse independently.
 - Display-settings sync is opt-in on each device. Enabling uses account settings when available, otherwise uploads the current device's section toggles, collapse choices and calendar view. Disabling keeps that device's current choices. Weather/colorblind keep their existing server-side behavior; credentials and device location are never in display sync.
 
