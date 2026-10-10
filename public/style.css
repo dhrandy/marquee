@@ -1510,3 +1510,10 @@ main > #search-section .search-bar { max-width: 560px; }
 .poster-row::-webkit-scrollbar, .popular-row::-webkit-scrollbar { height: 8px; }
 .poster-row::-webkit-scrollbar-track, .popular-row::-webkit-scrollbar-track { background: var(--panel); border-radius: 8px; }
 .poster-row::-webkit-scrollbar-thumb, .popular-row::-webkit-scrollbar-thumb { background: var(--purple); border-radius: 8px; }
+
+/* A small request symbol leaves poster artwork and shelf text unobstructed. */
+.popular-row .result-card { position: relative; height: auto; }
+.popular-row .poster-request { position: absolute; top: 5px; right: 5px; z-index: 2; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 5px; border: 0; background: transparent; color: #e5d6ff; cursor: pointer; border-radius: 50%; }
+.poster-request svg { width: 26px; height: 26px; padding: 4px; background: #1b1730eb; border: 1px solid #b49aff; border-radius: 50%; stroke: currentColor; stroke-width: 2; fill: none; box-shadow: 0 2px 6px #0007; }
+.popular-row .poster-request:hover svg { background: #b49aff; color: #1b1730; }
+.popular-row .poster-request:focus-visible { outline: 2px solid var(--purple); outline-offset: 1px; }

@@ -2502,3 +2502,40 @@ for (const width of [1440, 393]) {
     }
   });
 }
+
+for (const width of [1440, 834, 393, 280]) {
+  test(`small poster request icons fit in all sizes at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const items = Array.from({ length: 12 }, (_, i) => ({ id: 400 + i, mediaType: i % 2 ? "movie" : "tv", title: ["Short", "A much longer movie title wrapping over several lines", "Medium title"][i % 3], year: i % 3 ? "2024" : "", rating: i % 2 ? { value: 7.8, source: "TMDB" } : null, poster: ["north", "signal", "orbit"][i % 3], availability: i === 4 ? 5 : 1 }));
+    await page.route("**/api/recommendations", route => route.fulfill({ json: { seeds: ["Cops", "A film"], items } }));
+    await page.route("**/api/seerr/popular", route => route.fulfill({ json: { movies: items.map(item => ({ ...item, mediaType: "movie" })), tv: items.map(item => ({ ...item, mediaType: "tv" })) } }));
+    await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[data-pref="recommendations"]').check();
+    for (const size of ["small", "standard", "large"]) {
+      await page.locator("#poster-size").selectOption(size); await page.getByRole("button", { name: "Close settings" }).click();
+      for (const selector of ["#recommendations-content", "#popular-movies", "#popular-tv"]) {
+        const row = page.locator(selector); await expect(row.locator(".request-btn").first()).toBeVisible();
+        await expect(row.locator(".result-action")).toHaveCount(0);
+        const icons = await row.locator(".poster-request").evaluateAll(buttons => buttons.map(button => ({ button: button.getBoundingClientRect().toJSON(), poster: button.closest(".result-card").querySelector(".poster-art").getBoundingClientRect().toJSON() })));
+        for (const { button, poster } of icons) { expect(button.width).toBe(36); expect(button.right).toBeLessThan(poster.right); expect(button.top).toBeGreaterThan(poster.top); }
+        const posters = await row.locator(".poster-art").evaluateAll(elements => elements.map(el => el.getBoundingClientRect().top));
+        expect(Math.max(...posters) - Math.min(...posters)).toBeLessThan(1);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.locator("#recommendations-section").screenshot({ path: `${shots}/marquee-request-icon-${size}-${width}.png` });
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
+    }
+  });
+}
+
+test("poster plus starts a request without opening details; popout still has full Request", async ({ page }) => {
+  await page.route("**/api/recommendations", route => route.fulfill({ json: { seeds: ["Cops"], items: [{ id: 7, mediaType: "movie", title: "A film", poster: "signal", availability: 1 }] } }));
+  await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click(); await page.locator('[data-pref="recommendations"]').check(); await page.getByRole("button", { name: "Close settings" }).click();
+  let asked = false;
+  page.on("dialog", async dialog => { asked = true; await dialog.dismiss(); });
+  await page.locator("#recommendations-content .poster-request").click();
+  await expect(page.locator("#request-dialog")).toBeVisible(); await expect(page.locator("#episode-detail")).not.toBeVisible();
+  await page.locator("#request-dialog").getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.locator("#recommendations-content .poster-art").click();
+  await expect(page.locator("#episode-detail")).toBeVisible(); await expect(page.locator("#episode-request")).toHaveText("Request");
+});

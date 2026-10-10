@@ -1055,13 +1055,14 @@ async function loadWeather() {
   }
 }
 function resultCardHtml(r, includeContentRating = false) {
+  const shelf = !includeContentRating;
   const label = mediaActionLabel(r);
   const action = label
     ? ""
     : state.requestAccess[r.mediaType]
-      ? `<button class="request-btn" data-request data-media-type="${r.mediaType}" data-media-id="${r.id}" data-title="${escape(r.title)}">Request</button>`
+      ? `<button class="request-btn${shelf ? " poster-request" : ""}"${shelf ? ` aria-label="Request ${escape(r.title)}" title="Request ${escape(r.title)}"` : ""} data-request data-media-type="${r.mediaType}" data-media-id="${r.id}" data-title="${escape(r.title)}">${shelf ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>' : "Request"}</button>`
       : `<span class="request-unavailable">${escape(state.requestAccess.reason || state.requestAccess[`${r.mediaType}Reason`] || "Requests disabled in Seerr")}</span>`;
-  return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}${watchedBadgeHtml(r)}</div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${includeContentRating ? `<span class="row-cert row-cert-pending" aria-hidden="true"></span>` : ""}</p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
+  return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}${watchedBadgeHtml(r)}</div>${shelf && action.startsWith("<button") ? action : ""}<h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${includeContentRating ? `<span class="row-cert row-cert-pending" aria-hidden="true"></span>` : ""}</p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}${shelf ? "" : `<div class="result-action">${action}</div>`}</article>`;
 }
 function renderSearch(results) {
   $("#search-results").innerHTML = results.length
@@ -1143,6 +1144,7 @@ for (const [container, status] of [
   ["#requests", "#global-error"],
 ]) {
   $(container).addEventListener("click", (event) => {
+    if (event.target.closest("[data-request]")) return;
     let card = event.target.closest("[data-detail-id]");
     // Search rows open the popup from anywhere on the row except the button.
     if (!card && container === "#search-results" && !event.target.closest("button, a"))
@@ -1150,6 +1152,7 @@ for (const [container, status] of [
     if (card) openMediaDetail(card, $(status));
   });
   $(container).addEventListener("keydown", (event) => {
+    if (event.target.closest("[data-request]")) return;
     const card = event.target.closest("[data-detail-id]");
     if (card && ["Enter", " "].includes(event.key)) {
       event.preventDefault();
@@ -1615,13 +1618,15 @@ async function requestFromButton(event) {
     const status =
       button.id === "episode-request"
         ? $("#episode-request-status")
-        : $("#search-status");
+        : button.closest("#recommendations-section") ? $("#recommendations-status") : button.closest("#popular-section") ? $("#popular-status") : $("#search-status");
     status.textContent = error.message;
     status.hidden = false;
   }
 }
 $("#search-section").addEventListener("click", requestFromButton);
 $("#episode-detail").addEventListener("click", requestFromButton);
+$("#popular-section").addEventListener("click", requestFromButton);
+$("#recommendations-section").addEventListener("click", requestFromButton);
 (async () => {
   const config = await api("/api/config");
   state.demo = config.demo;
