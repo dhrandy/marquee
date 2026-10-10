@@ -162,12 +162,14 @@
       <p>Display preferences are saved on this device, for this Jellyfin account.</p>
       <div class="settings-group" id="section-order-settings">
         <h3>Shelf order within tabs</h3>
-        <p>Drag the handles to arrange shelves within their tabs, top to bottom. Arrow buttons work too.</p>
+        <p>Each page has its own order. Drag the handles top to bottom, or use the arrow buttons.</p>
         <small>Saved to your Jellyfin account on the server, even when display sync is off. Discover and On Jellyfin keep their assigned shelves; dragging does not change tabs. Hidden sections keep their place. Search and weather share a row when side by side.</small>
-        <ol id="section-order-list" aria-label="Dashboard section order"></ol>
-        <div class="order-footer"><button id="reset-section-order" type="button">Reset order</button><span id="section-order-status" role="status"></span></div>
+        <div id="section-order-list"></div>
+        <div class="order-footer"><span id="section-order-status" role="status"></span></div>
       </div>
       <div id="feature-settings"></div>
+      <label class="setting">Poster size<select id="poster-size"><option value="small">Small</option><option value="standard">Standard</option><option value="large">Large</option></select></label>
+      <small>Applies to every poster shelf on this device. This choice stays on this device, even when display sync is on.</small>
       <label class="setting">Auto-refresh shelves<select id="shelf-refresh-minutes"><option value="0">Off</option><option value="1">Every minute</option><option value="2">Every 2 minutes</option><option value="5">Every 5 minutes</option><option value="10">Every 10 minutes</option><option value="15">Every 15 minutes</option></select></label>
       <small>Recently added, Continue watching and Next up refresh while this tab is visible. Updates wait while you're using cards or a popout. Hidden sections aren't polled.</small>
       <p id="shelf-refresh-status" role="status"></p>

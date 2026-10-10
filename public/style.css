@@ -1483,3 +1483,39 @@ main > #search-section .search-bar { max-width: 560px; }
 .page-nav button span { white-space: nowrap; }
 .page-nav button svg { flex-shrink: 0; }
 @media (max-width: 340px) { .page-nav { padding-left: 10px; padding-right: 10px; } .page-nav button { gap: 6px; padding-left: 5px; padding-right: 5px; font-size: 13px; } }
+
+.page-order-group { margin: 22px 0; padding: 16px; border: 1px solid var(--line); border-radius: 10px; }
+.page-order-group h4 { margin: 0 0 12px; font-size: 18px; color: var(--ink); }
+.page-order-group ol { list-style: none; padding: 0; margin: 0 0 12px; }
+#section-order-list .reset-page-order { width: auto; height: auto; padding: 8px 12px; font-size: 14px; }
+@media (max-width: 400px) { .page-order-group { padding: 10px; } }
+@media (max-width: 340px) {
+  #section-order-list li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 6px; }
+  #section-order-list .order-handle { grid-column: 1; grid-row: 1; width: 28px; min-width: 28px; }
+  #section-order-list .order-name { grid-column: 2; grid-row: 1; }
+  #section-order-list [data-order-move] { grid-row: 2; }
+  #section-order-list [data-order-move="-1"] { grid-column: 2; justify-self: start; }
+  #section-order-list [data-order-move="1"] { grid-column: 2; justify-self: start; margin-left: 44px; }
+}
+
+/* One responsive poster size across every horizontal shelf. */
+.poster-row, .popular-row { --shelf-card-width: calc((100% - 90px) / 6); --shelf-card-min: 150px; }
+.poster-row > .poster-card, .popular-row > .ranked-poster, #recommendations-content > .result-card { flex: 0 0 var(--shelf-card-width); min-width: var(--shelf-card-min); }
+@media (max-width: 1100px) { .poster-row, .popular-row { --shelf-card-width: calc((100% - 54px) / 4); } }
+@media (max-width: 600px) { .poster-row, .popular-row { --shelf-card-width: 44%; --shelf-card-min: 126px; gap: 13px; } }
+@media (max-width: 340px) { .poster-row, .popular-row { --shelf-card-width: 65%; } }
+@media (min-width: 1200px) { .poster-row, .popular-row { --shelf-card-width: calc((100% - 96px) / 7); --shelf-card-min: 0px; gap: 16px; } }
+
+#dashboard[data-poster-size="large"] .poster-row, #dashboard[data-poster-size="large"] .popular-row { --shelf-card-width: calc((100% - 72px) / 5); --shelf-card-min: 180px; }
+@media (min-width: 1200px) { #dashboard[data-poster-size="large"] .poster-row, #dashboard[data-poster-size="large"] .popular-row { --shelf-card-width: calc((100% - 80px) / 6); --shelf-card-min: 0px; } }
+@media (max-width: 1100px) { #dashboard[data-poster-size="large"] .poster-row, #dashboard[data-poster-size="large"] .popular-row { --shelf-card-width: calc((100% - 36px) / 3); } }
+@media (max-width: 600px) { #dashboard[data-poster-size="large"] .poster-row, #dashboard[data-poster-size="large"] .popular-row { --shelf-card-width: 60%; --shelf-card-min: 150px; } }
+@media (max-width: 340px) { #dashboard[data-poster-size="large"] .poster-row, #dashboard[data-poster-size="large"] .popular-row { --shelf-card-width: 80%; } }
+
+#dashboard[data-poster-size="small"] .poster-row, #dashboard[data-poster-size="small"] .popular-row { --shelf-card-width: calc((100% - 126px) / 8); --shelf-card-min: 120px; }
+@media (min-width: 1200px) { #dashboard[data-poster-size="small"] .poster-row, #dashboard[data-poster-size="small"] .popular-row { --shelf-card-width: calc((100% - 128px) / 9); --shelf-card-min: 0px; } }
+@media (max-width: 1100px) { #dashboard[data-poster-size="small"] .poster-row, #dashboard[data-poster-size="small"] .popular-row { --shelf-card-width: calc((100% - 72px) / 5); } }
+@media (max-width: 600px) { #dashboard[data-poster-size="small"] .poster-row, #dashboard[data-poster-size="small"] .popular-row { --shelf-card-width: 34%; --shelf-card-min: 100px; } }
+@media (max-width: 340px) { #dashboard[data-poster-size="small"] .poster-row, #dashboard[data-poster-size="small"] .popular-row { --shelf-card-width: 44%; } }
+/* Personal shelf buttons must not inset the poster with generic button padding. */
+.personal-section .poster-link { display: block; width: 100%; padding: 0; border: 0; background: transparent; text-align: left; }

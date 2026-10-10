@@ -1991,7 +1991,7 @@ for (const width of [1440, 393]) {
     await page.locator("#watchlist-section").getByRole("button", { name: "Collapse Watchlist" }).click();
     await expect(page.locator("#watchlist-content")).toBeHidden();
     await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.getByRole("button", { name: "Reset order", exact: true }).click();
+    await page.getByRole("button", { name: "Reset Discover order", exact: true }).click();
     await expect(page.locator("#section-order-list li").first()).toHaveAttribute("data-order-key", "search");
     await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
   });
@@ -2014,7 +2014,7 @@ test("section ordering keeps separated search/weather and saves touch drag", asy
   await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: to.x + 15, y: to.y + 15 }] });
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
-  expect((await (await page.request.get("/api/section-order")).json()).order.indexOf("weather")).toBe(6);
+  expect((await (await page.request.get("/api/section-order")).json()).order.filter(key => ["search", "weather", "recent", "calendar", "recommendations", "popular"].includes(key)).indexOf("weather")).toBe(3);
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(page.locator(".home-top-row")).toBeHidden();
   expect(await page.locator("#weather").evaluate(el => el.parentElement.tagName)).toBe("MAIN");
@@ -2022,7 +2022,7 @@ test("section ordering keeps separated search/weather and saves touch drag", asy
   await page.locator("#weather").scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${shots}/marquee-order-weather-separated.png` });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("button", { name: "Reset order", exact: true }).click();
+  await page.getByRole("button", { name: "Reset Discover order", exact: true }).click();
   await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(page.locator(".home-top-row")).toBeVisible();
@@ -2394,3 +2394,87 @@ test("Home refreshes its active personal shelves without polling Discover", asyn
   await page.clock.runFor(75000);
   await expect.poll(() => personal).toBeGreaterThanOrEqual(2); expect(recent).toBe(0);
 });
+
+for (const width of [1440, 393, 280]) {
+  test(`page-specific shelf ordering preserves the other page at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 }); await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    const keys = pageName => page.locator(`[data-order-page="${pageName}"] li`).evaluateAll(rows => rows.map(row => row.dataset.orderKey));
+    const discover = await keys("discover"), home = await keys("home");
+    expect(discover).toHaveLength(6); expect(home).toHaveLength(5);
+    await page.getByRole("button", { name: "Move Continue watching up", exact: true }).click();
+    expect(await keys("discover")).toEqual(discover);
+    expect((await keys("home"))[0]).toBe("continueWatching");
+    await page.getByRole("button", { name: "Move Release calendar up", exact: true }).click();
+    const changedDiscover = await keys("discover"); expect(changedDiscover).not.toEqual(discover);
+    await page.getByRole("button", { name: "Reset On Jellyfin order", exact: true }).click();
+    expect(await keys("home")).toEqual(home); expect(await keys("discover")).toEqual(changedDiscover);
+    await expect(page.locator('[data-order-page="home"] [data-order-key="watchlist"] [data-order-move="-1"]')).toBeDisabled();
+    await expect(page.locator('[data-order-page="discover"] [data-order-key="search"] [data-order-move="-1"]')).toBeDisabled();
+    await page.locator('[data-order-page="discover"]').screenshot({ path: `${shots}/marquee-order-discover-${width}.png` });
+    await page.locator('[data-order-page="home"]').screenshot({ path: `${shots}/marquee-order-jellyfin-${width}.png` });
+    expect(await page.locator("#settings").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.getByRole("button", { name: "Close settings" }).click(); await page.reload();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    expect(await keys("home")).toEqual(home); expect(await keys("discover")).toEqual(changedDiscover);
+  });
+}
+
+for (const width of [1440, 834, 393, 360, 280]) {
+  test(`twenty recommendations keep readable poster widths at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.route("**/api/recommendations", route => route.fulfill({ json: { seed: "Cops", items: Array.from({ length: 20 }, (_, i) => ({ id: 200 + i, mediaType: "tv", title: ["Rob Dyrdek's Fantasy Factory", "Counting Cars International", "Married at First Sight"][i % 3], year: String(2009 + i), rating: { value: 7.8, source: "TMDB" }, poster: ["north", "signal", "orbit"][i % 3], availability: i === 0 ? 5 : i === 1 ? 3 : 1 })) } }));
+    await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[data-pref="recommendations"]').check(); await page.getByRole("button", { name: "Close settings" }).click();
+    const row = page.locator("#recommendations-content"), cards = row.locator(".result-card");
+    await expect(cards).toHaveCount(20);
+    await expect(row.locator(".media-rating")).toHaveCount(20);
+    const recommendationPoster = await cards.first().locator(".poster-art").boundingBox();
+    const popularPoster = await page.locator("#popular-movies .poster-art").first().boundingBox();
+    expect(Math.abs(recommendationPoster.width - popularPoster.width)).toBeLessThan(1);
+    expect(Math.abs(recommendationPoster.height - popularPoster.height)).toBeLessThan(1);
+    const recentPoster = await page.locator("#recent .poster-art").first().boundingBox();
+    expect(Math.abs(recommendationPoster.width - recentPoster.width)).toBeLessThan(1);
+    expect(Math.abs(recommendationPoster.height - recentPoster.height)).toBeLessThan(1);
+    const boxes = await cards.evaluateAll(els => els.map(el => ({ left: el.getBoundingClientRect().left, right: el.getBoundingClientRect().right, width: el.getBoundingClientRect().width })));
+    for (let i = 0; i < boxes.length; i++) { expect(boxes[i].width).toBeGreaterThanOrEqual(140); if (i) expect(boxes[i].left).toBeGreaterThan(boxes[i-1].right); }
+    expect(await row.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.locator("#recommendations-section").screenshot({ path: `${shots}/marquee-recommendations-full-${width}.png` });
+    await row.evaluate(el => el.scrollLeft = el.scrollWidth); await expect(cards.last()).toBeInViewport();
+  });
+}
+
+for (const width of [1440, 834, 393, 280]) {
+  test(`poster sizes are consistent and device-only at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 }); await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    for (const key of ["continueWatching", "nextUp", "recommendations", "leavingSoon"]) await page.locator(`[data-pref="${key}"]`).check();
+    await page.locator("#sync-display").check();
+    let previous = 0;
+    for (const size of ["small", "standard", "large"]) {
+      await page.locator("#poster-size").selectOption(size);
+      await page.getByRole("button", { name: "Close settings" }).click();
+      await view(page, "discover");
+      await expect(page.locator("#recommendations-content .result-card").first()).toBeVisible();
+      const bounds = selector => page.locator(selector).first().boundingBox();
+      const recent = await bounds("#recent .poster-art"); expect(recent.width).toBeGreaterThan(previous); previous = recent.width;
+      for (const selector of ["#recommendations-content .poster-art", "#popular-movies .poster-art", "#popular-tv .poster-art"]) {
+        const box = await bounds(selector); expect(Math.abs(box.width - recent.width)).toBeLessThan(1); expect(Math.abs(box.height - recent.height)).toBeLessThan(1);
+      }
+      await page.locator("#recent-section").screenshot({ path: `${shots}/marquee-poster-${size}-${width}.png` });
+      await view(page, "home");
+      for (const selector of ["#continueWatching-content .poster-art", "#nextUp-content .poster-art", "#leavingSoon-content .poster-art"]) {
+        const box = await bounds(selector); expect(Math.abs(box.width - recent.width)).toBeLessThan(1); expect(Math.abs(box.height - recent.height)).toBeLessThan(1);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
+    }
+    await expect.poll(async () => (await (await page.request.get("/api/display-preferences")).json()).preferences?.firstTab).toBe("discover");
+    expect((await (await page.request.get("/api/display-preferences")).json()).preferences).not.toHaveProperty("posterSize");
+    await page.getByRole("button", { name: "Close settings" }).click(); await page.reload();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.locator("#poster-size")).toHaveValue("large");
+    await page.locator("#poster-size").screenshot({ path: `${shots}/marquee-poster-size-settings-${width}.png` });
+  });
+}
