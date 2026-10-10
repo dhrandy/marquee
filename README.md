@@ -27,6 +27,11 @@ During beta, updates are manual. Pull the latest image yourself when updating an
 
 ## Features
 
+- Optional private Watchlist saves movies and shows for later without sending a Seerr request. Save from a Seerr title popup; watchlist entries are stored per Jellyfin account in the settings volume and follow you across devices.
+- Continue watching and Next up shelves use the signed-in user's Jellyfin viewing history and library permissions. Continue watching shows progress and minutes remaining; its link opens that exact item's Jellyfin page to resume. Next up excludes resumable/rewatched episodes. Both shelves and Watchlist start hidden; enable them in Settings. Each shelf can collapse independently.
+- Display-settings sync is opt-in on each device. Enabling uses account settings when available, otherwise uploads the current device's section toggles, collapse choices and calendar view. Disabling keeps that device's current choices. Weather/colorblind keep their existing server-side behavior; credentials and device location are never in display sync.
+
+
 - Seerr access matches the signed-in Jellyfin ID to an imported Seerr user. Movie/TV permissions and quotas come from Seerr. No allowlist. Requests use the server API key with the verified user ID override; TV requests include all requestable seasons. Ask a Seerr admin to import your Jellyfin user if no match exists. Names and email addresses are never used for matching.
 
 - Jellyfin username and password login gates all media APIs.
@@ -41,7 +46,7 @@ During beta, updates are manual. Pull the latest image yourself when updating an
 - Click a TV calendar entry for episode details: a complete poster beside the title with dimmed, softened backdrop artwork when supplied, a softened poster fallback, or a solid background if no artwork is available, show/year, episode title, network, runtime, genres and overview. The trailer button opens a clearly labeled YouTube search, not an unverified video. Upcoming season premieres are yellow, regular upcoming episodes white, available green, missing red; cinemas remain blue.
 - Sunday-first calendar, today highlight, previous/next period, refresh, and type/status filters. An optional hide-unmonitored filter drops unmonitored Sonarr/Radarr entries. Movies can appear twice: cinema and digital/physical releases are separate entries.
 - Green: available file. Red: release has passed but the file is missing. Yellow: season premiere. White: upcoming TV. Gray: unreleased movie.
-- Optional current weather and three-day forecast, off by default. Choose a city and Fahrenheit/Celsius in Settings, saved server-side per Jellyfin account. Refreshes every 15 minutes while visible, catches up when a stale tab becomes visible, and joins the Refresh button. Open-Meteo weather and city search are free for non-commercial use, with no API key or account.
+- Optional current weather and three-day forecast with condition icons, off by default. Wide screens share equal search/weather columns; smaller screens stack. Location names are kept in Settings, not on the weather display. An optional device-location setting requests browser permission over HTTPS, rounds coordinates to about 1km, and falls back to the saved city if denied/unavailable. Coordinates go through Marquee to Open-Meteo for forecasts and are not stored in account settings or synced. Choose a city and Fahrenheit/Celsius in Settings, saved server-side per Jellyfin account. Refreshes every 15 minutes while visible, catches up when a stale tab becomes visible, and joins the Refresh button. Open-Meteo weather and city search are free for non-commercial use, with no API key or account.
 - Jellyfin administrators can change the shared display name in Settings. It defaults to Marquee and survives container restarts.
 - Top 10 popular movies and TV shows come from Seerr, with request/availability indicators based on its latest library scan. Talk shows are excluded from the TV ranking and later popular results backfill the list. Both poster rows can be collapsed with the inline chevron or hidden entirely in Settings. Desktop hover and keyboard focus highlight posters. Click a search-result or top-10 poster for its details, network/studio, overview and trailer search; the request action stays on its card.
 - A quiet "Requests" section lists recent requests from everyone with requester display names, never emails. Reads retain the linked Seerr user: Seerr users need View Requests or Manage Requests permission to see other users' requests; otherwise Seerr returns only their own. No badges, no counts.
@@ -68,10 +73,10 @@ docker compose up -d
 
 Open the configured port through an HTTPS reverse proxy. `COOKIE_SECURE=true` requires HTTPS. For a local HTTP demo only, set `DEMO_MODE=true` and `COOKIE_SECURE=false`.
 
-Sign-ins are stored in an encrypted cookie, so they survive container restarts and recreates. `SESSION_SECRET` is optional: left empty, Marquee generates a secret once and keeps it in its data volume (`MARQUEE_DATA_DIR`). Set it yourself (32+ random characters) if the data volume is not persistent or you run several instances; changing it signs everyone out. Sessions last 8 hours. Sign out also ends the Jellyfin login the cookie carried.
+Each new sign-in uses a separate Jellyfin device identity, so another browser signing in does not revoke it. Sign-ins are stored in an encrypted cookie, so they survive container restarts and recreates. `SESSION_SECRET` is optional: left empty, Marquee generates a secret once and keeps it in its data volume (`MARQUEE_DATA_DIR`). Set it yourself (32+ random characters) if the data volume is not persistent or you run several instances; changing it signs everyone out. Sessions last 8 hours. Sign out also ends the Jellyfin login the cookie carried.
 
 
-The initial beta copies the mounted source into a temporary writable container directory and installs the locked production dependencies at startup. This needs internet access to the package registry. Sessions live in memory, so a restart signs users out. The `marquee-settings` volume keeps the administrator-set display name and per-user weather/colorblind preferences across container restarts. Other display preferences remain on the current device. Do not delete the settings volume when upgrading.
+The initial beta copies the mounted source into a temporary writable container directory and installs the locked production dependencies at startup. This needs internet access to the package registry. Encrypted sessions survive restart when the settings volume is kept. The `marquee-settings` volume keeps the administrator-set display name and per-user weather/colorblind preferences across container restarts. Other display preferences remain on the current device. Do not delete the settings volume when upgrading.
 
 ### CasaOS or standalone stack (no clone needed)
 
@@ -86,7 +91,7 @@ This is the easiest option for CasaOS, Dockhand, or another stack manager. You d
 
 You only need to edit the settings above. The commented startup steps download Marquee, install its runtime packages, and start it automatically. Your server needs internet access to GitHub and npm during startup. If a download fails, startup stops rather than running an incomplete app.
 
-**Updates:** restart or recreate the stack to download the latest beta. A running app does not update itself. Restarting signs users out.
+**Updates:** restart or recreate the stack to download the latest beta. A running app does not update itself. Restarting keeps existing sign-ins when the settings volume and session secret are unchanged.
 
 **Saved settings:** they stay in `/DATA/AppData/marquee/settings`. Keep that folder when updating. The small `marquee-init` helper prepares it for the app. Seeing this helper show `Exited (0)` is normal; the main `marquee` service should stay running. If you change the settings path, change it in both services.
 
@@ -346,7 +351,7 @@ Movie dates prefer digital release, then physical release, then cinema release. 
 
 The recent Jellyfin shelf and Seerr request list are per-user. **The Sonarr/Radarr calendar is shared among all signed-in viewers.** Seerr search runs as the linked user and the request list shows only that user's requests. They may include titles a viewer cannot access in Jellyfin. Do not deploy for untrusted users without a calendar permission layer. Seerr requesting follows the linked user's own movie/TV permissions and quotas; the Seerr API key never reaches the browser. Request-list titles are resolved through Seerr's movie/TV metadata API using the linked user. If metadata is temporarily unavailable, the request status remains visible with its TMDB id.
 
-Passwords are sent to Jellyfin and are not stored or logged. Jellyfin access tokens and opaque sessions stay in server memory. Cookies are HttpOnly, SameSite Strict, secure by default, and expire after eight hours. Sign-out removes the local session. It does not revoke the Jellyfin access token upstream; server restarts drop stored tokens.
+Passwords are sent to Jellyfin and are not stored or logged. Jellyfin access tokens are encrypted inside the HttpOnly session cookie, never exposed to page scripts. Cookies are HttpOnly, SameSite Strict, secure by default, and expire after eight hours. Sign-out removes the local session. Sign-out also ends the Jellyfin token upstream; normal server restarts keep encrypted sign-ins valid.
 
 Media APIs and image proxies require a session. Images are limited to item IDs returned for that viewer. API keys never go to the browser. Service URLs are administrator configuration, not user-editable request destinations. Login is rate-limited per client IP. Forwarded client IPs are used through the strict `TRUSTED_PROXIES` allowlist or opt-in `TRUST_PROXY=1` for isolated single-proxy deployments. Both default off; otherwise only the direct socket IP is trusted. Authenticated API traffic is capped at 240 calls per user per minute (weather/city search at 30). Image downloads are bounded while streaming; remote calendar art permits only fixed HTTPS TVDB/TMDB hosts without credentials, ports or redirects. The app rejects cross-origin writes, escapes media titles, sends security headers, and blocks indexing with a robots rule and headers. These do not replace authentication.
 

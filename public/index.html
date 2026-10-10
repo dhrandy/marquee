@@ -49,6 +49,7 @@
       </header>
       <main>
         <p id="global-error" role="alert" hidden></p>
+        <div class="home-top-row">
         <section id="search-section">
           <div class="section-heading">
             <div><span class="eyebrow">FIND SOMETHING TO WATCH</span><h2>Search and request</h2></div>
@@ -69,6 +70,8 @@
           </div>
           <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather by Open-Meteo</a>
         </section>
+        </div>
+        <section id="personal-shelves"></section>
         <section id="recent-section">
           <div class="section-heading">
             <div><span class="eyebrow">FRESH ON THE SHELF</span><h1>Recently added</h1></div>
@@ -162,6 +165,9 @@
           <option value="list">List</option>
         </select>
       </label>
+      <label class="setting">Sync display settings across devices (opt-in)<input type="checkbox" id="sync-display" /></label>
+      <small>When enabled on this device, section toggles, collapsed shelves and calendar view follow your Jellyfin account. Enabling uses your saved account preferences if present; otherwise uploads this device's choices. Disabling keeps this device's current choices.</small>
+      <p id="sync-display-status" role="status"></p>
       <div class="settings-group" id="weather-settings">
         <h3>Weather</h3>
         <p>Free weather and city search from Open-Meteo. No key or account needed.</p>
@@ -169,6 +175,9 @@
         <div class="settings-input-row"><input id="weather-city-query" maxlength="100" placeholder="City name" autocomplete="off" /><button id="weather-city-search">Find city</button></div>
         <div id="weather-city-results" class="city-results"></div>
         <p id="weather-city-selected">No city selected</p>
+        <label class="setting">Use this device's location (off by default)<input type="checkbox" id="weather-location" /></label>
+        <p id="weather-location-status" role="status"></p>
+        <small>Optional browser permission. Approximate coordinates go to Marquee and Open-Meteo for weather, not into saved account settings. Your selected city is the fallback. Requires HTTPS.</small>
         <label class="setting">Temperature units<select id="weather-units"><option value="fahrenheit">Fahrenheit (°F)</option><option value="celsius">Celsius (°C)</option></select></label>
         <p id="weather-settings-status" role="status"></p>
         <small>Saved server-side for your Jellyfin account across devices. City searches and chosen coordinates are sent to Open-Meteo.</small>
@@ -195,7 +204,7 @@
     </dialog>
     <dialog id="episode-detail" aria-labelledby="episode-title">
       <div class="episode-surface"><img id="episode-backdrop" alt="" hidden /><div class="episode-hero"><div class="episode-poster-wrap"><img id="episode-poster" alt="" hidden /><div id="episode-poster-status"></div></div><div class="episode-heading"><h2 id="episode-title"></h2><p id="episode-subtitle"></p><p id="episode-meta-top" class="episode-meta" aria-hidden="true"></p><div id="episode-genres-top" aria-hidden="true"></div><p id="episode-overview-top"></p><button type="button" id="episode-more" hidden aria-expanded="false">More</button></div><button id="episode-close" aria-label="Close episode details"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" /></svg></button></div>
-      <div class="episode-body"><span id="episode-content-rating" class="content-rating" hidden></span><div id="episode-genres"></div><p id="episode-meta" class="episode-meta"></p><p id="episode-rating" class="media-rating" hidden></p><p id="episode-cast" hidden></p><p id="episode-overview"></p><section id="episode-facts" aria-label="Title facts" hidden></section><div class="episode-actions"><button id="episode-request" hidden>Request</button><a id="episode-play" target="_blank" rel="noopener noreferrer" hidden>Play in Jellyfin ↗</a><a id="episode-trailer" target="_blank" rel="noopener noreferrer" aria-label="Find trailer on YouTube" title="Find trailer on YouTube"><img src="/icons/youtube.svg" alt="" aria-hidden="true" width="32" height="22"></a></div><p id="episode-request-status" role="status" hidden></p></div></div>
+      <div class="episode-body"><span id="episode-content-rating" class="content-rating" hidden></span><div id="episode-genres"></div><p id="episode-meta" class="episode-meta"></p><p id="episode-rating" class="media-rating" hidden></p><p id="episode-cast" hidden></p><p id="episode-overview"></p><section id="episode-facts" aria-label="Title facts" hidden></section><div class="episode-actions"><button id="episode-request" hidden>Request</button><button id="episode-save" hidden>Save to watchlist</button><a id="episode-play" target="_blank" rel="noopener noreferrer" hidden>Play in Jellyfin ↗</a><a id="episode-trailer" target="_blank" rel="noopener noreferrer" aria-label="Find trailer on YouTube" title="Find trailer on YouTube"><img src="/icons/youtube.svg" alt="" aria-hidden="true" width="32" height="22"></a></div><p id="episode-request-status" role="status" hidden></p></div></div>
     </dialog>
     <dialog id="request-dialog" aria-labelledby="request-title">
       <form id="request-form" method="dialog">

@@ -1,4 +1,5 @@
 import express from "express";
+import { cleanDisplayPreferences } from "./personal.js";
 import { proxyTrust, allowedOrigin } from "./security.js";
 import crypto from "node:crypto";
 import path from "node:path";
@@ -8,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
   authenticate,
   recentItems,
+  personalItems,
   calendar,
   jellyfinHeaders,
   seerrSearch,
@@ -115,7 +117,7 @@ app.use((req, res, next) => {
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
     "X-Robots-Tag": "noindex, nofollow",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(self)",
   });
   if (secure) res.set("Strict-Transport-Security", "max-age=31536000");
   if (req.path.startsWith("/api/")) res.set("Cache-Control", "no-store");
@@ -228,7 +230,7 @@ app.post("/api/logout", requireUser, async (req, res) => {
     try {
       await upstream(process.env.JELLYFIN_URL, "/Sessions/Logout", {
         method: "POST",
-        headers: jellyfinHeaders(req.user.token),
+        headers: jellyfinHeaders(req.user.token, req.user.deviceId),
       });
     } catch {}
   }
@@ -341,6 +343,44 @@ app.get("/api/me", requireUser, async (req, res) => {
       ? null
       : safeWebUrl(process.env.JELLYFIN_WEB_URL || process.env.JELLYFIN_URL),
   });
+});
+// Account-scoped personal data uses verified Jellyfin IDs, never supplied user IDs.
+const personalKey = user => demo ? user.sid : user.id;
+app.get("/api/display-preferences", requireUser, (req, res) => {
+  res.json({ preferences: savedSettings.displayByUser?.[personalKey(req.user)] || null });
+});
+app.post("/api/display-preferences", requireUser, async (req, res) => {
+  const preferences = cleanDisplayPreferences(req.body);
+  if (!preferences) return res.status(400).json({ error: "Choose valid display preferences." });
+  try {
+    await saveSettings(current => ({ ...current, displayByUser: { ...current.displayByUser, [personalKey(req.user)]: preferences } }));
+    res.json({ preferences });
+  } catch { res.status(500).json({ error: "Could not sync settings. Check the settings volume is writable." }); }
+});
+app.get("/api/watchlist", requireUser, (req, res) => {
+  res.json({ items: savedSettings.watchlistByUser?.[personalKey(req.user)] || [] });
+});
+app.post("/api/watchlist", requireUser, async (req, res) => {
+  const { mediaType, mediaId, saved } = req.body;
+  if (!["movie", "tv"].includes(mediaType) || !Number.isSafeInteger(mediaId) || mediaId <= 0 || typeof saved !== "boolean")
+    return res.status(400).json({ error: "Choose a valid movie or TV show." });
+  try {
+    let item;
+    if (saved) {
+      const access = await requestAccess(req.user);
+      if (access.error) return res.status(403).json({ error: access.error });
+      const detail = demo ? { title: "Demo watchlist title", year: "2026", poster: "/art/north.svg", overview: "Saved for later, without requesting." } : await seerrDetails(mediaType, mediaId, access.id);
+      item = { mediaType, mediaId, title: detail.title, year: detail.year || "", poster: detail.poster || null, overview: detail.overview || "" };
+    }
+    await saveSettings(current => {
+      const existing = current.watchlistByUser?.[personalKey(req.user)] || [];
+      const items = existing.filter(i => i.mediaType !== mediaType || i.mediaId !== mediaId);
+      if (saved && items.length >= 200) throw new Error("limit");
+      if (saved) items.unshift(item);
+      return { ...current, watchlistByUser: { ...current.watchlistByUser, [personalKey(req.user)]: items } };
+    });
+    res.json({ items: savedSettings.watchlistByUser[personalKey(req.user)] });
+  } catch (error) { res.status(error.message === "limit" ? 400 : 502).json({ error: error.message === "limit" ? "Your watchlist holds up to 200 titles. Remove one first." : "Could not update your watchlist. Try again." }); }
 });
 app.get("/api/weather-settings", requireUser, (req, res) => {
   const value = savedSettings.weatherByUser[demo ? req.user.sid : req.user.id];
@@ -768,6 +808,14 @@ app.get("/api/seerr/image", requireUser, async (req, res) => {
     res.sendStatus(502);
   }
 });
+app.get("/api/personal/:kind", requireUser, async (req, res) => {
+  if (!["continueWatching", "nextUp"].includes(req.params.kind)) return res.sendStatus(404);
+  try {
+    const items = demo ? (req.params.kind === "nextUp" ? titles.filter(item => item.type === "tv") : titles).slice(0, 3).map((item, index) => ({ ...item, progress: req.params.kind === "continueWatching" ? 30 + index * 20 : 0, remaining: 25 + index * 8 })) : await personalItems(req.user, req.params.kind);
+    for (const item of items) if (item.image) req.user.state.allowedImages.add(item.id);
+    res.json({ items });
+  } catch { res.status(502).json({ error: "Your viewing history could not be loaded from Jellyfin." }); }
+});
 app.get("/api/recent", requireUser, async (req, res) => {
   try {
     const items = demo ? titles : await recentItems(req.user);
@@ -776,10 +824,13 @@ app.get("/api/recent", requireUser, async (req, res) => {
       if (item.backdropId) req.user.state.allowedImages.add(item.backdropId);
     }
     res.json({ items });
-  } catch {
-    res
-      .status(502)
-      .json({ error: "Recently added could not be loaded from Jellyfin." });
+  } catch (error) {
+    if (/HTTP 401/.test(error.message)) {
+      sessions.revoke(req.user.sid, req.user.expires);
+      cookie(res, "", 0);
+      return res.status(401).json({ error: "Jellyfin ended this sign-in. Please sign in again." });
+    }
+    res.status(502).json({ error: `Recently added could not be loaded from Jellyfin. ${error.message}` });
   }
 });
 app.get("/api/image/:id", requireUser, async (req, res) => {
@@ -794,7 +845,7 @@ app.get("/api/image/:id", requireUser, async (req, res) => {
     const response = await fetch(
       `${process.env.JELLYFIN_URL.replace(/\/$/, "")}/Items/${req.params.id}/Images/${type}?maxWidth=${type === "Backdrop" ? 900 : 420}&quality=85`,
       {
-        headers: jellyfinHeaders(req.user.token),
+        headers: jellyfinHeaders(req.user.token, req.user.deviceId),
         signal: AbortSignal.timeout(10000),
         redirect: "error",
       },
@@ -987,6 +1038,7 @@ app.get("/api/weather", requireUser, weatherLimit, async (req, res) => {
       current_units: { temperature_2m: celsius ? "°C" : "°F" },
       daily: {
         time: ["2026-10-07", "2026-10-08", "2026-10-09"],
+        weather_code: [2, 3, 61],
         temperature_2m_max: celsius ? [22, 23, 22] : [72, 74, 71],
         temperature_2m_min: celsius ? [12, 13, 11] : [54, 56, 52],
       },
@@ -1000,7 +1052,7 @@ app.get("/api/weather", requireUser, weatherLimit, async (req, res) => {
       latitude,
       longitude,
       current: "temperature_2m,weather_code",
-      daily: "temperature_2m_max,temperature_2m_min",
+      daily: "temperature_2m_max,temperature_2m_min,weather_code",
       forecast_days: "3",
       timezone: "auto",
       temperature_unit: units,

@@ -1343,3 +1343,41 @@ button[aria-label="Close settings"]:hover { background: #b9a3f7; }
 @media (max-width: 600px) {
   .weather { gap: 8px; }
 }
+
+/* Each visible section owns one divider. Hidden wrappers leave no line. */
+main > section:not([hidden]), .personal-section:not([hidden]) {
+  border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 28px;
+}
+#personal-shelves { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+#popular-wrap .popular-section { border-top: 0; padding-top: 0; }
+#popular-wrap, #requests-section { margin-top: 0; }
+.calendar-heading { margin-top: 0; }
+.home-top-row { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+.home-top-row:has(#search-section[hidden]):has(#weather[hidden]) { display: none; }
+.home-top-row #search-section { margin-bottom: 0; }
+.home-top-row .weather { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+.home-top-row #search-section:not([hidden]) + .weather:not([hidden]) { margin-top: 28px; }
+.forecast-icon { width: 24px; height: 24px; color: #d7c6ff; flex: 0 0 auto; }
+@media (min-width: 1100px) {
+  .home-top-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; padding-bottom: 32px; margin-bottom: 32px; }
+  .home-top-row #search-section { max-width: none; }
+  .home-top-row #search-section .search-bar { max-width: 560px; }
+  .home-top-row #search-section .section-heading { margin-bottom: 24px; }
+  .home-top-row .weather { flex-direction: column; align-items: center; text-align: center; justify-content: center; gap: 0; }
+  .home-top-row .weather h2 { font-size: 31px; margin: 8px 0 16px; }
+  .home-top-row .weather-forecast { justify-content: center; gap: 24px; margin-top: 0; font-size: 14px; min-height: 40px; align-items: center; }
+  .home-top-row .forecast-day { display: grid; grid-template-columns: auto; justify-items: center; gap: 4px; }
+  .home-top-row .weather a { margin-top: 8px; }
+  .home-top-row #search-section:not([hidden]) + .weather:not([hidden]) { margin-top: 0; }
+  .home-top-row:has(#search-section[hidden]), .home-top-row:has(#weather[hidden]) { grid-template-columns: minmax(0, 1fr); }
+}
+@media (min-width: 601px) and (max-width: 1099px) { .forecast-day { flex-wrap: wrap; } }
+.personal-section { margin-bottom: 28px; }
+.personal-collapse { font-size: 24px; width: 36px; height: 36px; padding: 0; }
+.personal-section progress { width: 100%; height: 6px; margin: 10px 0 4px; accent-color: var(--purple); }
+.watchlist-remove { margin-top: 10px; }
+#personal-shelves:empty, #sync-display-status:empty { display: none; }
+
+@media (max-width: 1099px) {
+  .home-top-row:has(#weather:not([hidden])) #search-section:not([hidden]) { border-bottom: 1px solid var(--line); padding-bottom: 28px; }
+}

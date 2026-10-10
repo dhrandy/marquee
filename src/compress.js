@@ -31,6 +31,8 @@ export function compress() {
       if (skip) return;
       gzip = zlib.createGzip({ level: 6 });
       gzip.on("data", (chunk) => write(chunk));
+      // Express streams wait for drain on the response when our gzip buffer fills.
+      gzip.on("drain", () => res.emit("drain"));
       gzip.on("end", () => end());
       res.setHeader("Content-Encoding", "gzip");
       res.removeHeader("Content-Length");

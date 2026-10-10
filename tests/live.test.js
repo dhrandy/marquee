@@ -7,6 +7,7 @@ import http from "node:http";
 import { spawn } from "node:child_process";
 
 const calls = [];
+const authDeviceIds = [];
 let maliciousArtwork = null;
 const service = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
@@ -18,6 +19,7 @@ const service = http.createServer(async (req, res) => {
   });
   res.setHeader("Content-Type", "application/json");
   if (url.pathname === "/Users/AuthenticateByName") {
+    authDeviceIds.push(/DeviceId="([^"]+)"/.exec(req.headers.authorization)?.[1]);
     let body = "";
     for await (const chunk of req) body += chunk;
     const { Username, Pw } = JSON.parse(body);
@@ -36,14 +38,26 @@ const service = http.createServer(async (req, res) => {
       }),
     );
   }
+  if (/^\/Users\/[^/]+\/Items\/Resume$/.test(url.pathname) || url.pathname === "/Shows/NextUp") {
+    const user = url.searchParams.get("UserId");
+    assert.ok(req.headers.authorization.includes(`token-${user}`));
+    if (url.pathname === "/Shows/NextUp") {
+      assert.equal(url.searchParams.get("EnableResumable"), "false");
+      assert.equal(url.searchParams.get("EnableRewatching"), "false");
+    }
+    return res.end(JSON.stringify({ Items: [{ Id: `episode-${user}`, SeriesId: `series-${user}`, SeriesName: `Personal ${user}`, Name: "The next episode", Type: "Episode", ParentIndexNumber: 1, IndexNumber: 2, RunTimeTicks: 24000000000, UserData: { PlaybackPositionTicks: 12000000000 }, ImageTags: { Primary: "tag" } }] }));
+  }
   if (url.pathname === "/Items") {
+    if (url.searchParams.get("UserId") === "revoked-viewer") { res.writeHead(401); return res.end("{}"); }
     const user = url.searchParams.get("UserId");
     if (!req.headers.authorization?.includes(`token-${user}`)) {
       res.writeHead(403);
       return res.end("{}");
     }
-    if (url.searchParams.has("ParentId"))
+    if (url.searchParams.has("ParentId")) {
+      if (user === "count-failure-viewer") { res.writeHead(500); return res.end("{}"); }
       return res.end(JSON.stringify({ TotalRecordCount: 4 }));
+    }
     if (user === "physical-viewer") {
       assert.equal(url.searchParams.get("ExcludeLocationTypes"), "Virtual");
       assert.equal(url.searchParams.get("IsMissing"), "false");
@@ -1118,6 +1132,48 @@ try {
       ).status,
       400,
     );
+  });
+  await test("recent shelf tolerates count failures and rejected Jellyfin tokens require a clear sign-in", async () => {
+    const countCookie = (await signin("count-failure-viewer")).headers.get("set-cookie");
+    const shelf = await fetch(`${base}/api/recent`, { headers: { Cookie: countCookie } });
+    assert.equal(shelf.status, 200);
+    assert.ok((await shelf.json()).items.length > 0);
+    const revoked = (await signin("revoked-viewer")).headers.get("set-cookie");
+    const denied = await fetch(`${base}/api/recent`, { headers: { Cookie: revoked } });
+    assert.equal(denied.status, 401);
+    assert.match((await denied.json()).error, /Jellyfin ended this sign-in/);
+    assert.equal((await fetch(`${base}/api/me`, { headers: { Cookie: revoked } })).status, 401);
+  });
+  await test("sign-ins use separate Jellyfin device identities", async () => {
+    const start = authDeviceIds.length;
+    await signin("alice"); await signin("alice");
+    assert.equal(new Set(authDeviceIds.slice(start)).size, 2);
+    assert.ok(authDeviceIds.slice(start).every(id => id.startsWith("marquee-")));
+  });
+  await test("personal shelves, watchlist and synced display preferences stay account scoped", async () => {
+    const alice = (await signin("alice")).headers.get("set-cookie");
+    const bob = (await signin("bob")).headers.get("set-cookie");
+    const get = async (path, cookie) => (await fetch(`${base}${path}`, { headers: { Cookie: cookie } })).json();
+    const post = async (path, cookie, body) => fetch(`${base}${path}`, { method: "POST", headers: { Origin: base, Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    for (const kind of ["continueWatching", "nextUp"]) {
+      const data = await get(`/api/personal/${kind}`, alice);
+      assert.equal(data.items[0].title, "Personal alice");
+      assert.equal(data.items[0].progress, 50);
+      assert.equal(data.items[0].remaining, 20);
+      if (data.items[0].link) assert.match(data.items[0].link, /episode-alice/);
+    }
+    assert.equal((await fetch(`${base}/api/personal/continueWatching`)).status, 401);
+    await post("/api/display-preferences", alice, { search: false, nextUp: true, token: "must-not-store" });
+    assert.deepEqual((await get("/api/display-preferences", alice)).preferences, { search: false, nextUp: true });
+    assert.equal((await get("/api/display-preferences", bob)).preferences, null);
+    assert.deepEqual((await get("/api/display-preferences", (await signin("alice")).headers.get("set-cookie"))).preferences, { search: false, nextUp: true });
+    const before = calls.filter(c => c.path === "/api/v1/request").length;
+    assert.equal((await post("/api/watchlist", alice, { mediaType: "movie", mediaId: 9001, saved: true })).status, 200);
+    assert.equal((await get("/api/watchlist", alice)).items[0].title, "Requested Film");
+    assert.equal((await get("/api/watchlist", bob)).items.length, 0);
+    assert.equal(calls.filter(c => c.path === "/api/v1/request").length, before);
+    await post("/api/watchlist", alice, { mediaType: "movie", mediaId: 9001, saved: false });
+    assert.equal((await get("/api/watchlist", alice)).items.length, 0);
   });
   await test("bad passwords are rejected, repeated attempts are limited", async () => {
     for (let i = 0; i < 10; i++)

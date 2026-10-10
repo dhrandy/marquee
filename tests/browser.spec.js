@@ -921,7 +921,7 @@ for (const width of [1440, 1660, 393, 280]) {
     await expect(page.locator(".poster-card")).toHaveCount(18);
     const count = await page.locator(".poster-card").evaluateAll((cards) => {
       const right = document
-        .querySelector(".poster-row")
+        .querySelector("#recent.poster-row")
         .getBoundingClientRect().right;
       return cards.filter(
         (card) => card.getBoundingClientRect().right <= right + 1,
@@ -1727,7 +1727,7 @@ for (const width of [1440, 834, 393, 320, 280]) {
     await expect(page.locator("#weather-content")).toContainText("68°F");
     const gap = () => page.evaluate(() => document.querySelector("#weather").getBoundingClientRect().top - document.querySelector("#search-form").getBoundingClientRect().bottom);
     const idleGap = await gap();
-    expect(idleGap).toBe(28);
+    if (width < 1100) expect(idleGap).toBe(57);
     await expect(page.locator("#search-status")).toBeHidden();
     await expect(page.locator("#search-results")).toBeHidden();
     await page.screenshot({ path: `/downloads/marquee-spacing-after-${width}.png`, fullPage: true });
@@ -1756,7 +1756,7 @@ for (const width of [1440, 834, 393, 320, 280]) {
     await expect(page.locator("#recent-section")).toBeHidden();
     const hiddenGap = await page.evaluate(() => document.querySelector("#calendar-section").getBoundingClientRect().top - document.querySelector("#search-form").getBoundingClientRect().bottom);
     expect(hiddenGap).toBeGreaterThanOrEqual(24);
-    expect(hiddenGap).toBeLessThanOrEqual(60);
+    expect(hiddenGap).toBeLessThanOrEqual(100);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
@@ -1799,3 +1799,85 @@ for (const [label, saved, enabled] of [
     }
   });
 }
+
+test("weather location is device opt-in, approximate, and falls back to configured city", async ({ page, context }) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 35.123456, longitude: -80.987654 });
+  await login(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.locator("#weather-location")).not.toBeChecked();
+  await page.getByPlaceholder("City name").fill("Sample");
+  await page.getByRole("button", { name: "Find city", exact: true }).click();
+  await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
+  await page.locator('[data-pref="weather"]').check();
+  const located = page.waitForRequest(req => req.url().includes("/api/weather?") && new URL(req.url()).searchParams.get("latitude") === "35.12");
+  await page.locator("#weather-location").check();
+  const url = new URL((await located).url());
+  expect(url.searchParams.get("longitude")).toBe("-80.99");
+  await expect(page.locator("#weather-location-status")).toContainText("approximate location");
+  await expect(page.locator(".forecast-icon")).toHaveCount(3);
+  await expect(page.locator("#weather-content")).not.toContainText("Sample City");
+  await page.addInitScript(() => Object.defineProperty(navigator, "geolocation", { value: { getCurrentPosition: (_success, fail) => fail({ code: 1 }) } }));
+  await page.reload();
+  await expect(page.locator("#weather-content")).toContainText("68°F");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.locator("#weather-location-status")).toContainText("Using your saved city");
+});
+
+test("personal shelves are opt-in, collapsible and account-scoped watchlist saves never request", async ({ page, context }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await login(page);
+  for (const key of ["watchlist", "continueWatching", "nextUp"]) await expect(page.locator(`#${key}-section`)).toBeHidden();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  for (const key of ["watchlist", "continueWatching", "nextUp"]) await page.locator(`[data-pref="${key}"]`).check();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(page.locator("#continueWatching-content .poster-card")).toHaveCount(3);
+  await expect(page.locator("#nextUp-content .poster-card")).toHaveCount(2);
+  await page.getByRole("button", { name: "Collapse Continue watching", exact: true }).click();
+  await expect(page.locator("#continueWatching-content")).toBeHidden();
+  await page.getByRole("button", { name: "Expand Continue watching", exact: true }).click();
+  await page.locator("#continueWatching-content [data-personal]").first().click();
+  await expect(page.locator("#episode-play")).toHaveText("Resume in Jellyfin ↗");
+  await page.getByRole("button", { name: "Close episode details" }).click();
+  let requests = 0;
+  page.on("request", req => { if (req.url().endsWith("/api/seerr/request") && req.method() === "POST") requests++; });
+  await page.getByPlaceholder("Search movies and shows").fill("o");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.locator("#search-results .result-card")).toHaveCount(3);
+  await page.locator("#search-results [data-detail-id]").first().click();
+  await page.getByRole("button", { name: "Save to watchlist", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Remove from watchlist", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close episode details" }).click();
+  await expect(page.locator("#watchlist-content .poster-card")).toHaveCount(1);
+  expect(requests).toBe(0);
+  await page.getByPlaceholder("Search movies and shows").press("Escape");
+  await page.screenshot({ path: "/downloads/marquee-personal-desktop.png", fullPage: true });
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.screenshot({ path: "/downloads/marquee-personal-phone.png", fullPage: true });
+  const other = await context.browser().newContext();
+  const otherPage = await other.newPage();
+  await otherPage.goto("http://127.0.0.1:8739/");
+  await otherPage.getByRole("button", { name: "Explore demo" }).click();
+  expect((await (await otherPage.request.get("/api/watchlist")).json()).items).toHaveLength(0);
+  await other.close();
+  await page.locator(".watchlist-remove").click();
+  await expect(page.locator("#watchlist-content .poster-card")).toHaveCount(0);
+});
+
+test("display sync is opt-in, filtered and restores the account choices", async ({ page }) => {
+  await login(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.locator("#sync-display")).not.toBeChecked();
+  await page.locator("#sync-display").check();
+  await expect(page.locator("#sync-display-status")).toHaveText("Display settings synced.");
+  await page.locator('[data-pref="calendar"]').uncheck();
+  await expect.poll(async () => (await (await page.request.get("/api/display-preferences")).json()).preferences.calendar).toBe(false);
+  await page.reload();
+  await expect(page.locator("#calendar-section")).toBeHidden();
+  const response = await page.request.post("/api/display-preferences", { headers: { Origin: "http://127.0.0.1:8739" }, data: { calendar: true, weatherLocation: true, token: "not-stored", userId: "other" } });
+  expect(await response.json()).toEqual({ preferences: { calendar: true } });
+  await page.reload();
+  await expect(page.locator("#calendar-section")).toBeVisible();
+  expect((await page.request.post("/api/display-preferences", { headers: { Origin: "http://127.0.0.1:8739" }, data: { search: "true" } })).status()).toBe(400);
+  expect((await page.request.post("/api/watchlist", { headers: { Origin: "http://127.0.0.1:8739" }, data: { mediaType: "movie", mediaId: -1, saved: true } })).status()).toBe(400);
+});

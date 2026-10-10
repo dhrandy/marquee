@@ -12,6 +12,8 @@ const state = {
   name: "Marquee",
   cityResults: [],
   recentItems: [],
+  watchlistItems: [],
+  personalItems: {},
 };
 const defaults = {
   recent: true,
@@ -20,6 +22,7 @@ const defaults = {
   addedDates: true,
   shelfNavigation: true,
   weather: false,
+  weatherLocation: false,
   weatherCity: null,
   weatherUnits: "fahrenheit",
   search: false,
@@ -31,6 +34,9 @@ const defaults = {
   jellyfinLink: true,
   popularCollapsed: false,
   defaultView: "auto",
+  watchlist: false, continueWatching: false, nextUp: false,
+  watchlistCollapsed: false, continueWatchingCollapsed: false, nextUpCollapsed: false,
+  syncDisplay: false,
 };
 const statusLabel = {
   available: "Available",
@@ -86,11 +92,32 @@ function report(error) {
   $("#global-error").hidden = false;
 }
 function persist() {
-  const { weather, weatherCity, weatherUnits, colorblind, ...devicePrefs } =
+  const { weather, weatherCity, weatherUnits, weatherLocation, colorblind, ...devicePrefs } =
     state.prefs;
-  localStorage.setItem(state.key, JSON.stringify(devicePrefs));
+  localStorage.setItem(state.key, JSON.stringify({ ...devicePrefs, weatherLocation: state.prefs.weatherLocation }));
   applyPrefs();
+  if (state.prefs.syncDisplay) syncDisplayWrite();
 }
+let displayWrites = Promise.resolve();
+function syncDisplayWrite() {
+  const { weather, weatherCity, weatherUnits, colorblind, syncDisplay, weatherLocation, ...value } = state.prefs;
+  displayWrites = displayWrites.catch(() => {}).then(() => api("/api/display-preferences", { method: "POST", body: JSON.stringify(value) })).then(() => { $("#sync-display-status").textContent = "Display settings synced."; }).catch(error => { $("#sync-display-status").textContent = error.message; });
+  return displayWrites;
+}
+$("#sync-display").addEventListener("change", async event => {
+  const enabled = event.target.checked;
+  $("#sync-display-status").textContent = enabled ? "Syncing…" : "Sync is off on this device.";
+  try {
+    if (enabled) {
+      const { preferences } = await api("/api/display-preferences");
+      if (preferences) Object.assign(state.prefs, preferences);
+    }
+    state.prefs.syncDisplay = enabled;
+    state.view = state.prefs.lastView || (state.prefs.defaultView === "auto" ? "agenda" : state.prefs.defaultView);
+    persist(); buildSettings();
+    await Promise.all([loadPersonalShelves(), loadCalendar()]);
+  } catch (error) { event.target.checked = false; $("#sync-display-status").textContent = error.message; }
+});
 let weatherWrites = Promise.resolve();
 function saveWeather() {
   const value = {
@@ -124,6 +151,7 @@ function applyPrefs() {
   $("#calendar-section").hidden = !state.prefs.calendar;
   $("#search-section").hidden = !state.prefs.search;
   $("#popular-section").hidden = !state.prefs.popular || !state.prefs.search;
+  $("#popular-wrap").hidden = !state.prefs.popular || !state.prefs.search;
   $("#popular-content").hidden = Boolean(state.prefs.popularCollapsed);
   $("#popular-collapse").setAttribute(
     "aria-label",
@@ -147,13 +175,28 @@ function applyPrefs() {
   all(".poster-card time").forEach((el) => {
     el.hidden = !state.prefs.addedDates;
   });
-  $("#nothing").hidden = state.prefs.recent || state.prefs.calendar;
+  for (const key of ["watchlist", "continueWatching", "nextUp"]) {
+    const section = $(`#${key}-section`);
+    if (section) section.hidden = !state.prefs[key];
+    const content = $(`#${key}-content`);
+    if (content) content.hidden = Boolean(state.prefs[`${key}Collapsed`]);
+    const collapse = $(`[data-collapse="${key}"]`);
+    if (collapse) {
+      collapse.setAttribute("aria-expanded", !state.prefs[`${key}Collapsed`]);
+      collapse.setAttribute("aria-label", `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${{ watchlist: "Watchlist", continueWatching: "Continue watching", nextUp: "Next up" }[key]}`);
+    }
+  }
+  $("#personal-shelves").hidden = !["watchlist", "continueWatching", "nextUp"].some(key => state.prefs[key]);
+  $("#nothing").hidden = state.prefs.recent || state.prefs.calendar || state.prefs.watchlist || state.prefs.continueWatching || state.prefs.nextUp;
   $("#weather").hidden = !state.prefs.weather;
   if (state.prefs.weather) loadWeather();
   scheduleWeather();
 }
 function buildSettings() {
   const labels = {
+    watchlist: "Watchlist (off by default)",
+    continueWatching: "Continue watching (off by default)",
+    nextUp: "Next up (off by default)",
     recent: "Recently added",
     calendar: "Release calendar",
     search: "Search and requests",
@@ -185,10 +228,13 @@ function buildSettings() {
       if (el.dataset.pref === "weather") saveWeather();
       if (el.dataset.pref === "popular" && el.checked) loadPopular();
       if (el.dataset.pref === "requests" && el.checked) loadRequests();
+      if (["watchlist", "continueWatching", "nextUp"].includes(el.dataset.pref)) loadPersonalShelves();
     }),
   );
+  $("#sync-display").checked = Boolean(state.prefs.syncDisplay);
   $("#default-view").value = state.prefs.defaultView;
   $("#weather-units").value = state.prefs.weatherUnits;
+  $("#weather-location").checked = Boolean(state.prefs.weatherLocation);
   $("#weather-city-selected").textContent =
     state.prefs.weatherCity?.label || "No city selected";
   $("#display-name").value = state.name;
@@ -208,12 +254,18 @@ async function enter(name) {
   } catch {
     state.prefs = { ...defaults };
   }
+  if (state.prefs.syncDisplay) {
+    try { const { preferences } = await api("/api/display-preferences"); if (preferences) Object.assign(state.prefs, preferences); }
+    catch { /* Offline sync keeps this device's saved choices. */ }
+  }
   const [weatherSettings, accessibilitySettings] = await Promise.all([
     api("/api/weather-settings"),
     api("/api/accessibility-settings"),
   ]);
   Object.assign(state.prefs, weatherSettings, accessibilitySettings);
-  persist();
+  // Reading account settings on entry must not write them back and race another device.
+  const { weather, weatherCity, weatherUnits, colorblind, ...entryPrefs } = state.prefs;
+  localStorage.setItem(state.key, JSON.stringify(entryPrefs));
   state.view =
     state.prefs.lastView ||
     (state.prefs.defaultView === "auto" ? "agenda" : state.prefs.defaultView);
@@ -252,6 +304,7 @@ async function enter(name) {
     loadCalendar(),
     loadRequests(),
     loadPopular(),
+    loadPersonalShelves(),
   ]);
 }
 function fixBrokenPosters() {
@@ -496,7 +549,13 @@ async function loadMissingFacts(event) {
     factsCache.delete(source);
   }
 }
+let currentDetail = null;
 function showDetail(event) {
+  currentDetail = event;
+  const save = $("#episode-save");
+  save.hidden = !["movie", "tv"].includes(event.mediaType) || !Number.isSafeInteger(event.mediaId);
+  save.textContent = state.watchlistItems.some(item => item.mediaId === event.mediaId && item.mediaType === event.mediaType) ? "Remove from watchlist" : "Save to watchlist";
+  save.disabled = false;
   factsRequest++;
   renderDetailFacts(event.facts);
   $("#episode-title").textContent =
@@ -592,6 +651,7 @@ function showDetail(event) {
   if (backdropSource) image.src = backdropSource;
   else image.removeAttribute("src");
   const play = $("#episode-play");
+  play.textContent = "Play in Jellyfin ↗";
   play.hidden = !event.playLink;
   if (event.playLink) play.href = event.playLink;
   else play.removeAttribute("href");
@@ -682,7 +742,7 @@ let weatherTimer;
 let weatherLastLoaded = 0;
 function scheduleWeather() {
   clearInterval(weatherTimer);
-  if (!state.prefs.weather || !state.prefs.weatherCity) return;
+  if (!state.prefs.weather || (!state.prefs.weatherCity && !state.prefs.weatherLocation)) return;
   weatherTimer = setInterval(
     () => {
       if (!document.hidden && !$("#dashboard").hidden) loadWeather();
@@ -699,9 +759,45 @@ document.addEventListener("visibilitychange", () => {
   )
     loadWeather();
 });
+let weatherLocationRequest = null;
+async function deviceWeatherLocation() {
+  if (!state.prefs.weatherLocation) return null;
+  if (!navigator.geolocation || !window.isSecureContext) {
+    $("#weather-location-status").textContent = "Device location requires HTTPS. Using your saved city.";
+    return null;
+  }
+  if (!weatherLocationRequest) {
+    weatherLocationRequest = new Promise(resolve => navigator.geolocation.getCurrentPosition(
+      position => {
+        if (Date.now() - position.timestamp >= 15 * 60 * 1000) { resolve(null); return; }
+        $("#weather-location-status").textContent = "Using this device's approximate location.";
+        resolve({ latitude: Math.round(position.coords.latitude * 100) / 100, longitude: Math.round(position.coords.longitude * 100) / 100 });
+      },
+      () => { $("#weather-location-status").textContent = "Device location unavailable. Using your saved city."; resolve(null); },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 15 * 60 * 1000 },
+    )).finally(() => { weatherLocationRequest = null; });
+  }
+  return weatherLocationRequest;
+}
+$("#weather-location").addEventListener("change", event => {
+  state.prefs.weatherLocation = event.target.checked;
+  if (!event.target.checked) $("#weather-location-status").textContent = "";
+  persist();
+});
+function forecastIcon(code) {
+  let label = "Cloudy", paths = '<path d="M5 18h13a4 4 0 0 0 0-8 6 6 0 0 0-11-1 4.5 4.5 0 0 0-2 9Z"/>';
+  if (code === 0 || code === 1) { label = "Clear"; paths = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>'; }
+  else if (code >= 51 && code <= 67 || code >= 80 && code <= 82) { label = "Rain"; paths += '<path d="m7 20-1 2m6-2-1 2m6-2-1 2"/>'; }
+  else if (code >= 71 && code <= 77 || code === 85 || code === 86) { label = "Snow"; paths += '<path d="M7 21h.01M12 21h.01M17 21h.01"/>'; }
+  else if (code >= 95) { label = "Thunderstorms"; paths += '<path d="m13 16-3 4h4l-3 4"/>'; }
+  else if (code === 45 || code === 48) { label = "Fog"; paths = '<path d="M3 8h18M5 12h14M3 16h18M6 20h12"/>'; }
+  return `<svg class="forecast-icon" viewBox="0 0 24 24" role="img" aria-label="${label}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+}
 async function loadWeather() {
   try {
-    const city = state.prefs.weatherCity;
+    const locationEnabled = state.prefs.weatherLocation;
+    const located = await deviceWeatherLocation();
+    const city = locationEnabled && state.prefs.weatherLocation ? located || state.prefs.weatherCity : state.prefs.weatherCity;
     if (!city) {
       $("#weather-content").textContent = "Choose a city in Settings";
       $("#weather-forecast").textContent = "";
@@ -730,11 +826,11 @@ async function loadWeather() {
       95: "Thunderstorms",
     };
     $("#weather-content").textContent =
-      `${city.label} · ${Math.round(data.current.temperature_2m)}°${data.current_units.temperature_2m.replace("°", "")} · ${codes[data.current.weather_code] || "Mixed conditions"}`;
+      `${Math.round(data.current.temperature_2m)}°${data.current_units.temperature_2m.replace("°", "")} · ${codes[data.current.weather_code] || "Mixed conditions"}`;
     $("#weather-forecast").innerHTML = data.daily.time
       .map(
         (date, i) =>
-          `<span class="forecast-day"><b>${escape(new Date(`${date}T12:00:00`).toLocaleDateString([], { weekday: "short" }))}</b><span>${Math.round(data.daily.temperature_2m_max[i])}° <small>/ ${Math.round(data.daily.temperature_2m_min[i])}°</small></span></span>`,
+          `<span class="forecast-day">${Number.isInteger(data.daily.weather_code?.[i]) ? forecastIcon(data.daily.weather_code[i]) : ""}<b>${escape(new Date(`${date}T12:00:00`).toLocaleDateString([], { weekday: "short" }))}</b><span>${Math.round(data.daily.temperature_2m_max[i])}° <small>/ ${Math.round(data.daily.temperature_2m_min[i])}°</small></span></span>`,
       )
       .join("");
   } catch (error) {
@@ -1048,6 +1144,7 @@ $("#refresh").addEventListener("click", () =>
     loadRecent(),
     loadCalendar(),
     loadRequests(),
+    loadPersonalShelves(),
     ...(state.prefs.weather ? [loadWeather()] : []),
   ]),
 );
@@ -1341,3 +1438,55 @@ document.addEventListener("error", (event) => {
   if (img instanceof HTMLImageElement && img.classList.contains("flag"))
     img.replaceWith(Object.assign(document.createElement("span"), { className: "flag-code", textContent: img.dataset.code || "" }));
 }, true);
+
+const personalLabels = { watchlist: "Watchlist", continueWatching: "Continue watching", nextUp: "Next up" };
+let personalLoad = 0;
+async function loadPersonalShelves() {
+  const seq = ++personalLoad;
+  if (!$("#personal-shelves").children.length) {
+    $("#personal-shelves").innerHTML = Object.entries(personalLabels).map(([key, label]) => `<section id="${key}-section" class="personal-section" hidden><div class="section-heading"><div><span class="eyebrow">JUST FOR YOU</span><h2>${label}</h2></div><button class="personal-collapse" data-collapse="${key}" aria-controls="${key}-content" aria-expanded="true" aria-label="Collapse ${label}">⌄</button></div><div id="${key}-content" class="poster-row"></div></section>`).join("");
+  }
+  applyPrefs();
+  await Promise.all(Object.keys(personalLabels).map(async key => {
+    if (key !== "watchlist" && !state.prefs[key]) return;
+    try {
+      const { items } = await api(key === "watchlist" ? "/api/watchlist" : `/api/personal/${key}`);
+      if (seq !== personalLoad) return;
+      if (key === "watchlist") state.watchlistItems = items;
+      else state.personalItems[key] = items;
+      renderPersonalShelf(key, items);
+    } catch (error) { $(`#${key}-content`).innerHTML = `<p class="empty">${escape(error.message)}</p>`; }
+  }));
+}
+function renderPersonalShelf(key, items) {
+  $(`#${key}-content`).innerHTML = items.length ? items.map((item, index) => {
+    const poster = key === "watchlist" ? item.poster : item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`;
+    return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy"></div><h3>${escape(item.title)}</h3></button><p>${escape(item.subtitle || item.year || "")}</p>${key === "continueWatching" ? `<progress max="100" value="${Number(item.progress) || 0}" aria-label="${escape(item.title)} progress"></progress><p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-type="${item.mediaType}" data-remove-id="${item.mediaId}">Remove</button>` : ""}</article>`;
+  }).join("") : `<p class="empty">${key === "watchlist" ? "Save a movie or show from its details to watch later. Saving never sends a request." : key === "continueWatching" ? "Nothing in progress. Start watching in Jellyfin and it appears here." : "No next episodes yet. Your Jellyfin viewing history fills this shelf."}</p>`;
+  fixBrokenPosters();
+}
+async function updateWatchlist(mediaType, mediaId, saved) {
+  const data = await api("/api/watchlist", { method: "POST", body: JSON.stringify({ mediaType, mediaId, saved }) });
+  state.watchlistItems = data.items; renderPersonalShelf("watchlist", data.items);
+}
+$("#episode-save").addEventListener("click", async () => {
+  if (!currentDetail) return;
+  const event = currentDetail, button = $("#episode-save"); button.disabled = true;
+  try {
+    const saved = !state.watchlistItems.some(i => i.mediaType === event.mediaType && i.mediaId === event.mediaId);
+    await updateWatchlist(event.mediaType, event.mediaId, saved);
+    if (currentDetail === event) button.textContent = saved ? "Remove from watchlist" : "Save to watchlist";
+  } catch (error) { $("#episode-request-status").hidden = false; $("#episode-request-status").textContent = error.message; }
+  finally { button.disabled = false; }
+});
+$("#personal-shelves").addEventListener("click", async event => {
+  const collapse = event.target.closest("[data-collapse]");
+  if (collapse) { const key = collapse.dataset.collapse; state.prefs[`${key}Collapsed`] = !state.prefs[`${key}Collapsed`]; collapse.setAttribute("aria-expanded", !state.prefs[`${key}Collapsed`]); collapse.setAttribute("aria-label", `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${personalLabels[key]}`); persist(); return; }
+  const remove = event.target.closest("[data-remove-id]");
+  if (remove) { remove.disabled = true; try { await updateWatchlist(remove.dataset.removeType, Number(remove.dataset.removeId), false); } catch (error) { report(error); remove.disabled = false; } return; }
+  const button = event.target.closest("[data-personal]");
+  if (!button) return;
+  const key = button.dataset.personal, item = (key === "watchlist" ? state.watchlistItems : state.personalItems[key])[Number(button.dataset.index)];
+  if (key === "watchlist") { try { showDetail(await api(`/api/seerr/details/${item.mediaType}/${item.mediaId}`)); } catch (error) { report(error); } }
+  else { showDetail({ ...item.detail, poster: item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`, playLink: item.link }); $("#episode-play").textContent = key === "continueWatching" ? "Resume in Jellyfin ↗" : "Play in Jellyfin ↗"; }
+});

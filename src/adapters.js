@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import {
   normalizeEpisodes,
   normalizeMovies,
@@ -97,19 +98,21 @@ function connectionError(error) {
   return "Could not connect to the service. Check the URL and container connectivity.";
 }
 
-export function jellyfinHeaders(token = "") {
+export function jellyfinHeaders(token = "", deviceId = "marquee-web") {
   return {
-    Authorization: `MediaBrowser Client="Marquee", Device="Web", DeviceId="marquee-web", Version="0.1.0"${token ? `, Token="${token}"` : ""}`,
+    Authorization: `MediaBrowser Client="Marquee", Device="Web", DeviceId="${deviceId}", Version="0.1.0"${token ? `, Token="${token}"` : ""}`,
   };
 }
 
 export async function authenticate(username, password) {
+  // Each login gets its own Jellyfin device identity. Shared IDs revoke other browsers.
+  const deviceId = `marquee-${crypto.randomUUID()}`;
   const auth = await upstream(
     process.env.JELLYFIN_URL,
     "/Users/AuthenticateByName",
     {
       method: "POST",
-      headers: jellyfinHeaders(),
+      headers: jellyfinHeaders("", deviceId),
       body: { Username: username, Pw: password },
     },
   );
@@ -119,6 +122,7 @@ export async function authenticate(username, password) {
     id: auth.User.Id,
     name: auth.User.Name,
     token: auth.AccessToken,
+    deviceId,
     isAdmin: auth.User.Policy?.IsAdministrator === true,
   };
 }
@@ -148,7 +152,7 @@ export async function recentItems(user) {
       EnableTotalRecordCount: "true",
     });
     const data = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, {
-      headers: jellyfinHeaders(user.token),
+      headers: jellyfinHeaders(user.token, user.deviceId),
     });
     const items = data.Items || [];
     for (const item of items) {
@@ -165,7 +169,7 @@ export async function recentItems(user) {
               const season = await upstream(
                 process.env.JELLYFIN_URL,
                 `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(item.SeasonId)}`,
-                { headers: jellyfinHeaders(user.token) },
+                { headers: jellyfinHeaders(user.token, user.deviceId) },
               );
               seasonNumbers.set(item.SeasonId, season.IndexNumber);
             } catch {
@@ -207,18 +211,19 @@ export async function recentItems(user) {
           Limit: "0",
           EnableTotalRecordCount: "true",
         });
-        const season = await upstream(
-          process.env.JELLYFIN_URL,
-          `/Items?${params}`,
-          { headers: jellyfinHeaders(user.token) },
-        );
-        count = season.TotalRecordCount;
+        try {
+          const season = await upstream(process.env.JELLYFIN_URL, `/Items?${params}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+          count = season.TotalRecordCount;
+        } catch (error) {
+          // Optional episode counts must not blank the entire shelf on a transient failure.
+          if (/HTTP (401|403)/.test(error.message)) throw error;
+        }
         if (seasonNumber === null) {
           try {
             const details = await upstream(
               process.env.JELLYFIN_URL,
               `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(item.SeasonId)}`,
-              { headers: jellyfinHeaders(user.token) },
+              { headers: jellyfinHeaders(user.token, user.deviceId) },
             );
             if (Number.isInteger(details.IndexNumber))
               seasonNumber = details.IndexNumber;
@@ -748,7 +753,7 @@ export async function jellyfinTmdb(user, itemId) {
   const item = await upstream(
     process.env.JELLYFIN_URL,
     `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(itemId)}`,
-    { headers: jellyfinHeaders(user.token) },
+    { headers: jellyfinHeaders(user.token, user.deviceId) },
   );
   const type = item.Type === "Movie" ? "movie" : item.Type === "Series" ? "tv" : null;
   const id = Number(item.ProviderIds?.Tmdb);
@@ -781,4 +786,24 @@ export async function seerrContentRatings(items, userId) {
     }),
   );
   return out;
+}
+
+// Jellyfin applies this user's library permissions and viewing history.
+export async function personalItems(user, kind) {
+  const query = new URLSearchParams({ UserId: user.id, Limit: "18", Fields: "Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People", EnableUserData: "true", EnableImages: "true" });
+  const endpoint = kind === "continueWatching" ? `/Users/${encodeURIComponent(user.id)}/Items/Resume` : "/Shows/NextUp";
+  if (kind === "nextUp") { query.set("EnableResumable", "false"); query.set("EnableRewatching", "false"); }
+  const data = await upstream(process.env.JELLYFIN_URL, `${endpoint}?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+  return (data.Items || []).filter(item => !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual").slice(0, 18).map(item => {
+    const episode = item.Type === "Episode";
+    const ticks = item.UserData?.PlaybackPositionTicks || 0;
+    const progress = item.RunTimeTicks > 0 ? Math.max(0, Math.min(100, Math.round(ticks / item.RunTimeTicks * 100))) : 0;
+    return {
+      id: item.SeriesId || item.Id, title: item.SeriesName || item.Name,
+      subtitle: episode ? `S${item.ParentIndexNumber ?? "?"}E${item.IndexNumber ?? "?"} · ${item.Name || ""}` : `${item.ProductionYear || ""} · Movie`,
+      image: Boolean(item.ImageTags?.Primary || item.SeriesId), art: "placeholder", link: jellyfinLink(item.Id),
+      progress, remaining: item.RunTimeTicks > ticks ? Math.ceil((item.RunTimeTicks - ticks) / 600000000) : null,
+      detail: { title: item.SeriesName || item.Name, subtitle: item.Name || "", year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
+    };
+  });
 }

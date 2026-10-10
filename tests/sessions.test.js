@@ -55,6 +55,7 @@ test("stateless sessions", async (t) => {
     await stop();
     await start();
     assert.equal((await me(cookie)).status, 200);
+    assert.equal((await fetch(`${base}/api/recent`, { headers: { Cookie: cookie } })).status, 200);
   });
 
   await t.test("tampered cookies are rejected", async () => {
