@@ -1395,7 +1395,7 @@ for (const width of [1440, 393, 320, 280]) {
       for (const [availability, requested, label] of [[2, false, "Pending"], [3, false, "Processing"], [4, false, "Partially available"], [5, false, "In your library"], [null, true, "Requested"]]) {
         await page.evaluate(({ mediaType, availability, requested }) => {
           const item = { id: 42, mediaId: 42, mediaType, availability, requested, title: "Fictional Processing Film", subtitle: "Movie", poster: "north" };
-          document.querySelector("#search-results").innerHTML = resultCardHtml(item);
+          document.querySelector("#search-results").innerHTML = resultCardHtml(item, true);
           showDetail({ ...item, poster: "/art/north.svg" });
         }, { mediaType, availability, requested });
         await expect(page.locator("#search-results .result-action")).toHaveText("");
@@ -2531,8 +2531,6 @@ for (const width of [1440, 834, 393, 280]) {
 test("poster plus starts a request without opening details; popout still has full Request", async ({ page }) => {
   await page.route("**/api/recommendations", route => route.fulfill({ json: { seeds: ["Cops"], items: [{ id: 7, mediaType: "movie", title: "A film", poster: "signal", availability: 1 }] } }));
   await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click(); await page.locator('[data-pref="recommendations"]').check(); await page.getByRole("button", { name: "Close settings" }).click();
-  let asked = false;
-  page.on("dialog", async dialog => { asked = true; await dialog.dismiss(); });
   await page.locator("#recommendations-content .poster-request").click();
   await expect(page.locator("#request-dialog")).toBeVisible(); await expect(page.locator("#episode-detail")).not.toBeVisible();
   await page.locator("#request-dialog").getByRole("button", { name: "Cancel", exact: true }).click();
