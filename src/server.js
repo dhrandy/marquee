@@ -510,7 +510,7 @@ app.get("/api/library/:id/facts", requireUser, async (req, res) => {
     if (access.error) return res.json({ facts: null });
     const detail = await seerrDetails(tmdb.type, tmdb.id, access.id);
     const [marked] = await withWatched(req.user, [detail]);
-    res.json({ facts: detail.facts, mediaType: tmdb.type, mediaId: tmdb.id, watched: marked.watched, favoriteId: marked.favoriteId, favorite: marked.favorite });
+    res.json({ facts: detail.facts, network: tmdb.type === "tv" ? detail.network : null, mediaType: tmdb.type, mediaId: tmdb.id, watched: marked.watched, favoriteId: marked.favoriteId, favorite: marked.favorite });
   } catch {
     res.json({ facts: null });
   }

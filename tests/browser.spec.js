@@ -663,9 +663,8 @@ for (const width of [1440, 393, 320, 280]) {
     await expect(page.locator("#episode-title")).toContainText("(2026)");
     await expect(page.locator("#episode-subtitle")).toContainText("S");
     await expect(page.locator("#episode-genres")).toContainText("Adventure");
-    await expect(page.locator("#episode-meta")).toContainText(
-      "Sample Network · 48 min",
-    );
+    await expect(page.locator("#episode-meta")).toContainText("48 min");
+    await expect(page.locator("#episode-network")).toHaveText("Network · Sample Network");
     await expect(page.locator("#episode-trailer")).toHaveAttribute(
       "href",
       /youtube.com\/results\?search_query=/,
@@ -1871,7 +1870,7 @@ test("personal shelves are opt-in, collapsible and account-scoped watchlist save
   await page.getByRole("button", { name: "Expand Continue watching", exact: true }).click();
   await view(page, "home");
   await page.locator("#continueWatching-content [data-personal]").first().click();
-  await expect(page.locator("#episode-play")).toHaveText("Resume in Jellyfin ↗");
+  await expect(page.locator("#episode-play")).toHaveAttribute("aria-label", "Resume in Jellyfin");
   await page.getByRole("button", { name: "Close episode details" }).click();
   let requests = 0;
   page.on("request", req => { if (req.url().endsWith("/api/seerr/request") && req.method() === "POST") requests++; });
@@ -2052,7 +2051,7 @@ test("continue watching renders series, movies and episode labels without changi
   await shelf.locator("[data-personal]").first().click();
   await expect(page.locator("#episode-subtitle")).toHaveText("S2E4 · The Wedding");
   await expect(page.locator("#episode-play")).toHaveAttribute("href", "https://jellyfin.example/episode-great");
-  await expect(page.locator("#episode-play")).toHaveText("Resume in Jellyfin ↗");
+  await expect(page.locator("#episode-play")).toHaveAttribute("aria-label", "Resume in Jellyfin");
   await expect(page.locator('#episode-poster-status [aria-label="In your library"]')).toBeVisible();
   await expect(page.locator("#episode-request")).toBeHidden();
   await expect(page.locator("#episode-facts")).toBeVisible();
@@ -2536,4 +2535,61 @@ test("poster plus starts a request without opening details; popout still has ful
   await page.locator("#request-dialog").getByRole("button", { name: "Cancel", exact: true }).click();
   await page.locator("#recommendations-content .poster-art").click();
   await expect(page.locator("#episode-detail")).toBeVisible(); await expect(page.locator("#episode-request")).toHaveText("Request");
+});
+
+for (const width of [1440,393,280]) {
+  test(`TV network and popout play icon preview at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 }); await login(page);
+    await page.evaluate(() => showDetail({ title: "North of Nowhere", subtitle: "S2E4 · A New Day", mediaType: "tv", network: "Sample Network", overview: "A team follows a strange signal across the mountains. Every clue points to a place that should not exist.", genres: ["Drama", "Mystery"], poster: "/art/north.svg", backdrop: "/art/north.svg", playLink: "https://example.test/jellyfin", availability: 5 }));
+    await expect(page.locator("#episode-network")).toHaveText("Network · Sample Network");
+    await expect(page.locator("#episode-play")).toHaveAttribute("aria-label", "Play in Jellyfin"); await expect(page.locator("#episode-play svg")).toBeVisible();
+    await page.locator("#episode-detail").screenshot({ path: `${shots}/marquee-network-play-${width}.png` });
+    await page.evaluate(() => showDetail({ title: "A Movie", mediaType: "movie", network: "A studio", poster: "/art/signal.svg" }));
+    await expect(page.locator("#episode-network")).toBeHidden(); await expect(page.locator("#episode-play")).toBeHidden();
+  });
+}
+
+for (const width of [1440, 834, 1024, 393]) {
+  test(`shelf arrows match desktop or touch-width layout at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 }); await login(page);
+    for (const selector of [".recent-controls", "#popular-section .shelf-controls"]) {
+      const controls = page.locator(selector).first();
+      if (width > 1100) await expect(controls).toBeVisible(); else await expect(controls).toBeHidden();
+    }
+    await page.locator("#recent-section").screenshot({ path: `${shots}/marquee-touch-arrows-${width}.png` });
+  });
+}
+
+test("library TV popout fills its network after metadata lookup", async ({ page }) => {
+  await login(page);
+  await page.route("**/api/library/test-show/facts", route => route.fulfill({ json: { facts: { status: "Returning Series" }, network: "Sample Network", mediaType: "tv", mediaId: 42 } }));
+  await page.evaluate(() => showDetail({ title: "Test Show", mediaType: "tv", poster: "/art/north.svg", factsUrl: "/api/library/test-show/facts" }));
+  await expect(page.locator("#episode-network")).toHaveText("Network · Sample Network");
+  await page.evaluate(() => showDetail({ title: "No Network", mediaType: "tv", poster: "/art/north.svg" }));
+  await expect(page.locator("#episode-network")).toBeHidden();
+});
+
+for (const width of [1440,393]) {
+  test(`watchlist heart preview in all sizes at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 }); await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click(); await page.locator('[data-pref="watchlist"]').check();
+    await page.getByRole("button", { name: "Close settings" }).click(); await view(page,"home");
+    await page.evaluate(() => renderPersonalShelf("watchlist", Array.from({ length: 12 }, (_, i) => ({ id: `preview-${i}`, favoriteId: `preview-${i}`, favorite: true, title: ["The Last Signal","North of Nowhere","After Hours"][i%3], subtitle: "2026 · Series", art: ["signal","north","orbit"][i%3], watched: i%2===0, watchedScope: "series" }))));
+    for (const size of ["small","standard","large"]) {
+      await page.getByRole("button", { name: "Settings", exact: true }).click(); await page.locator("#poster-size").selectOption(size); await page.getByRole("button", { name: "Close settings" }).click();
+      await expect(page.locator("#watchlist-content .watchlist-remove").first()).toHaveAttribute("aria-pressed","true");
+      await page.locator("#watchlist-section").screenshot({ path: `${shots}/marquee-watchlist-heart-${size}-${width}.png` });
+    }
+  });
+}
+
+test("watchlist heart removes a favorite without opening popout or requesting media", async ({ page }) => {
+  await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click();
+  for (const key of ["watchlist","continueWatching"]) await page.locator(`[data-pref="${key}"]`).check();
+  await page.getByRole("button", { name: "Close settings" }).click(); await view(page,"home");
+  await page.locator("#continueWatching-content [data-personal]").first().click(); await page.getByRole("button", { name: "Add to Jellyfin favorites", exact: true }).click(); await page.getByRole("button", { name: "Close episode details" }).click();
+  await expect(page.locator("#watchlist-content .poster-card")).toHaveCount(1);
+  const posted = page.waitForRequest(request => request.url().endsWith("/api/watchlist") && request.method()==="POST");
+  await page.locator("#watchlist-content .watchlist-remove").click();
+  expect((await posted).postDataJSON().saved).toBe(false); await expect(page.locator("#watchlist-content .poster-card")).toHaveCount(0); await expect(page.locator("#episode-detail")).not.toBeVisible();
 });

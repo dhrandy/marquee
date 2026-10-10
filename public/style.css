@@ -1517,3 +1517,24 @@ main > #search-section .search-bar { max-width: 560px; }
 .poster-request svg { width: 26px; height: 26px; padding: 4px; background: #1b1730eb; border: 1px solid #b49aff; border-radius: 50%; stroke: currentColor; stroke-width: 2; fill: none; box-shadow: 0 2px 6px #0007; }
 .popular-row .poster-request:hover svg { background: #b49aff; color: #1b1730; }
 .popular-row .poster-request:focus-visible { outline: 2px solid var(--purple); outline-offset: 1px; }
+
+.episode-network { color: var(--ink); font-size: 14px; margin: 10px 0; }
+#episode-play { display: inline-flex; align-items: center; justify-content: center; width: 42px; min-width: 42px; height: 42px; padding: 8px; border: 1px solid #b49aff77; border-radius: 8px; color: var(--purple); background: #1b1730; }
+#episode-play svg { width: 24px; height: 24px; fill: currentColor; }
+#episode-play:hover { background: #b49aff; color: #1b1730; }
+
+/* Phones and touch tablets swipe shelves; desktops keep their arrow controls. */
+@media (hover: none) and (pointer: coarse), (max-width: 1100px) {
+  .recent-controls, .shelf-controls { display: none; }
+}
+
+/* Match the square play/favorite actions while keeping the familiar YouTube mark. */
+.episode-actions #episode-trailer { width: 42px; min-width: 42px; height: 42px; padding: 9px 6px; border-radius: 8px; }
+#episode-trailer img { width: 28px; height: 20px; }
+
+/* A filled heart replaces Watchlist's separate remove row. */
+#watchlist-content .poster-card { position: relative; }
+#watchlist-content .watchlist-remove { position: absolute; top: 5px; right: 5px; z-index: 2; width: 36px; height: 36px; padding: 5px; display: flex; align-items: center; justify-content: center; color: var(--purple); background: transparent; border: 0; border-radius: 50%; }
+#watchlist-content .watchlist-remove svg { width: 26px; height: 26px; padding: 4px; fill: currentColor; stroke: currentColor; stroke-width: 1.5; background: #1b1730eb; border: 1px solid #b49aff; border-radius: 50%; box-shadow: 0 2px 6px #0007; }
+#watchlist-content .watchlist-remove:focus-visible { outline: 2px solid var(--purple); outline-offset: 1px; }
+#watchlist-content .watchlist-remove { margin: 0; }

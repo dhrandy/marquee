@@ -845,7 +845,7 @@ export async function personalItems(user, kind) {
       image: Boolean(item.ImageTags?.Primary || item.SeriesId), art: "placeholder", link: jellyfinLink(item.Id),
       backdropId: item.ParentBackdropItemId || (item.BackdropImageTags?.length ? item.Id : item.SeriesId || null),
       progress, remaining: item.RunTimeTicks > ticks ? Math.ceil((item.RunTimeTicks - ticks) / 600000000) : null,
-      detail: { title: item.SeriesName || item.Name, subtitle: personalItemSubtitle(item), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), network: (item.Studios || []).slice(0, 3).map(studio => studio.Name).join(", "), year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
+      detail: { title: item.SeriesName || item.Name, subtitle: personalItemSubtitle(item), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), mediaType: item.Type === "Movie" ? "movie" : "tv", network: (item.Studios || []).slice(0, 3).map(studio => studio.Name).join(", "), year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
     };
   });
 }

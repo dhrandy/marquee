@@ -558,6 +558,7 @@ $("#recent").addEventListener("click", (event) => {
     title: item.title,
     watched: item.watched, watchedScope: item.watchedScope, favoriteId: item.favoriteId, favorite: item.favorite,
     subtitle: item.subtitle,
+    mediaType: item.type,
     ...item.detail,
     poster: item.image
       ? `/api/image/${encodeURIComponent(item.id)}`
@@ -744,6 +745,7 @@ async function loadMissingFacts(event) {
     // Ignore the answer if another popup was opened in the meantime.
     if (request !== factsRequest || !$("#episode-detail").open || currentDetail !== event) return;
     if (["movie", "tv"].includes(data.mediaType) && Number.isSafeInteger(data.mediaId)) { event.mediaType = data.mediaType; event.mediaId = data.mediaId; if (!event.favoriteId) Object.assign(event, { favoriteId: data.favoriteId, favorite: data.favorite }); setDetailSave(event); }
+    if (data.network) { event.network = data.network; setDetailNetwork(event); }
     if (!facts) { factsCache.delete(source); return; }
     if (event.watched == null && data.watched === true) { event.watched = true; $("#episode-poster-status").innerHTML = statusBadgeHtml(event) + watchedBadgeHtml(event); }
     renderDetailFacts(facts);
@@ -767,6 +769,15 @@ async function loadDetailFavorite(event) {
   if (!event.favoriteId) return;
   try { const data = await api(`/api/favorite/${encodeURIComponent(event.favoriteId)}`); if (currentDetail === event && !event.favoriteBusy && !event.favoriteWritten) { Object.assign(event, data); setDetailSave(event); } }
   catch { if (currentDetail === event && !event.favoriteBusy && !event.favoriteWritten) { event.favoriteId = null; setDetailSave(event); } }
+}
+function setDetailNetwork(event) {
+  const network = $("#episode-network");
+  network.textContent = event.mediaType === "tv" && event.network ? `Network · ${event.network}` : "";
+  network.hidden = !network.textContent;
+}
+function setDetailPlay(resume = false) {
+  const label = resume ? "Resume in Jellyfin" : "Play in Jellyfin";
+  $("#episode-play").setAttribute("aria-label", label); $("#episode-play").title = label;
 }
 function showDetail(event) {
   currentDetail = event;
@@ -803,8 +814,9 @@ function showDetail(event) {
     ? `Content rating (${event.contentRatingRegion})`
     : "Content rating";
   // Desktop shows genres and the meta line under the overview; phones keep them in the body.
+  setDetailNetwork(event);
   const metaParts = [
-    event.network,
+    event.mediaType === "tv" ? null : event.network,
     event.runtime ? `${event.runtime} min` : null,
     statusLabel[event.status] || event.subtitle,
   ].filter(Boolean);
@@ -866,7 +878,7 @@ function showDetail(event) {
   if (backdropSource) image.src = backdropSource;
   else image.removeAttribute("src");
   const play = $("#episode-play");
-  play.textContent = "Play in Jellyfin ↗";
+  setDetailPlay();
   play.hidden = !event.playLink;
   if (event.playLink) play.href = event.playLink;
   else play.removeAttribute("href");
@@ -1709,7 +1721,7 @@ function leavingLabel(item) {
 function renderPersonalShelf(key, items) {
   $(`#${key}-content`).innerHTML = items.length ? items.map((item, index) => {
     const poster = item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`;
-    return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}</div><h3>${escape(item.title)}</h3></button><p>${escape(item.subtitle || item.year || "")}</p>${key === "leavingSoon" ? `<p class="leaving-date">${escape(leavingLabel(item))}</p>` : ""}${key === "continueWatching" ? `<progress max="100" value="${Number(item.progress) || 0}" aria-label="${escape(item.title)} progress"></progress><p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-id="${escape(item.favoriteId)}" aria-label="Remove ${escape(item.title)} from Jellyfin favorites">Remove favorite</button>` : ""}</article>`;
+    return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}</div><h3>${escape(item.title)}</h3></button><p>${escape(item.subtitle || item.year || "")}</p>${key === "leavingSoon" ? `<p class="leaving-date">${escape(leavingLabel(item))}</p>` : ""}${key === "continueWatching" ? `<progress max="100" value="${Number(item.progress) || 0}" aria-label="${escape(item.title)} progress"></progress><p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-id="${escape(item.favoriteId)}" aria-label="Remove ${escape(item.title)} from Jellyfin favorites" title="Remove from Jellyfin favorites" aria-pressed="true">${heartIcon}</button>` : ""}</article>`;
   }).join("") : `<p class="empty">${key === "leavingSoon" ? "No eligible scheduled departures in your Jellyfin library." : key === "watchlist" ? "Your Jellyfin movie and series favorites appear here. Use the heart in a title's popout to add one." : key === "continueWatching" ? "Nothing in progress. Start watching in Jellyfin and it appears here." : "No next episodes yet. Your Jellyfin viewing history fills this shelf."}</p>`;
   fixBrokenPosters();
 }
@@ -1733,5 +1745,5 @@ $("#dashboard main").addEventListener("click", async event => {
   const button = event.target.closest("[data-personal]");
   if (!button) return;
   const key = button.dataset.personal, item = (key === "watchlist" ? state.watchlistItems : state.personalItems[key])[Number(button.dataset.index)];
-  { showDetail({ title: item.title, subtitle: item.subtitle, ...item.detail, favoriteId: item.favoriteId, favorite: item.favorite, watched: item.watched, watchedScope: item.watchedScope, poster: item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`, backdrop: item.backdropId ? `/api/image/${encodeURIComponent(item.backdropId)}?type=Backdrop` : null, playLink: item.link, availability: 5, factsUrl: `/api/library/${encodeURIComponent(item.id)}/facts` }); $("#episode-play").textContent = key === "continueWatching" ? "Resume in Jellyfin ↗" : "Play in Jellyfin ↗"; }
+  { showDetail({ title: item.title, subtitle: item.subtitle, mediaType: item.detail?.mediaType || (item.watchedScope === "movie" ? "movie" : "tv"), ...item.detail, favoriteId: item.favoriteId, favorite: item.favorite, watched: item.watched, watchedScope: item.watchedScope, poster: item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`, backdrop: item.backdropId ? `/api/image/${encodeURIComponent(item.backdropId)}?type=Backdrop` : null, playLink: item.link, availability: 5, factsUrl: `/api/library/${encodeURIComponent(item.id)}/facts` }); setDetailPlay(key === "continueWatching"); }
 });
