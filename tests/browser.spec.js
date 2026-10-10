@@ -1881,3 +1881,39 @@ test("display sync is opt-in, filtered and restores the account choices", async 
   expect((await page.request.post("/api/display-preferences", { headers: { Origin: "http://127.0.0.1:8739" }, data: { search: "true" } })).status()).toBe(400);
   expect((await page.request.post("/api/watchlist", { headers: { Origin: "http://127.0.0.1:8739" }, data: { mediaType: "movie", mediaId: -1, saved: true } })).status()).toBe(400);
 });
+
+for (const width of [1440, 1100, 834, 393]) {
+  test(`weather moves left when search is hidden at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByPlaceholder("City name").fill("Sample");
+    await page.getByRole("button", { name: "Find city", exact: true }).click();
+    await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
+    await page.locator('[data-pref="weather"]').check();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#weather-content")).toContainText("68°F");
+    const positions = () => page.evaluate(() => {
+      const weather = document.querySelector("#weather").getBoundingClientRect();
+      const content = document.querySelector("#weather-content").getBoundingClientRect();
+      return { left: weather.left, center: (weather.left + weather.right) / 2, contentLeft: content.left, contentCenter: (content.left + content.right) / 2 };
+    });
+    if (width >= 1100) {
+      const before = await positions();
+      expect(Math.abs(before.contentCenter - before.center)).toBeLessThan(1);
+    }
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[data-pref="search"]').uncheck();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    const hidden = await positions();
+    expect(Math.abs(hidden.contentLeft - hidden.left)).toBeLessThan(1);
+    await page.screenshot({ path: `/downloads/marquee-weather-left-${width}.png` });
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[data-pref="search"]').check();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    if (width >= 1100) {
+      const after = await positions();
+      expect(Math.abs(after.contentCenter - after.center)).toBeLessThan(1);
+    }
+  });
+}

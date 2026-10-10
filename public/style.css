@@ -1370,6 +1370,8 @@ main > section:not([hidden]), .personal-section:not([hidden]) {
   .home-top-row .weather a { margin-top: 8px; }
   .home-top-row #search-section:not([hidden]) + .weather:not([hidden]) { margin-top: 0; }
   .home-top-row:has(#search-section[hidden]), .home-top-row:has(#weather[hidden]) { grid-template-columns: minmax(0, 1fr); }
+  .home-top-row:has(#search-section[hidden]) .weather { align-items: flex-start; text-align: left; }
+  .home-top-row:has(#search-section[hidden]) .weather-forecast { justify-content: flex-start; }
 }
 @media (min-width: 601px) and (max-width: 1099px) { .forecast-day { flex-wrap: wrap; } }
 .personal-section { margin-bottom: 28px; }
