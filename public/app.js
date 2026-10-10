@@ -1178,8 +1178,9 @@ async function loadPopular() {
 async function loadRecommendations() {
   if (!state.prefs.recommendations) return;
   try {
-    const { seed, items } = await api("/api/recommendations");
-    $("#recommendation-seed").textContent = seed ? `Because you watched ${seed}` : "Watch a movie or show in Jellyfin to get suggestions.";
+    const { seed, seeds, items } = await api("/api/recommendations");
+    const titles = seeds?.length ? seeds : seed ? [seed] : [];
+    $("#recommendation-seed").textContent = titles.length ? `Because you watched ${titles.join(", ")}` : "Watch a movie or show in Jellyfin to get suggestions.";
     $("#recommendations-content").innerHTML = items.length ? items.map(r => resultCardHtml(r)).join("") : '<p class="empty">No suggestions yet.</p>';
     $("#recommendations-status").textContent = ""; fixBrokenPosters();
   } catch (error) { $("#recommendations-status").textContent = error.message; }

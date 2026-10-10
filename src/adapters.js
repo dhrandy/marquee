@@ -906,19 +906,42 @@ export async function favoriteItems(user) {
 }
 
 export async function recommendations(user, seerrUserId) {
-  const query = new URLSearchParams({ UserId: user.id, Recursive: "true", IncludeItemTypes: "Movie,Series,Episode", IsPlayed: "true", SortBy: "DatePlayed", SortOrder: "Descending", Fields: "ProviderIds", EnableUserData: "true", Limit: "10" });
+  // Read enough history to skip repeat episodes of the same show and missing metadata.
+  const query = new URLSearchParams({ UserId: user.id, Recursive: "true", IncludeItemTypes: "Movie,Episode", IsPlayed: "true", SortBy: "DatePlayed", SortOrder: "Descending", Fields: "ProviderIds", EnableUserData: "true", Limit: "50" });
   const history = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
-  let seed = null;
+  const seeds = [], seen = new Set(), series = new Map();
   for (const item of history.Items || []) {
     if (item.UserData?.Played !== true) continue;
     let source = item;
-    if (item.Type === "Episode" && item.SeriesId) source = await upstream(process.env.JELLYFIN_URL, `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(item.SeriesId)}`, { headers: jellyfinHeaders(user.token, user.deviceId) }).catch(() => null);
+    if (item.Type === "Episode" && item.SeriesId) {
+      if (!series.has(item.SeriesId)) series.set(item.SeriesId, await upstream(process.env.JELLYFIN_URL, `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(item.SeriesId)}`, { headers: jellyfinHeaders(user.token, user.deviceId) }).catch(() => null));
+      source = series.get(item.SeriesId);
+    }
     if (!source || !["Movie", "Series"].includes(source.Type)) continue;
-    const id = Number(source.ProviderIds?.Tmdb);
-    if (Number.isSafeInteger(id) && id > 0) { seed = { id, type: source.Type === "Movie" ? "movie" : "tv", title: source.Name }; break; }
+    const id = Number(source.ProviderIds?.Tmdb), type = source.Type === "Movie" ? "movie" : "tv", key = `${type}:${id}`;
+    if (!Number.isSafeInteger(id) || id <= 0 || seen.has(key)) continue;
+    seen.add(key); seeds.push({ id, type, title: source.Name });
+    if (seeds.length === 5) break;
   }
-  if (!seed) return { seed: null, items: [] };
-  const data = await upstream(process.env.SEERR_URL, `/api/v1/${seed.type}/${seed.id}/recommendations?page=1`, { headers: { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(seerrUserId) } });
-  const items = normalizeSeerrResults({ results: (data.results || []).map(item => ({ ...item, mediaType: seed.type })) }).filter(item => item.id !== seed.id).slice(0, 12);
-  return { seed: seed.title, items: await withWatched(user, items) };
+  if (!seeds.length) return { seed: null, seeds: [], items: [] };
+  // Fetch once per distinct title, in parallel. A failed seed need not hide the others.
+  const responses = await Promise.allSettled(seeds.map(async seed => {
+    const data = await upstream(process.env.SEERR_URL, `/api/v1/${seed.type}/${seed.id}/recommendations?page=1`, { headers: { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(seerrUserId) } });
+    return normalizeSeerrResults({ results: (data.results || []).map(item => ({ ...item, mediaType: seed.type })) });
+  }));
+  if (responses.every(response => response.status === "rejected")) throw responses[0].reason;
+  const pools = responses.filter(response => response.status === "fulfilled").map(response => response.value);
+  const items = [], maxLength = Math.max(0, ...pools.map(pool => pool.length));
+  // Round-robin keeps the first show's list from crowding out movies or other shows.
+  for (let index = 0; index < maxLength && items.length < 20; index++) {
+    for (const pool of pools) {
+      const item = pool[index];
+      if (!item) continue;
+      const key = `${item.mediaType}:${item.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key); items.push(item);
+      if (items.length === 20) break;
+    }
+  }
+  return { seed: seeds[0].title, seeds: seeds.map(seed => seed.title), items: await withWatched(user, items) };
 }

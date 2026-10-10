@@ -2478,3 +2478,27 @@ for (const width of [1440, 834, 393, 280]) {
     await page.locator("#poster-size").screenshot({ path: `${shots}/marquee-poster-size-settings-${width}.png` });
   });
 }
+
+for (const width of [1440, 393]) {
+  test(`last five recommendations and purple scrollbars preview at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.route("**/api/recommendations", route => route.fulfill({ json: { seeds: ["Cops", "The Last Signal", "North of Nowhere", "Orbit Nine", "After Hours"], items: Array.from({ length: 20 }, (_, i) => ({ id: 300 + i, mediaType: i % 2 ? "movie" : "tv", title: ["Rob Dyrdek's Fantasy Factory", "A New Movie", "Counting Cars", "Another Movie"][i % 4], year: "2024", rating: { value: 7.8, source: "TMDB" }, poster: ["north", "signal", "orbit"][i % 3], availability: 1 })) } }));
+    await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[data-pref="recommendations"]').check(); await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#recommendation-seed")).toHaveText("Because you watched Cops, The Last Signal, North of Nowhere, Orbit Nine, After Hours");
+    const row = page.locator("#recommendations-content");
+    expect(await row.evaluate(el => getComputedStyle(el).scrollbarColor)).toBe("rgb(180, 154, 255) rgb(25, 28, 40)");
+    await page.locator("#recommendations-section").screenshot({ path: `${shots}/marquee-last-five-${width}.png` });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const options = {
+      "library": '<path d="M4 4h4v16H4zM11 4h4v16h-4zM18 4l3 15-3 1-3-15z"/>',
+      "screen": '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4m-2-10 5-3-5-3z"/>',
+      "film": '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4m-11-2 5-3-5-3z"/>'
+    };
+    await view(page, "home");
+    for (const [name, svg] of Object.entries(options)) {
+      await page.locator('button[data-page="home"] svg').evaluate((el, content) => el.innerHTML = content, svg);
+      await page.locator("#page-nav").screenshot({ path: `${shots}/marquee-icon-${name}-${width}.png` });
+    }
+  });
+}

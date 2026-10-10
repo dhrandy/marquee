@@ -660,7 +660,7 @@ app.get("/api/leaving-soon", requireUser, async (req, res) => {
   } catch { res.status(502).json({ error: "Could not verify Maintainerr departures. Check its URL, version, collections and exclusions." }); }
 });
 app.get("/api/recommendations", requireUser, async (req, res) => {
-  if (demo) return res.json({ seed: "North of Nowhere", items: demoSearch("") });
+  if (demo) return res.json({ seed: "North of Nowhere", seeds: ["North of Nowhere", "The Last Signal", "After Hours", "Orbit Nine", "Wild Coast"], items: demoSearch("") });
   try {
     const access = await requestAccess(req.user);
     if (access.error) return res.status(403).json({ error: access.error });

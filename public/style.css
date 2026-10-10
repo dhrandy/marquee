@@ -133,8 +133,6 @@ h2 {
   padding-bottom: 14px;
 }
 .poster-card {
-  flex: 0 0 calc((100% - 90px) / 6);
-  min-width: 150px;
   scroll-snap-align: start;
 }
 .poster-art {
@@ -506,9 +504,6 @@ dialog small {
   .calendar-toolbar {
     flex-wrap: wrap;
   }
-  .poster-card {
-    flex-basis: calc((100% - 54px) / 4);
-  }
 }
 @media (max-width: 600px) {
   .masthead {
@@ -549,10 +544,6 @@ dialog small {
   .eyebrow {
     font-size: 8px;
     letter-spacing: 1.5px;
-  }
-  .poster-card {
-    flex: 0 0 44%;
-    min-width: 126px;
   }
   .poster-row {
     gap: 13px;
@@ -663,9 +654,6 @@ dialog small {
   }
   .date-nav h3 {
     font-size: 14px;
-  }
-  .poster-card {
-    flex-basis: 65%;
   }
 }
 .weather {
@@ -1041,13 +1029,13 @@ dialog select { min-width: 0; max-width: 100%; }
 .popular-heading p { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
 .popular-section h3 { font-size: 17px; margin: 22px 0 14px; }
 .popular-row { display: flex; gap: 18px; overflow-x: auto; padding: 2px 0 18px; scroll-snap-type: x proximity; }
-.ranked-poster { flex: 0 0 174px; min-width: 0; position: relative; scroll-snap-align: start; }
+.ranked-poster { position: relative; scroll-snap-align: start; }
 .popular-rank { position: absolute; top: 8px; left: 8px; z-index: 1; background: #11131fe8; border: 1px solid #746490; color: #e5d6ff; border-radius: 8px; padding: 4px 8px; font-weight: 700; }
 .popular-row .result-card { height: 100%; }
 .popular-row .result-overview { display: none; }
 .popular-row .result-card h3 { font-size: 15px; margin: 12px 0 6px; }
 .popular-row .result-meta { font-size: 11px; }
-@media(max-width:600px) { .ranked-poster { flex-basis: 142px; } .popular-row { gap: 14px; } }
+
 
 .episode-meta { font-size: 13px; color: var(--muted); }
 
@@ -1064,11 +1052,8 @@ dialog select { min-width: 0; max-width: 100%; }
 .poster-art[data-detail-id] { cursor: pointer; }
 .poster-art[data-detail-id]:focus-visible { outline: 2px solid var(--purple); outline-offset: -2px; }
 
-/* A modest desktop size reduction; mobile card sizing is unchanged. */
+/* Desktop search results use their own grid, separate from shelf sizes. */
 @media (min-width: 1200px) {
-  .poster-row, .popular-row { gap: 16px; }
-  .poster-card { flex: 0 0 calc((100% - 96px) / 7); min-width: 0; }
-  .ranked-poster { flex-basis: 160px; }
   .search-results { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 18px; }
 }
 
@@ -1519,3 +1504,9 @@ main > #search-section .search-bar { max-width: 560px; }
 @media (max-width: 340px) { #dashboard[data-poster-size="small"] .poster-row, #dashboard[data-poster-size="small"] .popular-row { --shelf-card-width: 44%; } }
 /* Personal shelf buttons must not inset the poster with generic button padding. */
 .personal-section .poster-link { display: block; width: 100%; padding: 0; border: 0; background: transparent; text-align: left; }
+
+/* Use the same accent scrollbar in Firefox and Chromium, at every device width. */
+.poster-row, .popular-row { scrollbar-width: thin; scrollbar-color: var(--purple) var(--panel); }
+.poster-row::-webkit-scrollbar, .popular-row::-webkit-scrollbar { height: 8px; }
+.poster-row::-webkit-scrollbar-track, .popular-row::-webkit-scrollbar-track { background: var(--panel); border-radius: 8px; }
+.poster-row::-webkit-scrollbar-thumb, .popular-row::-webkit-scrollbar-thumb { background: var(--purple); border-radius: 8px; }
