@@ -1038,7 +1038,7 @@ dialog select { min-width: 0; max-width: 100%; }
 @media(max-width:340px) { .episode-hero { gap: 12px; padding-left: 16px; padding-right: 16px; } #episode-poster { width: 80px; height: 120px; } .episode-heading h2 { font-size: 20px; } }
 
 .popular-section { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 24px; }
-.popular-heading p { color: var(--muted); font-size: 12px; margin: 8px 0 20px; }
+.popular-heading p { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
 .popular-section h3 { font-size: 17px; margin: 22px 0 14px; }
 .popular-row { display: flex; gap: 18px; overflow-x: auto; padding: 2px 0 18px; scroll-snap-type: x proximity; }
 .ranked-poster { flex: 0 0 174px; min-width: 0; position: relative; scroll-snap-align: start; }
@@ -1051,7 +1051,6 @@ dialog select { min-width: 0; max-width: 100%; }
 
 .episode-meta { font-size: 13px; color: var(--muted); }
 
-.popular-title { display: flex; align-items: center; gap: 6px; }
 #popular-collapse { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 8px; border: 0; border-radius: 6px; color: var(--muted); }
 #popular-collapse svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
 #popular-collapse[aria-expanded="false"] svg { transform: rotate(-90deg); }
@@ -1099,8 +1098,15 @@ dialog select { min-width: 0; max-width: 100%; }
   .owned, .requested-label, .connection-buttons button,
   #connection-result, #episode-overview, #episode-trailer, #episode-play { font-size:14px; line-height:1.5; }
   .eyebrow { letter-spacing:1px; }
-  .view-tabs { flex-wrap:wrap; gap:3px; }
-  .view-tabs button { flex:1 0 27%; padding:7px 6px; }
+  .calendar-toolbar { gap:10px; }
+  .view-tools > button { padding:7px 10px; }
+  .view-tabs { flex-wrap:nowrap; gap:2px; width:100%; }
+  .view-tabs button { flex:1 1 0; min-width:0; padding:7px 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .calendar-toolbar .view-tabs button { font-size:13px; }
+  @media(max-width:340px) {
+    .calendar-toolbar .view-tabs { gap:1px; }
+    .calendar-toolbar .view-tabs button { font-size:12px; padding:7px 1px; }
+  }
   .request-row { flex-wrap:wrap; }
   .request-row small { display:block; white-space:normal; overflow-wrap:anywhere; }
 }
@@ -1316,6 +1322,7 @@ button[aria-label="Close settings"]:hover { background: #b9a3f7; }
 .search-results .result-card { position: relative; }
 .search-results .result-card .poster-art { position: static; }
 .search-results .result-card .poster-status { top: auto; right: 12px; bottom: 10px; }
+.row-cert-pending { min-width: 30px; color: transparent; background: #ffffff14; border-color: transparent; }
 .row-cert { display: inline-block; font-size: 11px; font-weight: 600; line-height: 1.4; padding: 0 6px; margin-left: 6px; border: 1px solid #c5cad6; border-radius: 4px; color: #edf0f7; vertical-align: 1px; }
 /* Cap the search block so rows don't stretch across wide screens. */
 #search-section { max-width: 760px; }

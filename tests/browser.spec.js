@@ -866,7 +866,7 @@ test("installed service worker replaces stale cached styles with network version
     (await fetch("/style.css")).text(),
   );
   expect(css).not.toContain("stale marker");
-  expect(css).toContain(".popular-title");
+  expect(css).toContain(".popular-heading");
 });
 
 for (const width of [1440, 393, 280]) {

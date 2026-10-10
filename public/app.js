@@ -745,7 +745,7 @@ function resultCardHtml(r) {
     : state.requestAccess[r.mediaType]
       ? `<button class="request-btn" data-request data-media-type="${r.mediaType}" data-media-id="${r.id}" data-title="${escape(r.title)}">Request</button>`
       : `<span class="request-unavailable">${escape(state.requestAccess.reason || state.requestAccess[`${r.mediaType}Reason`] || "Requests disabled in Seerr")}</span>`;
-  return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}</div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${availabilityText(r.availability) ? ` · ${availabilityText(r.availability)}` : ""}</p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
+  return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}</div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${availabilityText(r.availability) ? ` · ${availabilityText(r.availability)}` : ""}<span class="row-cert row-cert-pending" aria-hidden="true"></span></p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
 }
 function renderSearch(results) {
   $("#search-results").innerHTML = results.length
@@ -754,22 +754,47 @@ function renderSearch(results) {
   fixBrokenPosters();
   addRowRatings(results);
 }
-// Content ratings (R, PG-13, TV-MA...) arrive a moment later so results never wait for them.
+// Content ratings (R, PG-13, TV-MA...) arrive a moment later so results never wait for
+// them. A pending chip holds each rating's place so the rows do not shift, and a
+// session cache fills repeat searches before the network answer returns.
+const certCache = new Map();
 async function addRowRatings(results) {
   const items = results.slice(0, 30).map((r) => `${r.mediaType}:${r.id}`);
   if (!items.length) return;
   const seq = searchSeq;
-  try {
-    const { ratings } = await api(`/api/seerr/content-ratings?items=${items.join(",")}`);
-    if (seq !== searchSeq) return;
+  const fill = (key, value) => {
     for (const card of all("#search-results .result-card")) {
       const poster = card.querySelector("[data-detail-id]");
-      const value = ratings[`${poster.dataset.detailType}:${poster.dataset.detailId}`];
-      const meta = card.querySelector(".result-meta");
-      if (value && meta && !meta.querySelector(".row-cert"))
-        meta.insertAdjacentHTML("beforeend", `<span class="row-cert" title="Content rating">${escape(value)}</span>`);
+      if (`${poster.dataset.detailType}:${poster.dataset.detailId}` !== key) continue;
+      const chip = card.querySelector(".row-cert-pending");
+      if (!chip) continue;
+      if (value) {
+        chip.textContent = value;
+        chip.title = "Content rating";
+        chip.classList.remove("row-cert-pending");
+        chip.removeAttribute("aria-hidden");
+      } else chip.remove();
     }
-  } catch {}
+  };
+  const missing = [];
+  for (const key of items) {
+    if (certCache.has(key)) fill(key, certCache.get(key));
+    else missing.push(key);
+  }
+  if (!missing.length) return;
+  try {
+    const { ratings } = await api(`/api/seerr/content-ratings?items=${missing.join(",")}`);
+    if (seq !== searchSeq) return;
+    if (certCache.size > 1500) certCache.clear();
+    for (const key of missing) {
+      const value = ratings[key] || "";
+      certCache.set(key, value);
+      fill(key, value);
+    }
+  } catch {
+    if (seq !== searchSeq) return;
+    for (const key of missing) fill(key, "");
+  }
 }
 $("#popular-collapse").addEventListener("click", () => {
   state.prefs.popularCollapsed = !state.prefs.popularCollapsed;
@@ -1042,12 +1067,12 @@ all("[data-view]").forEach((button) =>
 let searchTimer = null;
 let searchController = null;
 let searchSeq = 0;
-async function runSearch(query, force = false) {
+async function runSearch(query) {
   clearTimeout(searchTimer);
   searchController?.abort();
   const seq = ++searchSeq;
   query = query.trim();
-  if (query.length < (force ? 1 : 2)) {
+  if (!query) {
     $("#search-status").textContent = "";
     if (!query) $("#search-results").innerHTML = "";
     return;
@@ -1104,12 +1129,12 @@ new MutationObserver(syncSearchClear).observe($("#search-results"), { childList:
 $("#search-form input[name=query]").addEventListener("input", syncSearchClear);
 $("#search-form").addEventListener("submit", (event) => {
   event.preventDefault();
-  runSearch(new FormData(event.target).get("query") || "", true);
+  runSearch(new FormData(event.target).get("query") || "");
 });
 $("#search-form input[name=query]").addEventListener("input", (event) => {
   clearTimeout(searchTimer);
   const value = event.target.value;
-  if (value.trim().length < 2) return runSearch(value);
+  if (!value.trim()) return runSearch(value);
   searchTimer = setTimeout(() => runSearch(value), 250);
 });
 function seasonPill(status) {
