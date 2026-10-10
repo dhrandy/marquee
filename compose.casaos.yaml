@@ -1,6 +1,7 @@
 name: marquee
 services:
   marquee:
+    container_name: marquee
     image: node:22-alpine
     working_dir: /app
     # Root only prepares the settings folder; the app runs as node.

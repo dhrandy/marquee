@@ -1,5 +1,6 @@
 services:
   marquee:
+    container_name: marquee
     image: node:22-alpine
     working_dir: /app
     user: node

@@ -98,6 +98,8 @@ You only need to edit the settings above. The commented startup steps download M
 
 **Updates:** restart or recreate the stack to download the latest beta. A running app does not update itself. Restarting keeps existing sign-ins when the settings volume and session secret are unchanged.
 
+**Container name:** the container is named `marquee`. If you run a second Marquee instance on the same Docker host, give it a different `container_name`, host port and settings folder. The stack/project name is separate.
+
 **Saved settings:** they stay in `/DATA/AppData/marquee/settings`. Keep that folder when updating. The same container briefly prepares its ownership, then runs all downloads, package installation and the app as the non-root `node` user. Only one container is needed.
 
 **Platform notes:**
@@ -112,6 +114,7 @@ You only need to edit the settings above. The commented startup steps download M
 name: marquee
 services:
   marquee:
+    container_name: marquee
     image: node:22-alpine
     working_dir: /app
     # Root only prepares the settings folder; the app runs as node.
@@ -215,6 +218,7 @@ The original `compose.yaml` below is for an existing local/git checkout. Do not 
 ```yaml
 services:
   marquee:
+    container_name: marquee
     image: node:22-alpine
     working_dir: /app
     user: node
