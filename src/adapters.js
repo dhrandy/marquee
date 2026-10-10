@@ -799,19 +799,43 @@ export function personalItemSubtitle(item) {
   return [item.ProductionYear, season].filter(Boolean).join(" · ");
 }
 export async function personalItems(user, kind) {
-  const query = new URLSearchParams({ UserId: user.id, Limit: "18", Fields: "Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People", EnableUserData: "true", EnableImages: "true" });
+  const query = new URLSearchParams({ UserId: user.id, Limit: "18", Fields: "Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People,ProviderIds", EnableUserData: "true", EnableImages: "true" });
   const endpoint = kind === "continueWatching" ? `/Users/${encodeURIComponent(user.id)}/Items/Resume` : "/Shows/NextUp";
   if (kind === "nextUp") { query.set("EnableResumable", "false"); query.set("EnableRewatching", "false"); }
   const data = await upstream(process.env.JELLYFIN_URL, `${endpoint}?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
-  return (data.Items || []).filter(item => !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual").slice(0, 18).map(item => {
+  const visible = (data.Items || []).filter(item => !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual").slice(0, 18);
+  const resolved = await Promise.all(visible.map(async item => {
+    if (!["Series", "Season"].includes(item.Type)) return item;
+    const seriesId = item.SeriesId || (item.Type === "Series" ? item.Id : null);
+    try {
+      if (kind === "continueWatching") {
+        const resume = new URLSearchParams(query);
+        resume.set("ParentId", item.Id); resume.set("IncludeItemTypes", "Episode"); resume.set("Limit", "1");
+        const episodes = await upstream(process.env.JELLYFIN_URL, `/Users/${encodeURIComponent(user.id)}/Items/Resume?${resume}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+        const episode = episodes.Items?.find(e => e.Type === "Episode" && !e.IsMissing && !e.IsPlaceHolder && e.LocationType !== "Virtual");
+        if (episode) return { ...episode, SeriesName: episode.SeriesName || item.SeriesName || item.Name, SeriesId: episode.SeriesId || seriesId };
+      }
+      if (seriesId) {
+        const next = new URLSearchParams(query);
+        next.set("SeriesId", seriesId); next.set("Limit", "1"); next.set("EnableResumable", "true"); next.set("EnableRewatching", "false");
+        const episodes = await upstream(process.env.JELLYFIN_URL, `/Shows/NextUp?${next}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+        const episode = episodes.Items?.find(e => e.Type === "Episode" && !e.IsMissing && !e.IsPlaceHolder && e.LocationType !== "Virtual");
+        if (episode) return { ...episode, SeriesName: episode.SeriesName || item.SeriesName || item.Name, SeriesId: episode.SeriesId || seriesId };
+      }
+    } catch (error) { if (/HTTP (401|403)\b/.test(error.message)) throw error; }
+    // Metadata failures must not hide a whole shelf or invent episode numbers.
+    return item;
+  }));
+  return resolved.map(item => {
     const ticks = item.UserData?.PlaybackPositionTicks || 0;
     const progress = item.RunTimeTicks > 0 ? Math.max(0, Math.min(100, Math.round(ticks / item.RunTimeTicks * 100))) : 0;
     return {
       id: item.SeriesId || item.Id, title: item.SeriesName || item.Name,
       subtitle: personalItemSubtitle(item),
       image: Boolean(item.ImageTags?.Primary || item.SeriesId), art: "placeholder", link: jellyfinLink(item.Id),
+      backdropId: item.ParentBackdropItemId || (item.BackdropImageTags?.length ? item.Id : item.SeriesId || null),
       progress, remaining: item.RunTimeTicks > ticks ? Math.ceil((item.RunTimeTicks - ticks) / 600000000) : null,
-      detail: { title: item.SeriesName || item.Name, subtitle: item.Name || "", year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
+      detail: { title: item.SeriesName || item.Name, subtitle: personalItemSubtitle(item), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), network: (item.Studios || []).slice(0, 3).map(studio => studio.Name).join(", "), year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
     };
   });
 }

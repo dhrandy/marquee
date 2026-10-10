@@ -506,7 +506,7 @@ app.get("/api/library/:id/facts", requireUser, async (req, res) => {
     const access = await requestAccess(req.user);
     if (access.error) return res.json({ facts: null });
     const detail = await seerrDetails(tmdb.type, tmdb.id, access.id);
-    res.json({ facts: detail.facts });
+    res.json({ facts: detail.facts, mediaType: tmdb.type, mediaId: tmdb.id });
   } catch {
     res.json({ facts: null });
   }
@@ -824,7 +824,10 @@ app.get("/api/personal/:kind", requireUser, async (req, res) => {
   if (!["continueWatching", "nextUp"].includes(req.params.kind)) return res.sendStatus(404);
   try {
     const items = demo ? (req.params.kind === "nextUp" ? titles.filter(item => item.type === "tv") : titles).slice(0, 3).map((item, index) => ({ ...item, progress: req.params.kind === "continueWatching" ? 30 + index * 20 : 0, remaining: 25 + index * 8 })) : await personalItems(req.user, req.params.kind);
-    for (const item of items) if (item.image) req.user.state.allowedImages.add(item.id);
+    for (const item of items) {
+      req.user.state.allowedImages.add(item.id);
+      if (item.backdropId) req.user.state.allowedImages.add(item.backdropId);
+    }
     res.json({ items });
   } catch { res.status(502).json({ error: "Your viewing history could not be loaded from Jellyfin." }); }
 });

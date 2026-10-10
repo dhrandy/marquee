@@ -540,6 +540,8 @@ function openEpisode(id) {
   if (!event) return;
   showDetail({
     ...event,
+    mediaType: event.type === "movie" ? "movie" : "tv",
+    mediaId: Number.isSafeInteger(event.tmdbId) ? event.tmdbId : undefined,
     factsUrl: event.tmdbId
       ? `/api/seerr/details/${event.type === "movie" ? "movie" : "tv"}/${event.tmdbId}`
       : null,
@@ -618,15 +620,14 @@ async function loadMissingFacts(event) {
     if (!factsCache.has(source))
       factsCache.set(
         source,
-        api(source).then((data) => data.facts || null),
+        api(source),
       );
-    const facts = await factsCache.get(source);
-    if (!facts) {
-      factsCache.delete(source);
-      return;
-    }
+    const data = await factsCache.get(source);
+    const facts = data.facts;
     // Ignore the answer if another popup was opened in the meantime.
-    if (request !== factsRequest || !$("#episode-detail").open) return;
+    if (request !== factsRequest || !$("#episode-detail").open || currentDetail !== event) return;
+    if (["movie", "tv"].includes(data.mediaType) && Number.isSafeInteger(data.mediaId)) { event.mediaType = data.mediaType; event.mediaId = data.mediaId; setDetailSave(event); }
+    if (!facts) { factsCache.delete(source); return; }
     renderDetailFacts(facts);
     $("#episode-rating").hidden = ratingHidden(event.rating, facts);
   } catch {
@@ -634,12 +635,15 @@ async function loadMissingFacts(event) {
   }
 }
 let currentDetail = null;
-function showDetail(event) {
-  currentDetail = event;
+function setDetailSave(event) {
   const save = $("#episode-save");
   save.hidden = !["movie", "tv"].includes(event.mediaType) || !Number.isSafeInteger(event.mediaId);
   save.textContent = state.watchlistItems.some(item => item.mediaId === event.mediaId && item.mediaType === event.mediaType) ? "Remove from watchlist" : "Save to watchlist";
   save.disabled = false;
+}
+function showDetail(event) {
+  currentDetail = event;
+  setDetailSave(event);
   factsRequest++;
   renderDetailFacts(event.facts);
   $("#episode-title").textContent =
@@ -1570,5 +1574,5 @@ $("#dashboard main").addEventListener("click", async event => {
   if (!button) return;
   const key = button.dataset.personal, item = (key === "watchlist" ? state.watchlistItems : state.personalItems[key])[Number(button.dataset.index)];
   if (key === "watchlist") { try { showDetail(await api(`/api/seerr/details/${item.mediaType}/${item.mediaId}`)); } catch (error) { report(error); } }
-  else { showDetail({ ...item.detail, poster: item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`, playLink: item.link }); $("#episode-play").textContent = key === "continueWatching" ? "Resume in Jellyfin ↗" : "Play in Jellyfin ↗"; }
+  else { showDetail({ ...item.detail, poster: item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`, backdrop: item.backdropId ? `/api/image/${encodeURIComponent(item.backdropId)}?type=Backdrop` : null, playLink: item.link, availability: 5, factsUrl: `/api/library/${encodeURIComponent(item.id)}/facts` }); $("#episode-play").textContent = key === "continueWatching" ? "Resume in Jellyfin ↗" : "Play in Jellyfin ↗"; }
 });

@@ -1990,8 +1990,9 @@ test("section ordering keeps separated search/weather and saves touch drag", asy
 
 test("continue watching renders series, movies and episode labels without changing playback", async ({ page }) => {
   await page.setViewportSize({ width: 532, height: 900 });
+  await page.route("**/api/library/great/facts", route => route.fulfill({ json: { facts: { scores: { imdb: 7.5 } }, mediaType: "tv", mediaId: 111 } }));
   await page.route("**/api/personal/continueWatching", route => route.fulfill({ json: { items: [
-    { id: "great", title: "The Great", subtitle: "2020 · Series", art: "north", progress: 0, remaining: null, detail: {} },
+    { id: "great", title: "The Great", subtitle: "S2E4 · The Wedding", art: "north", progress: 50, remaining: 20, link: "https://jellyfin.example/episode-great", detail: { title: "The Great", subtitle: "S2E4 · The Wedding" } },
     { id: "landman", title: "Landman", subtitle: "2024 · Series", art: "coast", progress: 0, remaining: null, detail: {} },
     { id: "film", title: "A film", subtitle: "2026 · Movie", art: "signal", progress: 50, remaining: 20, detail: {} },
     { id: "episode", title: "A show", subtitle: "S2E3 · Episode title", art: "orbit", progress: 50, remaining: 20, detail: {} },
@@ -2001,9 +2002,18 @@ test("continue watching renders series, movies and episode labels without changi
   await page.locator('[data-pref="continueWatching"]').check();
   await page.getByRole("button", { name: "Close settings" }).click();
   const shelf = page.locator("#continueWatching-section");
-  await expect(shelf).toContainText("2020 · Series");
+  await expect(shelf).toContainText("S2E4 · The Wedding");
   await expect(shelf).toContainText("2024 · Series");
   await expect(shelf).toContainText("2026 · Movie");
   await expect(shelf).toContainText("S2E3 · Episode title");
-  await shelf.screenshot({ path: "/downloads/marquee-series-label-fixed.png" });
+  await shelf.screenshot({ path: "/downloads/marquee-episode-fixed.png" });
+  await shelf.locator("[data-personal]").first().click();
+  await expect(page.locator("#episode-subtitle")).toHaveText("S2E4 · The Wedding");
+  await expect(page.locator("#episode-play")).toHaveAttribute("href", "https://jellyfin.example/episode-great");
+  await expect(page.locator("#episode-play")).toHaveText("Resume in Jellyfin ↗");
+  await expect(page.locator('#episode-poster-status [aria-label="In your library"]')).toBeVisible();
+  await expect(page.locator("#episode-request")).toBeHidden();
+  await expect(page.locator("#episode-facts")).toBeVisible();
+  await expect(page.locator("#episode-save")).toBeVisible();
+  await page.locator("#episode-detail").screenshot({ path: "/downloads/marquee-personal-popup-fixed.png" });
 });
