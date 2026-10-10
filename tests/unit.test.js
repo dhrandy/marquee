@@ -343,3 +343,14 @@ test("section order accepts only a complete unique known list", async () => {
   assert.deepEqual(cleanSectionOrder([...sectionOrderDefaults].reverse()), [...sectionOrderDefaults].reverse());
   for (const value of [null, {}, [], sectionOrderDefaults.slice(1), [...sectionOrderDefaults.slice(1), "weather"], [...sectionOrderDefaults.slice(1), "token"]]) assert.equal(cleanSectionOrder(value), null);
 });
+
+test("personal media labels do not mistake series or seasons for movies", async () => {
+  const { personalItemSubtitle } = await import("../src/adapters.js");
+  assert.equal(personalItemSubtitle({ Type: "Series", ProductionYear: 2020 }), "2020 · Series");
+  assert.equal(personalItemSubtitle({ Type: "Movie", ProductionYear: 2024 }), "2024 · Movie");
+  assert.equal(personalItemSubtitle({ Type: "Season", IndexNumber: 2 }), "Season 2");
+  assert.equal(personalItemSubtitle({ Type: "Episode", ParentIndexNumber: 1, IndexNumber: 3, Name: "Pilot" }), "S1E3 · Pilot");
+  assert.equal(personalItemSubtitle({ Type: "Episode" }), "S?E?");
+  assert.equal(personalItemSubtitle({ SeriesId: "series" }), "Series");
+  assert.equal(personalItemSubtitle({ Type: "Other" }), "Media");
+});

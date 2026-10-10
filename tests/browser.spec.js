@@ -1987,3 +1987,23 @@ test("section ordering keeps separated search/weather and saves touch drag", asy
   await expect(page.locator(".home-top-row")).toBeVisible();
   await context.close();
 });
+
+test("continue watching renders series, movies and episode labels without changing playback", async ({ page }) => {
+  await page.setViewportSize({ width: 532, height: 900 });
+  await page.route("**/api/personal/continueWatching", route => route.fulfill({ json: { items: [
+    { id: "great", title: "The Great", subtitle: "2020 · Series", art: "north", progress: 0, remaining: null, detail: {} },
+    { id: "landman", title: "Landman", subtitle: "2024 · Series", art: "coast", progress: 0, remaining: null, detail: {} },
+    { id: "film", title: "A film", subtitle: "2026 · Movie", art: "signal", progress: 50, remaining: 20, detail: {} },
+    { id: "episode", title: "A show", subtitle: "S2E3 · Episode title", art: "orbit", progress: 50, remaining: 20, detail: {} },
+  ] } }));
+  await login(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator('[data-pref="continueWatching"]').check();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  const shelf = page.locator("#continueWatching-section");
+  await expect(shelf).toContainText("2020 · Series");
+  await expect(shelf).toContainText("2024 · Series");
+  await expect(shelf).toContainText("2026 · Movie");
+  await expect(shelf).toContainText("S2E3 · Episode title");
+  await shelf.screenshot({ path: "/downloads/marquee-series-label-fixed.png" });
+});

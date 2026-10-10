@@ -789,18 +789,26 @@ export async function seerrContentRatings(items, userId) {
 }
 
 // Jellyfin applies this user's library permissions and viewing history.
+export function personalItemSubtitle(item) {
+  if (item.Type === "Episode") {
+    const episode = `S${item.ParentIndexNumber ?? "?"}E${item.IndexNumber ?? "?"}`;
+    return [episode, item.Name].filter(Boolean).join(" · ");
+  }
+  const label = { Movie: "Movie", Series: "Series", Season: "Season" }[item.Type] || (item.SeriesId || item.SeriesName ? "Series" : "Media");
+  const season = item.Type === "Season" && item.IndexNumber != null ? `Season ${item.IndexNumber}` : label;
+  return [item.ProductionYear, season].filter(Boolean).join(" · ");
+}
 export async function personalItems(user, kind) {
   const query = new URLSearchParams({ UserId: user.id, Limit: "18", Fields: "Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People", EnableUserData: "true", EnableImages: "true" });
   const endpoint = kind === "continueWatching" ? `/Users/${encodeURIComponent(user.id)}/Items/Resume` : "/Shows/NextUp";
   if (kind === "nextUp") { query.set("EnableResumable", "false"); query.set("EnableRewatching", "false"); }
   const data = await upstream(process.env.JELLYFIN_URL, `${endpoint}?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
   return (data.Items || []).filter(item => !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual").slice(0, 18).map(item => {
-    const episode = item.Type === "Episode";
     const ticks = item.UserData?.PlaybackPositionTicks || 0;
     const progress = item.RunTimeTicks > 0 ? Math.max(0, Math.min(100, Math.round(ticks / item.RunTimeTicks * 100))) : 0;
     return {
       id: item.SeriesId || item.Id, title: item.SeriesName || item.Name,
-      subtitle: episode ? `S${item.ParentIndexNumber ?? "?"}E${item.IndexNumber ?? "?"} · ${item.Name || ""}` : `${item.ProductionYear || ""} · Movie`,
+      subtitle: personalItemSubtitle(item),
       image: Boolean(item.ImageTags?.Primary || item.SeriesId), art: "placeholder", link: jellyfinLink(item.Id),
       progress, remaining: item.RunTimeTicks > ticks ? Math.ceil((item.RunTimeTicks - ticks) / 600000000) : null,
       detail: { title: item.SeriesName || item.Name, subtitle: item.Name || "", year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },

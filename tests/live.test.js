@@ -45,7 +45,7 @@ const service = http.createServer(async (req, res) => {
       assert.equal(url.searchParams.get("EnableResumable"), "false");
       assert.equal(url.searchParams.get("EnableRewatching"), "false");
     }
-    return res.end(JSON.stringify({ Items: [{ Id: `episode-${user}`, SeriesId: `series-${user}`, SeriesName: `Personal ${user}`, Name: "The next episode", Type: "Episode", ParentIndexNumber: 1, IndexNumber: 2, RunTimeTicks: 24000000000, UserData: { PlaybackPositionTicks: 12000000000 }, ImageTags: { Primary: "tag" } }] }));
+    return res.end(JSON.stringify({ Items: [{ Id: `episode-${user}`, SeriesId: `series-${user}`, SeriesName: `Personal ${user}`, Name: "The next episode", Type: "Episode", ParentIndexNumber: 1, IndexNumber: 2, RunTimeTicks: 24000000000, UserData: { PlaybackPositionTicks: 12000000000 }, ImageTags: { Primary: "tag" } }, { Id: "great-series", Name: "The Great", Type: "Series", ProductionYear: 2020 }, { Id: "landman-series", Name: "Landman", Type: "Series", ProductionYear: 2024 }, { Id: "personal-movie", Name: "A film", Type: "Movie", ProductionYear: 2026 }] }));
   }
   if (url.pathname === "/Items") {
     if (url.searchParams.get("UserId") === "revoked-viewer") { res.writeHead(401); return res.end("{}"); }
@@ -1158,6 +1158,10 @@ try {
     for (const kind of ["continueWatching", "nextUp"]) {
       const data = await get(`/api/personal/${kind}`, alice);
       assert.equal(data.items[0].title, "Personal alice");
+      assert.equal(data.items[0].subtitle, "S1E2 · The next episode");
+      assert.equal(data.items[1].subtitle, "2020 · Series");
+      assert.equal(data.items[2].subtitle, "2024 · Series");
+      assert.equal(data.items[3].subtitle, "2026 · Movie");
       assert.equal(data.items[0].progress, 50);
       assert.equal(data.items[0].remaining, 20);
       if (data.items[0].link) assert.match(data.items[0].link, /episode-alice/);
