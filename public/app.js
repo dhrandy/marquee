@@ -22,7 +22,7 @@ const defaults = {
   weather: false,
   weatherCity: null,
   weatherUnits: "fahrenheit",
-  search: true,
+  search: false,
   hideUnmonitored: false,
   requests: true,
   popular: true,
@@ -198,9 +198,12 @@ function buildSettings() {
 async function enter(name) {
   state.key = `marquee:${name}:preferences`;
   try {
+    const saved = JSON.parse(localStorage.getItem(state.key) || "null");
+    const hasSavedPrefs = saved && typeof saved === "object" && !Array.isArray(saved);
     state.prefs = {
       ...defaults,
-      ...JSON.parse(localStorage.getItem(state.key) || "{}"),
+      // Older saved preferences predate the search toggle: keep it visible.
+      ...(hasSavedPrefs ? { search: true, ...saved } : {}),
     };
   } catch {
     state.prefs = { ...defaults };
@@ -210,6 +213,7 @@ async function enter(name) {
     api("/api/accessibility-settings"),
   ]);
   Object.assign(state.prefs, weatherSettings, accessibilitySettings);
+  persist();
   state.view =
     state.prefs.lastView ||
     (state.prefs.defaultView === "auto" ? "agenda" : state.prefs.defaultView);

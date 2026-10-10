@@ -39,7 +39,7 @@ During beta, updates are manual. Pull the latest image yourself when updating an
 - Poster cards show a star and score without a source label or logo. Jellyfin scores in popups also omit the source label; verified TMDB/IMDb metadata retains its source label. Missing or unrated scores stay hidden. Ratings can be turned off in Settings.
 - Recently-added posters open a detail popup with a Play in Jellyfin button that opens the exact movie/episode the card represents. Desktop posters are modestly smaller; mobile sizing is unchanged.
 - Click a TV calendar entry for episode details: a complete poster beside the title with dimmed, softened backdrop artwork when supplied, a softened poster fallback, or a solid background if no artwork is available, show/year, episode title, network, runtime, genres and overview. The trailer button opens a clearly labeled YouTube search, not an unverified video. Upcoming season premieres are yellow, regular upcoming episodes white, available green, missing red; cinemas remain blue.
-- Monday-first calendar, today highlight, previous/next period, refresh, and type/status filters. An optional hide-unmonitored filter drops unmonitored Sonarr/Radarr entries. Movies can appear twice: cinema and digital/physical releases are separate entries.
+- Sunday-first calendar, today highlight, previous/next period, refresh, and type/status filters. An optional hide-unmonitored filter drops unmonitored Sonarr/Radarr entries. Movies can appear twice: cinema and digital/physical releases are separate entries.
 - Green: available file. Red: release has passed but the file is missing. Yellow: season premiere. White: upcoming TV. Gray: unreleased movie.
 - Optional current weather and three-day forecast, off by default. Choose a city and Fahrenheit/Celsius in Settings, saved server-side per Jellyfin account. Refreshes every 15 minutes while visible, catches up when a stale tab becomes visible, and joins the Refresh button. Open-Meteo weather and city search are free for non-commercial use, with no API key or account.
 - Jellyfin administrators can change the shared display name in Settings. It defaults to Marquee and survives container restarts.
@@ -48,7 +48,7 @@ During beta, updates are manual. Pull the latest image yourself when updating an
 - Poster and title taps deep-link into Jellyfin's web player through the external URL setting.
 - Settings includes per-service connection tests with real error messages (DNS failure, connection refused, timeout, or HTTP status).
 - Installable as a PWA (manifest and service worker). Only static assets are cached; media API responses are never cached.
-- Settings can hide either main section, weather, the status legend, added dates, and poster navigation arrows.
+- Settings can hide either main section, weather, the status legend, added dates, and poster navigation arrows. Search is off on browsers with no saved display preferences; turn it on in Settings. Existing saved preferences keep their current search choice (older records without a search field keep it on).
 - Mobile defaults to Agenda. Month/week remain available with horizontal scrolling instead of squeezed columns.
 - Display preferences are stored on the current device. Weather enabled state, city and F/C units are saved server-side per Jellyfin account and follow that user across devices. The display name is shared.
 - Demo mode with fictional titles and original sample poster art. No external credentials required.

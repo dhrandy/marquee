@@ -3,6 +3,11 @@ import fs from "node:fs";
 const shots = process.env.CI ? "test-results/screenshots" : "/downloads";
 fs.mkdirSync(shots, { recursive: true });
 async function login(page) {
+  // Existing-user fixture: most tests exercise the search-enabled home page.
+  await page.addInitScript(() => {
+    const key = "marquee:Demo viewer:preferences";
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ search: true }));
+  });
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();
   await expect(
@@ -910,6 +915,7 @@ for (const width of [1440, 1660, 393, 280]) {
       }));
       await route.fulfill({ json: data });
     });
+    await page.addInitScript(() => localStorage.setItem("marquee:Demo viewer:preferences", JSON.stringify({ search: true })));
     await page.goto("/");
     await page.getByRole("button", { name: "Explore demo" }).click();
     await expect(page.locator(".poster-card")).toHaveCount(18);
@@ -1752,5 +1758,44 @@ for (const width of [1440, 834, 393, 320, 280]) {
     expect(hiddenGap).toBeGreaterThanOrEqual(24);
     expect(hiddenGap).toBeLessThanOrEqual(60);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
+
+for (const [label, saved, enabled] of [
+  ["fresh", null, false],
+  ["legacy", { recent: true, calendar: true }, true],
+  ["enabled", { search: true }, true],
+  ["disabled", { search: false }, false],
+]) {
+  test(`search default preserves ${label} preferences`, async ({ page }) => {
+    await page.setViewportSize({ width: 834, height: 1100 });
+    await page.addInitScript(saved => {
+      if (sessionStorage.getItem("search-default-seeded")) return;
+      sessionStorage.setItem("search-default-seeded", "true");
+      const key = "marquee:Demo viewer:preferences";
+      if (saved === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(saved));
+    }, saved);
+    await page.goto("/");
+    await page.getByRole("button", { name: "Explore demo" }).click();
+    await expect(page.locator(".poster-card")).toHaveCount(6);
+    await expect(page.locator("#search-section")).toBeVisible({ visible: enabled });
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("marquee:Demo viewer:preferences")).search)).toBe(enabled);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.locator('[data-pref="search"]')).toBeChecked({ checked: enabled });
+    await page.locator('[data-pref="search"]').setChecked(!enabled);
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#search-section")).toBeVisible({ visible: !enabled });
+    await page.reload();
+    await expect(page.locator(".poster-card")).toHaveCount(6);
+    await expect(page.locator("#search-section")).toBeVisible({ visible: !enabled });
+    if (label === "fresh") {
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await page.locator('[data-pref="search"]').uncheck();
+      await page.getByRole("button", { name: "Close settings" }).click();
+      await page.screenshot({ path: "/downloads/marquee-search-default-off-tablet.png" });
+      await page.setViewportSize({ width: 393, height: 852 });
+      await page.screenshot({ path: "/downloads/marquee-search-default-off-phone.png" });
+    }
   });
 }
