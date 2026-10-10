@@ -2,7 +2,7 @@
 
 ![Beta](https://img.shields.io/badge/status-beta-b49aff) ![License](https://img.shields.io/badge/license-proprietary-blue)
 
-A small self-hosted media home screen: recently added at the top, a release calendar underneath. Sign in with your Jellyfin account. Your recent titles follow your Jellyfin library permissions.
+A self-hosted media dashboard with recent titles, a release calendar, personal Jellyfin shelves and Seerr discovery. Sign in with your Jellyfin account. Your recent titles follow your Jellyfin library permissions.
 
 <img src="docs/images/dashboard-redacted.png" alt="Marquee dashboard with recent titles, release agenda, Seerr search, top ten and Requests; requester names removed" width="100%">
 
@@ -13,9 +13,9 @@ A small self-hosted media home screen: recently added at the top, a release cale
 
 ## Beta
 
-This is a local beta. No application image or public release has been published yet. The compose setup below runs the source using the official Node image, without a Dockerfile. Live-server compatibility and container deployment still need testing before a release.
+This is a beta. No application image or public release has been published yet. The compose setup below runs the source using the official Node image, without a Dockerfile. Live-server compatibility and container deployment still need testing before a release.
 
-During beta, updates are manual. Pull the latest image yourself when updating an image-based installation; Marquee does not auto-update running containers. The CasaOS source-based stack below downloads current source only when you manually restart/recreate it. No version bump is required for each beta change.
+During beta, updates are manual. The standalone stack below downloads current source when you restart/recreate it. A local-checkout installation uses the source folder you provide. Marquee does not update itself while running. No version bump is required for each beta change.
 
 ## Contents
 
@@ -83,9 +83,9 @@ Each new sign-in uses a separate Jellyfin device identity, so another browser si
 
 The initial beta copies the mounted source into a temporary writable container directory and installs the locked production dependencies at startup. This needs internet access to the package registry. Encrypted sessions survive restart when the settings volume is kept. The `marquee-settings` volume keeps the administrator-set display name and per-user weather/colorblind preferences across container restarts. Other display preferences remain on the current device. Do not delete the settings volume when upgrading.
 
-### CasaOS or standalone stack (no clone needed)
+### Single-container stack (CasaOS, Dockhand, Synology or plain Docker)
 
-This is the easiest option for CasaOS, Dockhand, or another stack manager. You do not need to download the source folder. Settings come from a `.env` file beside your compose file, or your stack manager's Environment settings.
+This is the easiest option for a stack manager or plain Docker Compose. You do not need to download the source folder. Settings come from a `.env` file beside your compose file, or your stack manager's Environment settings.
 
 1. Copy the complete example below into your stack editor (or use `compose.casaos.yaml`).
 2. Add the variables from the `.env` example below to a `.env` file beside your compose file, or to the stack's Environment settings. Fill in your own service URLs and API keys. Keep your keys private.
@@ -98,42 +98,25 @@ You only need to edit the settings above. The commented startup steps download M
 
 **Updates:** restart or recreate the stack to download the latest beta. A running app does not update itself. Restarting keeps existing sign-ins when the settings volume and session secret are unchanged.
 
-**Saved settings:** they stay in `/DATA/AppData/marquee/settings`. Keep that folder when updating. The small `marquee-init` helper prepares it for the app. Seeing this helper show `Exited (0)` is normal; the main `marquee` service should stay running. If you change the settings path, change it in both services.
+**Saved settings:** they stay in `/DATA/AppData/marquee/settings`. Keep that folder when updating. The same container briefly prepares its ownership, then runs all downloads, package installation and the app as the non-root `node` user. Only one container is needed.
 
-Docker Compose waits for the helper to finish before starting Marquee. CasaOS uses Compose v2; older installations may behave differently.
+**Platform notes:**
 
+- CasaOS: use Custom Install and paste the full stack below. The default settings path fits CasaOS.
+- Dockhand: create/edit the stack, paste the compose, and add its environment values.
+- Synology Container Manager: use a Project and its compose editor. Change the settings source to your existing shared-folder path, for example `/volume1/docker/marquee/settings`.
+- Plain Docker: save this as `compose.yaml` beside your `.env` and deploy with your Docker Compose interface. The source downloads automatically; no clone or permission commands are needed.
+
+**Already using the two-container stack?** Keep your current settings source, environment values and port. Replace the compose with this complete example and recreate the stack. Remove the old stopped `marquee-init` container in your manager if it remains as an orphan; do not delete the settings folder. The app keeps its saved settings and session secret. If your NAS blocks ownership changes on that folder, startup will stop rather than silently losing saved settings.
 ```yaml
 name: marquee
 services:
-  # Creates non-root ownership for settings. Exited (0) is normal.
-  marquee-init:
-    image: alpine:3.21
-    user: 0:0
-    command:
-      - sh
-      - -c
-      - chown -R 1000:1000 /settings
-    volumes:
-      - type: bind
-        source: /DATA/AppData/marquee/settings
-        target: /settings
-    read_only: true
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-    security_opt:
-      - no-new-privileges:true
-    restart: "no"
   marquee:
     image: node:22-alpine
     working_dir: /app
-    user: node
+    # Root only prepares the settings folder; the app runs as node.
+    user: "0:0"
     init: true
-    depends_on:
-      marquee-init:
-        condition: service_completed_successfully
     # Downloads current main on restart; requires HTTPS access to GitHub and npm.
     command:
       - sh
@@ -141,25 +124,31 @@ services:
       - |
           set -eu
 
-          # 1. Download Marquee from GitHub.
+          # 1. Prepare saved settings, then switch to the non-root app user.
+          chown -R 1000:1000 /home/node
+          exec su node -s /bin/sh -c '
+          set -eu
+
+          # 2. Download Marquee from GitHub.
           wget -O /app/source.tar.gz \
             https://codeload.github.com/dhrandy/marquee/tar.gz/refs/heads/main
 
-          # 2. Unpack the app and remove the download.
+          # 3. Unpack the app and remove the download.
           tar -xzf /app/source.tar.gz -C /app --strip-components=1
           rm /app/source.tar.gz
 
-          # 3. Leave tests and development files out of the running copy.
+          # 4. Leave tests and development files out of the running copy.
           rm -rf /app/tests /app/docs /app/.github \
             /app/playwright.config.js /app/README.md \
             /app/compose.yaml /app/compose.casaos.yaml \
             /app/.env.example /app/.gitignore
 
-          # 4. Install only the packages the app needs to run.
+          # 5. Install only the packages the app needs to run.
           npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
-          # 5. Start Marquee.
+          # 6. Start Marquee.
           exec node src/server.js
+          '
     # Change published for your host port; keep target 8739.
     ports:
       - target: 8739
@@ -181,11 +170,13 @@ services:
       RADARR_API_KEY: ${RADARR_API_KEY}
       SEERR_URL: ${SEERR_URL}
       SEERR_API_KEY: ${SEERR_API_KEY}
+      MAINTAINERR_URL: ${MAINTAINERR_URL:-}
+      MAINTAINERR_API_KEY: ${MAINTAINERR_API_KEY:-}
       # Browser-facing Jellyfin URL; blank falls back to JELLYFIN_URL.
       JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
     volumes:
       - type: bind
-        # Persistent settings: keep this source in sync with marquee-init.
+        # Persistent settings: keep this folder when updating.
         source: /DATA/AppData/marquee/settings
         target: /home/node
     tmpfs:
@@ -194,15 +185,24 @@ services:
     read_only: true
     cap_drop:
       - ALL
+    # Only needed for folder ownership and the startup user switch.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
     healthcheck:
       test:
         - CMD
+        - su
         - node
-        - -e
-        - fetch('http://127.0.0.1:8739/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+        - -s
+        - /bin/sh
+        - -c
+        - node -e "fetch('http://127.0.0.1:8739/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -233,7 +233,7 @@ services:
           npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
           # Start Marquee.
-          node src/server.js
+          exec node src/server.js
     ports:
       - "${MARQUEE_PORT}:8739"
     environment:
@@ -250,6 +250,8 @@ services:
       RADARR_API_KEY: ${RADARR_API_KEY}
       SEERR_URL: ${SEERR_URL}
       SEERR_API_KEY: ${SEERR_API_KEY}
+      MAINTAINERR_URL: ${MAINTAINERR_URL:-}
+      MAINTAINERR_API_KEY: ${MAINTAINERR_API_KEY:-}
       JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
     volumes:
       - ./:/source:ro
@@ -294,11 +296,16 @@ TZ=Etc/UTC
 DEMO_MODE=false
 # true when Marquee sits behind an HTTPS reverse proxy (recommended). false only for a local HTTP demo.
 COOKIE_SECURE=true
-# Optional. Leave empty and Marquee generates one and keeps it in its data volume.
+# Optional. Empty = generated once and kept in the data volume. Set 32+ random characters to pin it.
 SESSION_SECRET=
-# Proxy IP/CIDR allowlist as seen by the container. Empty means no forwarded headers trusted.
+# Comma-separated trusted reverse-proxy IPs/narrow CIDRs as seen by the container.
+# Empty ignores X-Forwarded-For. Do not use a wildcard, true, or a hop count.
+# Proxy must overwrite forwarded client headers; backend must not be publicly reachable.
 TRUSTED_PROXIES=
-# Simple single-proxy alternative. 1 only when every backend connection comes through your proxy.
+# Simpler alternative: 1 trusts exactly one proxy hop (default off).
+# ONLY if backend access is restricted to your proxy, including LAN/container callers.
+# Current compose publishes on host interfaces; configure firewall/bind isolation yourself.
+# Direct backend callers can spoof client IPs with this mode. Strict allowlist wins if set.
 TRUST_PROXY=0
 
 # Internal vs external URLs: the container talks to your services over your
@@ -329,9 +336,15 @@ SEERR_API_KEY=replace-with-your-seerr-api-key
 # Weather is set per viewer in Settings: city picker and F/C units.
 # Open-Meteo weather and city search are free for non-commercial use. No API key or account needed.
 # Dashboard display name is set by a Jellyfin administrator in Settings (default Marquee).
+
+# Optional read-only Leaving soon shelf. Internal URL, including BASE_PATH if used.
+# Maintainerr has no built-in API authentication; do not expose it publicly.
+MAINTAINERR_URL=http://maintainerr:6246
+# Optional compatibility header. Maintainerr does not validate this as protection.
+MAINTAINERR_API_KEY=
 ```
 
-Dockhand users can put these variables in the stack's Environment tab instead of a `.env` file. The source folder must still be mounted: change `./:/source:ro` to your source checkout location if Dockhand's stack directory differs. No particular host OS, NAS, or stack manager is required.
+Dockhand users can put these variables in the stack's Environment tab instead of a `.env` file. Only the local-checkout compose needs a source folder: change `./:/source:ro` to your checkout location if Dockhand's stack directory differs. The standalone stack downloads its own source. No particular host OS, NAS, or stack manager is required.
 
 ### Reverse proxy
 

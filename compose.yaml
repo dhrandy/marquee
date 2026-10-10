@@ -18,7 +18,7 @@ services:
           npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
           # Start Marquee.
-          node src/server.js
+          exec node src/server.js
     ports:
       - "${MARQUEE_PORT}:8739"
     environment:

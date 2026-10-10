@@ -1,34 +1,11 @@
 name: marquee
 services:
-  # Creates non-root ownership for settings. Exited (0) is normal.
-  marquee-init:
-    image: alpine:3.21
-    user: 0:0
-    command:
-      - sh
-      - -c
-      - chown -R 1000:1000 /settings
-    volumes:
-      - type: bind
-        source: /DATA/AppData/marquee/settings
-        target: /settings
-    read_only: true
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-    security_opt:
-      - no-new-privileges:true
-    restart: "no"
   marquee:
     image: node:22-alpine
     working_dir: /app
-    user: node
+    # Root only prepares the settings folder; the app runs as node.
+    user: "0:0"
     init: true
-    depends_on:
-      marquee-init:
-        condition: service_completed_successfully
     # Downloads current main on restart; requires HTTPS access to GitHub and npm.
     command:
       - sh
@@ -36,25 +13,31 @@ services:
       - |
           set -eu
 
-          # 1. Download Marquee from GitHub.
+          # 1. Prepare saved settings, then switch to the non-root app user.
+          chown -R 1000:1000 /home/node
+          exec su node -s /bin/sh -c '
+          set -eu
+
+          # 2. Download Marquee from GitHub.
           wget -O /app/source.tar.gz \
             https://codeload.github.com/dhrandy/marquee/tar.gz/refs/heads/main
 
-          # 2. Unpack the app and remove the download.
+          # 3. Unpack the app and remove the download.
           tar -xzf /app/source.tar.gz -C /app --strip-components=1
           rm /app/source.tar.gz
 
-          # 3. Leave tests and development files out of the running copy.
+          # 4. Leave tests and development files out of the running copy.
           rm -rf /app/tests /app/docs /app/.github \
             /app/playwright.config.js /app/README.md \
             /app/compose.yaml /app/compose.casaos.yaml \
             /app/.env.example /app/.gitignore
 
-          # 4. Install only the packages the app needs to run.
+          # 5. Install only the packages the app needs to run.
           npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
-          # 5. Start Marquee.
+          # 6. Start Marquee.
           exec node src/server.js
+          '
     # Change published for your host port; keep target 8739.
     ports:
       - target: 8739
@@ -82,7 +65,7 @@ services:
       JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
     volumes:
       - type: bind
-        # Persistent settings: keep this source in sync with marquee-init.
+        # Persistent settings: keep this folder when updating.
         source: /DATA/AppData/marquee/settings
         target: /home/node
     tmpfs:
@@ -91,15 +74,24 @@ services:
     read_only: true
     cap_drop:
       - ALL
+    # Only needed for folder ownership and the startup user switch.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
     healthcheck:
       test:
         - CMD
+        - su
         - node
-        - -e
-        - fetch('http://127.0.0.1:8739/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+        - -s
+        - /bin/sh
+        - -c
+        - node -e "fetch('http://127.0.0.1:8739/api/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 30s
       timeout: 5s
       start_period: 60s
