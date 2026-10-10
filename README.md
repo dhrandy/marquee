@@ -23,7 +23,6 @@ During beta, updates are manual. The standalone stack below downloads current so
 - [Run with Docker Compose](#run-with-docker-compose)
 - [Connection settings](#connection-settings)
 - [Privacy and permissions](#privacy-and-permissions)
-- [Development and tests](#development-and-tests)
 
 ## Features
 
@@ -386,26 +385,6 @@ Media APIs and image proxies require a session. Images are limited to item IDs r
 Demo mode must not be enabled for private live deployments: it allows anyone to open the sample dashboard without Jellyfin credentials. Demo adapters are separate from the live adapters and cannot expose live data.
 
 City searches share the typed city name with Open-Meteo when you press Find city. Forecast requests share the selected city coordinates only when the widget is enabled. Results are cached for 15 minutes. Attribution stays visible with the widget. Weather and geocoding need no key or account and are free for non-commercial use. See [geocoding documentation](https://open-meteo.com/en/docs/geocoding-api) and [Open-Meteo documentation](https://open-meteo.com/en/docs) for service terms and use limits.
-
-## Development and tests
-
-Node 22 or newer:
-
-```sh
-npm ci
-DEMO_MODE=true COOKIE_SECURE=false npm start
-```
-
-For tests, install Chromium with Playwright or set `CHROME_PATH` to a local Chrome executable:
-
-```sh
-npx playwright install chromium
-npm test
-```
-
-Tests live in `tests/`. They cover calendar status mapping, date ranges, API auth gates, same-origin protection, no-crawl/security headers, calendar navigation and filters, settings persistence, weather toggling, logout, and mobile overflow at 393, 320, and 280 pixels. Browser screenshot output goes to `/downloads` locally or the test output directory in CI. The workflow runs tests only. It does not publish anything.
-
-Integration adapters live separately from the UI so another feed can be added later.
 
 ## Third-party artwork
 
