@@ -337,3 +337,9 @@ test("radarr calendar entries carry popup details and a TMDB id", async () => {
   assert.equal(entry.runtime, 100);
   assert.match(entry.poster, /image\.tmdb\.org/);
 });
+
+test("section order accepts only a complete unique known list", async () => {
+  const { cleanSectionOrder, sectionOrderDefaults } = await import("../src/personal.js");
+  assert.deepEqual(cleanSectionOrder([...sectionOrderDefaults].reverse()), [...sectionOrderDefaults].reverse());
+  for (const value of [null, {}, [], sectionOrderDefaults.slice(1), [...sectionOrderDefaults.slice(1), "weather"], [...sectionOrderDefaults.slice(1), "token"]]) assert.equal(cleanSectionOrder(value), null);
+});

@@ -1470,8 +1470,7 @@ test("facts panel uses real images and SVG icons instead of emoji, so nothing de
   await page.locator("#recent .recent-detail").first().click();
   const flags = page.locator("#episode-facts .country-flags img.flag");
   await expect(flags.first()).toBeVisible();
-  const broken = await flags.evaluateAll((imgs) => imgs.filter((i) => !i.complete || i.naturalWidth === 0).length);
-  expect(broken).toBe(0);
+  await expect.poll(() => flags.evaluateAll((imgs) => imgs.filter((i) => !i.complete || i.naturalWidth === 0).length)).toBe(0);
   const text = await page.locator("#episode-facts").innerText();
   expect(text).not.toMatch(/[\u{1F000}-\u{1FFFF}\u2600-\u27BF]/u);
   await expect(page.locator("#episode-facts .score-mark svg").first()).toBeVisible();
@@ -1917,3 +1916,74 @@ for (const width of [1440, 1100, 834, 393]) {
     }
   });
 }
+
+for (const width of [1440, 393]) {
+  test(`section order drag, server reload, hidden sections and reset at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 950 });
+    await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.locator("#section-order-list li")).toHaveCount(9);
+    const handle = page.getByRole("button", { name: "Drag Release calendar", exact: true });
+    const target = page.locator('#section-order-list li[data-order-key="search"]');
+    await handle.scrollIntoViewIfNeeded();
+    const from = await handle.boundingBox(), to = await target.boundingBox();
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + 20, to.y + 18, { steps: 12 });
+    await page.mouse.up();
+    await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
+    await expect(page.locator("#section-order-list li").first()).toHaveAttribute("data-order-key", "calendar");
+    await page.locator("#section-order-settings").screenshot({ path: `/downloads/marquee-order-settings-${width}.png` });
+    await page.getByRole("button", { name: "Close settings" }).click();
+    expect(await page.evaluate(() => document.querySelector("#calendar-section").getBoundingClientRect().top < document.querySelector("#search-section").getBoundingClientRect().top)).toBe(true);
+    await page.screenshot({ path: `/downloads/marquee-order-dashboard-${width}.png` });
+    await page.reload();
+    await expect(page.locator("#recent .poster-card")).toHaveCount(6);
+    expect(await page.evaluate(() => document.querySelector("#calendar-section").getBoundingClientRect().top < document.querySelector("#search-section").getBoundingClientRect().top)).toBe(true);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Move Weather down", exact: true }).click();
+    await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
+    await page.locator('[data-pref="watchlist"]').check();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#watchlist-section")).toBeVisible();
+    await expect(page.locator("#watchlist-section").getByRole("button", { name: "Collapse Watchlist" })).toBeVisible();
+    await page.locator("#watchlist-section").getByRole("button", { name: "Collapse Watchlist" }).click();
+    await expect(page.locator("#watchlist-content")).toBeHidden();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Reset order", exact: true }).click();
+    await expect(page.locator("#section-order-list li").first()).toHaveAttribute("data-order-key", "search");
+    await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
+  });
+}
+
+test("section ordering keeps separated search/weather and saves touch drag", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 393, height: 900 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage(); await login(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByPlaceholder("City name").fill("Sample");
+  await page.getByRole("button", { name: "Find city", exact: true }).click();
+  await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
+  await page.locator('[data-pref="weather"]').check();
+  const handle = page.getByRole("button", { name: "Drag Weather", exact: true });
+  await handle.scrollIntoViewIfNeeded();
+  const from = await handle.boundingBox();
+  const to = await page.locator('[data-order-key="calendar"]').boundingBox();
+  const cdp = await context.newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: from.x + 15, y: from.y + 15 }] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: to.x + 15, y: to.y + 15 }] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
+  expect((await (await page.request.get("/api/section-order")).json()).order.indexOf("weather")).toBe(6);
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(page.locator(".home-top-row")).toBeHidden();
+  expect(await page.locator("#weather").evaluate(el => el.parentElement.tagName)).toBe("MAIN");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.locator("#weather").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "/downloads/marquee-order-weather-separated.png" });
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Reset order", exact: true }).click();
+  await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(page.locator(".home-top-row")).toBeVisible();
+  await context.close();
+});

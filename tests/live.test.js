@@ -1170,6 +1170,12 @@ try {
     const before = calls.filter(c => c.path === "/api/v1/request").length;
     assert.equal((await post("/api/watchlist", alice, { mediaType: "movie", mediaId: 9001, saved: true })).status, 200);
     assert.equal((await get("/api/watchlist", alice)).items[0].title, "Requested Film");
+    const order = ["calendar", "search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "popular", "requests"];
+    assert.equal((await post("/api/section-order", alice, { order })).status, 200);
+    assert.deepEqual((await get("/api/section-order", alice)).order, order);
+    assert.notDeepEqual((await get("/api/section-order", bob)).order, order);
+    assert.deepEqual((await get("/api/section-order", (await signin("alice")).headers.get("set-cookie"))).order, order);
+    assert.equal((await post("/api/section-order", alice, { order: ["calendar", "calendar"] })).status, 400);
     assert.equal((await get("/api/watchlist", bob)).items.length, 0);
     assert.equal(calls.filter(c => c.path === "/api/v1/request").length, before);
     await post("/api/watchlist", alice, { mediaType: "movie", mediaId: 9001, saved: false });

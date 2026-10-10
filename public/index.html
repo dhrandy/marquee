@@ -154,6 +154,13 @@
         <span id="settings-role" class="settings-role" hidden>Admin</span>
       </div>
       <p>Display preferences are saved on this device, for this Jellyfin account.</p>
+      <div class="settings-group" id="section-order-settings">
+        <h3>Section order</h3>
+        <p>Drag the handles to arrange your dashboard, top to bottom. Arrow buttons work too.</p>
+        <small>Saved to your Jellyfin account on the server, even when display sync is off. Hidden sections keep their place. Search and weather share a row when side by side.</small>
+        <ol id="section-order-list" aria-label="Dashboard section order"></ol>
+        <div class="order-footer"><button id="reset-section-order" type="button">Reset order</button><span id="section-order-status" role="status"></span></div>
+      </div>
       <div id="feature-settings"></div>
       <label class="setting">Default calendar view
         <select id="default-view">

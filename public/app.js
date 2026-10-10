@@ -140,6 +140,83 @@ function saveWeather() {
     });
   return weatherWrites;
 }
+const sectionLabels = { search: "Search and request", weather: "Weather", watchlist: "Watchlist", continueWatching: "Continue watching", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", popular: "Popular right now", requests: "Request status" };
+const defaultSectionOrder = Object.keys(sectionLabels);
+let sectionOrder = [...defaultSectionOrder], orderWrites = Promise.resolve();
+const sectionElement = key => $(key === "weather" ? "#weather" : key === "popular" ? "#popular-wrap" : `#${key}-section`);
+function applySectionOrder() {
+  const main = $("#dashboard main"), row = $(".home-top-row");
+  const visible = sectionOrder.filter(key => sectionElement(key) && !sectionElement(key).hidden);
+  const paired = visible.includes("search") && visible[visible.indexOf("search") + 1] === "weather";
+  row.hidden = !paired;
+  const desired = [];
+  for (const key of sectionOrder) {
+    const element = sectionElement(key);
+    if (!element) continue;
+    if (paired && ["search", "weather"].includes(key)) {
+      if (element.parentElement !== row) row.append(element);
+      if (key === "search") desired.push(row);
+    } else desired.push(element);
+  }
+  const actual = [...main.children].filter(el => desired.includes(el));
+  if (desired.some((el, index) => actual[index] !== el)) {
+    for (const el of desired) main.insertBefore(el, $("#nothing"));
+  }
+  $("#personal-shelves").hidden = true;
+}
+function buildSectionOrder() {
+  $("#section-order-list").innerHTML = sectionOrder.map((key, index) => `<li data-order-key="${key}"><button type="button" class="order-handle" aria-label="Drag ${sectionLabels[key]}" title="Drag to reorder">⠿</button><span class="order-name">${sectionLabels[key]}<small>${sectionElement(key)?.hidden ? "Hidden" : "Visible"}</small></span><button type="button" data-order-move="-1" aria-label="Move ${sectionLabels[key]} up" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-order-move="1" aria-label="Move ${sectionLabels[key]} down" ${index === sectionOrder.length - 1 ? "disabled" : ""}>↓</button></li>`).join("");
+}
+function saveSectionOrder() {
+  const order = [...sectionOrder];
+  $("#section-order-status").textContent = "Saving…";
+  orderWrites = orderWrites.catch(() => {}).then(() => api("/api/section-order", { method: "POST", body: JSON.stringify({ order }) })).then(() => { $("#section-order-status").textContent = "Saved to your account."; }).catch(error => { $("#section-order-status").textContent = error.message; });
+}
+function moveSection(key, index) {
+  const from = sectionOrder.indexOf(key);
+  if (from < 0 || index < 0 || index >= sectionOrder.length || from === index) return;
+  sectionOrder.splice(from, 1); sectionOrder.splice(index, 0, key);
+  applySectionOrder(); buildSectionOrder(); saveSectionOrder();
+}
+$("#section-order-list").addEventListener("click", event => {
+  const button = event.target.closest("[data-order-move]");
+  if (!button) return;
+  const key = button.closest("[data-order-key]").dataset.orderKey;
+  moveSection(key, sectionOrder.indexOf(key) + Number(button.dataset.orderMove));
+  $(`[data-order-key="${key}"] [data-order-move="${button.dataset.orderMove}"]`)?.focus();
+});
+$("#section-order-list").addEventListener("keydown", event => {
+  if (!event.target.closest(".order-handle") || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  event.preventDefault(); const key = event.target.closest("[data-order-key]").dataset.orderKey;
+  moveSection(key, sectionOrder.indexOf(key) + (event.key === "ArrowUp" ? -1 : 1));
+  $(`[data-order-key="${key}"] .order-handle`)?.focus();
+});
+let sectionDrag = null;
+$("#section-order-list").addEventListener("pointerdown", event => {
+  const handle = event.target.closest(".order-handle");
+  if (!handle || event.button !== 0) return;
+  event.preventDefault(); const item = handle.closest("li");
+  sectionDrag = { key: item.dataset.orderKey, index: sectionOrder.indexOf(item.dataset.orderKey), pointer: event.pointerId };
+  handle.setPointerCapture(event.pointerId); item.classList.add("dragging");
+});
+$("#section-order-list").addEventListener("pointermove", event => {
+  if (!sectionDrag || sectionDrag.pointer !== event.pointerId) return;
+  const dialog = $("#settings"), bounds = dialog.getBoundingClientRect();
+  if (event.clientY < bounds.top + 80) dialog.scrollTop -= 14;
+  if (event.clientY > bounds.bottom - 80) dialog.scrollTop += 14;
+  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("#section-order-list li");
+  all("#section-order-list .drop-target").forEach(el => el.classList.remove("drop-target"));
+  if (target) { sectionDrag.index = sectionOrder.indexOf(target.dataset.orderKey); target.classList.add("drop-target"); }
+});
+function finishSectionDrag(event) {
+  if (!sectionDrag || sectionDrag.pointer !== event.pointerId) return;
+  const drag = sectionDrag; sectionDrag = null;
+  all("#section-order-list li").forEach(el => el.classList.remove("dragging", "drop-target"));
+  if (event.type !== "pointercancel") moveSection(drag.key, drag.index);
+}
+$("#section-order-list").addEventListener("pointerup", finishSectionDrag);
+$("#section-order-list").addEventListener("pointercancel", finishSectionDrag);
+$("#reset-section-order").addEventListener("click", () => { sectionOrder = [...defaultSectionOrder]; applySectionOrder(); buildSectionOrder(); saveSectionOrder(); });
 function applyPrefs() {
   document.body.classList.toggle("colorblind", Boolean(state.prefs.colorblind));
   $("#jellyfin-home").hidden =
@@ -191,6 +268,7 @@ function applyPrefs() {
   $("#weather").hidden = !state.prefs.weather;
   if (state.prefs.weather) loadWeather();
   scheduleWeather();
+  applySectionOrder();
 }
 function buildSettings() {
   const labels = {
@@ -219,7 +297,7 @@ function buildSettings() {
   all("[data-pref]").forEach((el) =>
     el.addEventListener("change", () => {
       state.prefs[el.dataset.pref] = el.checked;
-      persist();
+      persist(); buildSectionOrder();
       if (el.dataset.pref === "colorblind")
         api("/api/accessibility-settings", {
           method: "POST",
@@ -231,6 +309,7 @@ function buildSettings() {
       if (["watchlist", "continueWatching", "nextUp"].includes(el.dataset.pref)) loadPersonalShelves();
     }),
   );
+  buildSectionOrder();
   $("#sync-display").checked = Boolean(state.prefs.syncDisplay);
   $("#default-view").value = state.prefs.defaultView;
   $("#weather-units").value = state.prefs.weatherUnits;
@@ -258,6 +337,11 @@ async function enter(name) {
     try { const { preferences } = await api("/api/display-preferences"); if (preferences) Object.assign(state.prefs, preferences); }
     catch { /* Offline sync keeps this device's saved choices. */ }
   }
+  sectionOrder = [...defaultSectionOrder];
+  try {
+    const { order } = await api("/api/section-order");
+    if (Array.isArray(order) && order.length === defaultSectionOrder.length && new Set(order).size === order.length && order.every(key => defaultSectionOrder.includes(key))) sectionOrder = order;
+  } catch (error) { $("#section-order-status").textContent = error.message; }
   const [weatherSettings, accessibilitySettings] = await Promise.all([
     api("/api/weather-settings"),
     api("/api/accessibility-settings"),
@@ -1087,9 +1171,7 @@ $("#weather-units").addEventListener("change", (event) => {
   persist();
   saveWeather();
 });
-$("#settings-button").addEventListener("click", () =>
-  $("#settings").showModal(),
-);
+$("#settings-button").addEventListener("click", () => { buildSectionOrder(); $("#settings").showModal(); });
 $("#default-view").addEventListener("change", (event) => {
   state.prefs.defaultView = event.target.value;
   delete state.prefs.lastView;
@@ -1443,7 +1525,7 @@ const personalLabels = { watchlist: "Watchlist", continueWatching: "Continue wat
 let personalLoad = 0;
 async function loadPersonalShelves() {
   const seq = ++personalLoad;
-  if (!$("#personal-shelves").children.length) {
+  if (!$("#watchlist-section")) {
     $("#personal-shelves").innerHTML = Object.entries(personalLabels).map(([key, label]) => `<section id="${key}-section" class="personal-section" hidden><div class="section-heading"><div><span class="eyebrow">JUST FOR YOU</span><h2>${label}</h2></div><button class="personal-collapse" data-collapse="${key}" aria-controls="${key}-content" aria-expanded="true" aria-label="Collapse ${label}">⌄</button></div><div id="${key}-content" class="poster-row"></div></section>`).join("");
   }
   applyPrefs();
@@ -1479,7 +1561,7 @@ $("#episode-save").addEventListener("click", async () => {
   } catch (error) { $("#episode-request-status").hidden = false; $("#episode-request-status").textContent = error.message; }
   finally { button.disabled = false; }
 });
-$("#personal-shelves").addEventListener("click", async event => {
+$("#dashboard main").addEventListener("click", async event => {
   const collapse = event.target.closest("[data-collapse]");
   if (collapse) { const key = collapse.dataset.collapse; state.prefs[`${key}Collapsed`] = !state.prefs[`${key}Collapsed`]; collapse.setAttribute("aria-expanded", !state.prefs[`${key}Collapsed`]); collapse.setAttribute("aria-label", `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${personalLabels[key]}`); persist(); return; }
   const remove = event.target.closest("[data-remove-id]");

@@ -1,5 +1,5 @@
 import express from "express";
-import { cleanDisplayPreferences } from "./personal.js";
+import { cleanDisplayPreferences, cleanSectionOrder, sectionOrderDefaults } from "./personal.js";
 import { proxyTrust, allowedOrigin } from "./security.js";
 import crypto from "node:crypto";
 import path from "node:path";
@@ -356,6 +356,18 @@ app.post("/api/display-preferences", requireUser, async (req, res) => {
     await saveSettings(current => ({ ...current, displayByUser: { ...current.displayByUser, [personalKey(req.user)]: preferences } }));
     res.json({ preferences });
   } catch { res.status(500).json({ error: "Could not sync settings. Check the settings volume is writable." }); }
+});
+// Layout order is always account-saved, independently of optional display sync.
+app.get("/api/section-order", requireUser, (req, res) => {
+  res.json({ order: cleanSectionOrder(savedSettings.orderByUser?.[personalKey(req.user)]) || sectionOrderDefaults });
+});
+app.post("/api/section-order", requireUser, async (req, res) => {
+  const order = cleanSectionOrder(req.body.order);
+  if (!order) return res.status(400).json({ error: "Choose each dashboard section exactly once." });
+  try {
+    await saveSettings(current => ({ ...current, orderByUser: { ...current.orderByUser, [personalKey(req.user)]: order } }));
+    res.json({ order });
+  } catch { res.status(500).json({ error: "Could not save section order. Check the settings volume is writable." }); }
 });
 app.get("/api/watchlist", requireUser, (req, res) => {
   res.json({ items: savedSettings.watchlistByUser?.[personalKey(req.user)] || [] });

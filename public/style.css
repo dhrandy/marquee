@@ -1383,3 +1383,23 @@ main > section:not([hidden]), .personal-section:not([hidden]) {
 @media (max-width: 1099px) {
   .home-top-row:has(#weather:not([hidden])) #search-section:not([hidden]) { border-bottom: 1px solid var(--line); padding-bottom: 28px; }
 }
+
+/* Section order controls work with mouse, touch and keyboard. */
+#section-order-list { list-style: none; padding: 0; margin: 18px 0; }
+#section-order-list li { display: flex; align-items: center; gap: 8px; padding: 8px; margin: 5px 0; border: 1px solid var(--line); border-radius: 8px; background: #ffffff04; }
+#section-order-list button { width: 36px; min-width: 36px; height: 36px; padding: 0; font-size: 20px; }
+#section-order-list .order-handle { touch-action: none; cursor: grab; background: transparent; border-color: transparent; font-size: 27px; color: var(--muted); }
+.order-name { flex: 1; font-size: 14px; }
+.order-name small { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+#section-order-list .dragging { opacity: .55; }
+#section-order-list .drop-target { border-color: var(--purple); background: #ac8fff20; }
+.order-footer { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); }
+main > #search-section { max-width: none; margin-top: 0; }
+main > #search-section .search-bar { max-width: 560px; }
+@media (min-width: 1100px) {
+  main > .weather { flex-direction: column; align-items: flex-start; justify-content: flex-start; text-align: left; gap: 0; }
+  main > .weather h2 { font-size: 31px; margin: 8px 0 16px; }
+  main > .weather-forecast, main > .weather .weather-forecast { gap: 24px; }
+  main > .weather .forecast-day { display: grid; justify-items: center; gap: 4px; }
+  main > .weather a { margin-top: 8px; }
+}

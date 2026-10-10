@@ -23,3 +23,9 @@ export function cleanDisplayPreferences(value) {
   }
   return clean;
 }
+
+export const sectionOrderDefaults = ["search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "calendar", "popular", "requests"];
+export function cleanSectionOrder(value) {
+  if (!Array.isArray(value) || value.length !== sectionOrderDefaults.length || new Set(value).size !== value.length || value.some(key => !sectionOrderDefaults.includes(key))) return null;
+  return [...value];
+}

@@ -55,6 +55,7 @@ During beta, updates are manual. Pull the latest image yourself when updating an
 - Installable as a PWA (manifest and service worker). Only static assets are cached; media API responses are never cached.
 - Settings can hide either main section, weather, the status legend, added dates, and poster navigation arrows. Search is on by default; turn it off in Settings if preferred. Existing saved preferences keep their current search choice (older records without a search field keep it on).
 - Mobile defaults to Agenda. Month/week remain available with horizontal scrolling instead of squeezed columns.
+- Drag dashboard sections into any top-to-bottom order in Settings, with arrow buttons for keyboard/touch use and a Reset order button. Each Jellyfin account has its own server-saved order, independent of opt-in display sync. Hidden sections keep their position. Search and weather share their two-column row when adjacent in that order; separated sections use full width.
 - Display preferences are stored on the current device. Weather enabled state, city and F/C units are saved server-side per Jellyfin account and follow that user across devices. The display name is shared.
 - Demo mode with fictional titles and original sample poster art. No external credentials required.
 
