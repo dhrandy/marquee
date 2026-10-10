@@ -368,3 +368,9 @@ test("old section order keeps saved ordering and adds recommendations before pop
   assert.deepEqual(upgraded.filter(key => key !== "recommendations"), legacy);
   assert.equal(upgraded.indexOf("recommendations") + 1, upgraded.indexOf("popular"));
 });
+
+test("section order adds Leaving soon while preserving approved ten-section order", async () => {
+  const { cleanSectionOrder, sectionOrderDefaults } = await import("../src/personal.js");
+  const old = sectionOrderDefaults.filter(key => key !== "leavingSoon").reverse();
+  assert.deepEqual(cleanSectionOrder(old).filter(key => key !== "leavingSoon"), old);
+});

@@ -2,6 +2,9 @@ import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 const shots = process.env.CI ? "test-results/screenshots" : "/downloads";
 fs.mkdirSync(shots, { recursive: true });
+async function view(page, name) {
+  await page.locator(`#page-nav button[data-page="${name}"]`).click();
+}
 async function login(page) {
   // Existing-user fixture: most tests exercise the search-enabled home page.
   await page.addInitScript(() => {
@@ -179,6 +182,7 @@ test("library and calendar popups show the same facts panel as Seerr popups", as
   await page.route("**/api/library/*/facts", (route) =>
     route.fulfill({ json: { facts: null } }),
   );
+  await view(page, "discover");
   await page.locator("#recent .recent-detail").nth(1).click();
   await expect(page.locator("#episode-detail")).toBeVisible();
   await expect(page.locator("#episode-facts")).toBeHidden();
@@ -268,6 +272,7 @@ test("demo search, request flow, requests list, and settings toggles", async ({
 }) => {
   await login(page);
   await expect(page.locator("#requests-section .request-row")).toHaveCount(3);
+  await view(page, "discover");
   await page.getByPlaceholder("Search movies and shows").fill("orbit");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator("#search-results .result-card h3")).toHaveText([
@@ -291,6 +296,7 @@ test("demo search, request flow, requests list, and settings toggles", async ({
   await page.locator('[data-pref="requests"]').check();
   await page.locator('[data-pref="search"]').uncheck();
   await page.getByRole("button", { name: "Close settings" }).click();
+  await view(page, "home");
   await expect(page.locator("#requests-section")).toBeVisible();
   await expect(page.locator("#search-section")).toBeHidden();
 });
@@ -317,6 +323,7 @@ test("seerr titles are rendered as text, not executable markup", async ({
     }),
   );
   await login(page);
+  await view(page, "discover");
   await page.getByPlaceholder("Search movies and shows").fill("anything");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator("#search-results .result-card h3")).toHaveText(
@@ -352,6 +359,7 @@ test("PWA manifest and service worker are served and linked", async ({
 test("search section screenshot for review", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await login(page);
+  await view(page, "discover");
   await page.getByPlaceholder("Search movies and shows").fill("o");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator("#search-results .result-card")).toHaveCount(3);
@@ -369,6 +377,7 @@ test("search section screenshot for review", async ({ page }) => {
       height: Math.min(box.height + 20, 900),
     },
   });
+  await view(page, "home");
   await page
     .locator("#requests-section")
     .screenshot({ path: `${shots}/marquee-requests.png` });
@@ -441,7 +450,8 @@ for (const width of [1440, 393, 320, 280]) {
   test(`search results are rows that fit at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await login(page);
-    await page.getByPlaceholder("Search movies and shows").fill("o");
+    await view(page, "discover");
+  await page.getByPlaceholder("Search movies and shows").fill("o");
     await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(page.locator("#search-results .result-card")).toHaveCount(3);
     await page.waitForTimeout(400);
@@ -498,6 +508,7 @@ test("search footers stay aligned with long titles, missing overviews, and after
     }),
   );
   await login(page);
+  await view(page, "discover");
   await page.getByPlaceholder("Search movies and shows").fill("test");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator("#search-results .result-card")).toHaveCount(3);
@@ -593,6 +604,7 @@ test("Seerr request buttons reflect movie/TV access and escape denial text", asy
     }),
   );
   await login(page);
+  await view(page, "discover");
   await page.getByPlaceholder("Search movies and shows").fill("o");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator("#search-results .request-btn")).toHaveCount(1);
@@ -804,8 +816,10 @@ test("shared queue is titled Requests and keeps requester names", async ({
   page,
 }) => {
   await login(page);
+  await view(page, "home");
   await expect(page.locator("#requests-section h2")).toHaveText("Requests");
   await expect(page.locator(".request-row").first()).toContainText("by");
+  await view(page, "home");
   await page
     .locator("#requests-section")
     .screenshot({ path: `${shots}/marquee-shared-requests.png` });
@@ -880,7 +894,8 @@ for (const width of [1440, 393, 280]) {
   }) => {
     await page.setViewportSize({ width, height: 1000 });
     await login(page);
-    await page.getByPlaceholder("Search movies and shows").fill("Signal");
+    await view(page, "discover");
+  await page.getByPlaceholder("Search movies and shows").fill("Signal");
     await page.getByRole("button", { name: "Search", exact: true }).click();
     await page
       .locator('#search-results [data-detail-type="movie"]')
@@ -891,7 +906,8 @@ for (const width of [1440, 393, 280]) {
       .locator("#episode-detail")
       .screenshot({ path: `${shots}/marquee-search-popup-${width}.png` });
     await page.keyboard.press("Escape");
-    await page.getByPlaceholder("Search movies and shows").fill("North");
+    await view(page, "discover");
+  await page.getByPlaceholder("Search movies and shows").fill("North");
     await page.getByRole("button", { name: "Search", exact: true }).click();
     await page
       .locator('#search-results [data-detail-type="tv"]')
@@ -1149,7 +1165,8 @@ for (const width of [1440, 393, 320, 280]) {
     await page
       .locator("#calendar-section")
       .screenshot({ path: `${shots}/marquee-colorblind-${width}.png` });
-    await page.locator("#requests [data-detail-id]").first().focus();
+    await view(page, "home");
+  await page.locator("#requests [data-detail-id]").first().focus();
     await page.keyboard.press("Enter");
     await expect(page.locator("#episode-detail")).toBeVisible();
     await expect(page.locator("#episode-poster")).toBeVisible();
@@ -1386,6 +1403,7 @@ for (const width of [1440, 393, 320, 280]) {
         if (availability === 3 && mediaType === "movie") {
           await page.locator("#episode-detail").screenshot({ path: `${shots}/marquee-processing-popup-${width}.png` });
           await page.locator("#episode-close").click();
+  await view(page, "discover");
           await page.locator("#search-results .result-card").screenshot({ path: `${shots}/marquee-processing-card-${width}.png` });
         } else await page.locator("#episode-close").click();
       }
@@ -1446,6 +1464,7 @@ test("desktop popup puts meta and genres under the title and clamps long overvie
   });
   await page.setViewportSize({ width: 1280, height: 900 });
   await login(page);
+  await view(page, "discover");
   await page.locator("#recent .recent-detail").first().click();
   await expect(page.locator("#episode-genres-top")).toBeVisible();
   await expect(page.locator("#episode-meta-top")).toBeVisible();
@@ -1458,6 +1477,7 @@ test("desktop popup puts meta and genres under the title and clamps long overvie
   expect(await page.locator("#episode-overview-top").evaluate((el) => el.clientHeight)).toBeGreaterThan(clamped);
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 393, height: 850 });
+  await view(page, "discover");
   await page.locator("#recent .recent-detail").first().click();
   await expect(page.locator("#episode-genres")).toBeVisible();
   await expect(page.locator("#episode-meta")).toBeVisible();
@@ -1467,6 +1487,7 @@ test("desktop popup puts meta and genres under the title and clamps long overvie
 
 test("facts panel uses real images and SVG icons instead of emoji, so nothing depends on emoji fonts", async ({ page }) => {
   await login(page);
+  await view(page, "discover");
   await page.locator("#recent .recent-detail").first().click();
   const flags = page.locator("#episode-facts .country-flags img.flag");
   await expect(flags.first()).toBeVisible();
@@ -1514,7 +1535,7 @@ test("search is live: results follow typing after a pause, stale answers are ign
   await expect(page.locator("#search-results .result-card")).toHaveCount(0);
 });
 
-test("weather forecast shows three readable day tiles on phones", async ({ page }) => {
+test("weather forecast shows five readable day tiles on phones", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 900 });
   await login(page);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -1524,7 +1545,7 @@ test("weather forecast shows three readable day tiles on phones", async ({ page 
   await page.locator('[data-pref="weather"]').check();
   await page.getByRole("button", { name: "Close settings" }).click();
   const days = page.locator("#weather-forecast .forecast-day");
-  await expect(days).toHaveCount(3);
+  await expect(days).toHaveCount(5);
   expect(await days.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(14);
   const boxes = await days.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().right));
   expect(Math.max(...boxes)).toBeLessThanOrEqual(393);
@@ -1534,13 +1555,15 @@ for (const width of [1440, 393]) {
   test(`request dialog: season picker and advanced options at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await login(page);
-    await page.getByPlaceholder("Search movies and shows").fill("harbor");
+    await view(page, "discover");
+  await page.getByPlaceholder("Search movies and shows").fill("harbor");
     await page.getByRole("button", { name: "Search", exact: true }).click();
     let body = null;
     await page.route("**/api/seerr/request", async (route) => {
       body = route.request().postDataJSON();
       await route.continue();
     });
+  await view(page, "discover");
     await page.locator("#search-results").getByRole("button", { name: "Request", exact: true }).first().click();
     const dialog = page.locator("dialog#request-dialog[open]");
     await expect(dialog.locator(".season-row input[data-season]")).toHaveCount(3);
@@ -1566,8 +1589,10 @@ for (const width of [1440, 393]) {
 
 test("request dialog can be cancelled and needs a season", async ({ page }) => {
   await login(page);
+  await view(page, "discover");
   await page.getByPlaceholder("Search movies and shows").fill("harbor");
   await page.getByRole("button", { name: "Search", exact: true }).click();
+  await view(page, "discover");
   await page.locator("#search-results").getByRole("button", { name: "Request", exact: true }).first().click();
   const dialog = page.locator("dialog#request-dialog[open]");
   await dialog.locator('input[data-season="2"]').uncheck();
@@ -1595,6 +1620,7 @@ for (const width of [1440, 393]) {
 
 test("request dialog still lets you request when the options cannot load", async ({ page }) => {
   await login(page);
+  await view(page, "discover");
   await page.getByPlaceholder("Search movies and shows").fill("harbor");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await page.route("**/api/seerr/request-options*", (route) =>
@@ -1605,6 +1631,7 @@ test("request dialog still lets you request when the options cannot load", async
     body = route.request().postDataJSON();
     await route.continue();
   });
+  await view(page, "discover");
   await page.locator("#search-results").getByRole("button", { name: "Request", exact: true }).first().click();
   const dialog = page.locator("dialog#request-dialog[open]");
   await expect(dialog.locator("#request-status")).toContainText("boom");
@@ -1617,12 +1644,14 @@ for (const width of [1440, 393]) {
   test(`search redesign preview at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: width > 500 ? 900 : 850 });
     await login(page);
-    await page.getByPlaceholder("Search movies and shows").fill("o");
+    await view(page, "discover");
+  await page.getByPlaceholder("Search movies and shows").fill("o");
     await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(page.locator("#search-results .result-card")).toHaveCount(3);
     await expect(page.locator("#search-results .row-cert")).toHaveCount(3);
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${shots}/marquee-search-redesign-${width}.png` });
+  await view(page, "discover");
     await page.locator("#search-results .result-card h3").first().click();
     await expect(page.locator("#episode-detail[open]")).toBeVisible();
     await page.waitForTimeout(300);
@@ -1697,9 +1726,9 @@ for (const selected of ["2026-10-04", "2026-10-07", "2026-10-10", "2027-01-01", 
     await page.getByRole("button", { name: "Previous period" }).click();
     await expect(page.locator(".day-cell").first()).toHaveAttribute("data-date", weekDates[0]);
     if (selected === "2026-10-07") {
-      await page.locator("#calendar-section").screenshot({ path: "/downloads/marquee-sunday-week-desktop.png" });
+      await page.locator("#calendar-section").screenshot({ path: `${shots}/marquee-sunday-week-desktop.png` });
       await page.setViewportSize({ width: 393, height: 852 });
-      await page.locator("#calendar-section").screenshot({ path: "/downloads/marquee-sunday-week-mobile.png" });
+      await page.locator("#calendar-section").screenshot({ path: `${shots}/marquee-sunday-week-mobile.png` });
     }
     const todayResponse = page.waitForResponse(r => r.url().includes("/api/calendar?"));
     await page.getByRole("button", { name: "Today", exact: true }).click();
@@ -1729,13 +1758,13 @@ for (const width of [1440, 834, 393, 320, 280]) {
     if (width < 1100) expect(idleGap).toBe(57);
     await expect(page.locator("#search-status")).toBeHidden();
     await expect(page.locator("#search-results")).toBeHidden();
-    await page.screenshot({ path: `/downloads/marquee-spacing-after-${width}.png`, fullPage: true });
+    await page.screenshot({ path: `${shots}/marquee-spacing-after-${width}.png`, fullPage: true });
     const input = page.getByPlaceholder("Search movies and shows");
     await input.fill("o");
     await input.press("Enter");
     await expect(page.locator("#search-results .result-card")).toHaveCount(3);
     await page.locator("#search-results").evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished)));
-    await page.screenshot({ path: `/downloads/marquee-spacing-results-${width}.png`, fullPage: true });
+    await page.screenshot({ path: `${shots}/marquee-spacing-results-${width}.png`, fullPage: true });
     await input.press("Escape");
     await expect(page.locator("#search-results .result-card")).toHaveCount(0);
     expect(await gap()).toBe(idleGap);
@@ -1792,9 +1821,9 @@ for (const [label, saved, enabled] of [
       await page.getByRole("button", { name: "Settings", exact: true }).click();
       await page.locator('[data-pref="search"]').check();
       await page.getByRole("button", { name: "Close settings" }).click();
-      await page.screenshot({ path: "/downloads/marquee-search-default-on-tablet.png" });
+      await page.screenshot({ path: `${shots}/marquee-search-default-on-tablet.png` });
       await page.setViewportSize({ width: 393, height: 852 });
-      await page.screenshot({ path: "/downloads/marquee-search-default-on-phone.png" });
+      await page.screenshot({ path: `${shots}/marquee-search-default-on-phone.png` });
     }
   });
 }
@@ -1814,7 +1843,7 @@ test("weather location is device opt-in, approximate, and falls back to configur
   const url = new URL((await located).url());
   expect(url.searchParams.get("longitude")).toBe("-80.99");
   await expect(page.locator("#weather-location-status")).toContainText("approximate location");
-  await expect(page.locator(".forecast-icon")).toHaveCount(3);
+  await expect(page.locator(".forecast-icon")).toHaveCount(5);
   await expect(page.locator("#weather-content")).not.toContainText("Sample City");
   await page.addInitScript(() => Object.defineProperty(navigator, "geolocation", { value: { getCurrentPosition: (_success, fail) => fail({ code: 1 }) } }));
   await page.reload();
@@ -1832,33 +1861,40 @@ test("personal shelves are opt-in, collapsible and account-scoped watchlist save
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(page.locator("#continueWatching-content .poster-card")).toHaveCount(3);
   await expect(page.locator("#nextUp-content .poster-card")).toHaveCount(2);
+  await view(page, "home");
   await page.getByRole("button", { name: "Collapse Continue watching", exact: true }).click();
   await expect(page.locator("#continueWatching-content")).toBeHidden();
+  await view(page, "home");
   await page.getByRole("button", { name: "Expand Continue watching", exact: true }).click();
+  await view(page, "home");
   await page.locator("#continueWatching-content [data-personal]").first().click();
   await expect(page.locator("#episode-play")).toHaveText("Resume in Jellyfin ↗");
   await page.getByRole("button", { name: "Close episode details" }).click();
   let requests = 0;
   page.on("request", req => { if (req.url().endsWith("/api/seerr/request") && req.method() === "POST") requests++; });
+  await view(page, "discover");
   await page.getByPlaceholder("Search movies and shows").fill("o");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator("#search-results .result-card")).toHaveCount(3);
+  await view(page, "home");
   await page.locator("#continueWatching-content [data-personal]").first().click();
   await page.getByRole("button", { name: "Add to Jellyfin favorites", exact: true }).click();
   await expect(page.getByRole("button", { name: "Remove from Jellyfin favorites", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close episode details" }).click();
   await expect(page.locator("#watchlist-content .poster-card")).toHaveCount(1);
   expect(requests).toBe(0);
+  await view(page, "discover");
   await page.getByPlaceholder("Search movies and shows").press("Escape");
-  await page.screenshot({ path: "/downloads/marquee-personal-desktop.png", fullPage: true });
+  await page.screenshot({ path: `${shots}/marquee-personal-desktop.png`, fullPage: true });
   await page.setViewportSize({ width: 393, height: 852 });
-  await page.screenshot({ path: "/downloads/marquee-personal-phone.png", fullPage: true });
+  await page.screenshot({ path: `${shots}/marquee-personal-phone.png`, fullPage: true });
   const other = await context.browser().newContext();
   const otherPage = await other.newPage();
   await otherPage.goto("http://127.0.0.1:8739/");
   await otherPage.getByRole("button", { name: "Explore demo" }).click();
   expect((await (await otherPage.request.get("/api/watchlist")).json()).items).toHaveLength(0);
   await other.close();
+  await view(page, "home");
   await page.locator(".watchlist-remove").click();
   await expect(page.locator("#watchlist-content .poster-card")).toHaveCount(0);
 });
@@ -1906,7 +1942,7 @@ for (const width of [1440, 1100, 834, 393]) {
     await page.getByRole("button", { name: "Close settings" }).click();
     const hidden = await positions();
     expect(Math.abs(hidden.contentLeft - hidden.left)).toBeLessThan(1);
-    await page.screenshot({ path: `/downloads/marquee-weather-left-${width}.png` });
+    await page.screenshot({ path: `${shots}/marquee-weather-left-${width}.png` });
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.locator('[data-pref="search"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
@@ -1922,7 +1958,7 @@ for (const width of [1440, 393]) {
     await page.setViewportSize({ width, height: 950 });
     await login(page);
     await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await expect(page.locator("#section-order-list li")).toHaveCount(10);
+    await expect(page.locator("#section-order-list li")).toHaveCount(11);
     const handle = page.getByRole("button", { name: "Drag Release calendar", exact: true });
     const target = page.locator('#section-order-list li[data-order-key="search"]');
     await handle.scrollIntoViewIfNeeded();
@@ -1933,10 +1969,10 @@ for (const width of [1440, 393]) {
     await page.mouse.up();
     await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
     await expect(page.locator("#section-order-list li").first()).toHaveAttribute("data-order-key", "calendar");
-    await page.locator("#section-order-settings").screenshot({ path: `/downloads/marquee-order-settings-${width}.png` });
+    await page.locator("#section-order-settings").screenshot({ path: `${shots}/marquee-order-settings-${width}.png` });
     await page.getByRole("button", { name: "Close settings" }).click();
     expect(await page.evaluate(() => document.querySelector("#calendar-section").getBoundingClientRect().top < document.querySelector("#search-section").getBoundingClientRect().top)).toBe(true);
-    await page.screenshot({ path: `/downloads/marquee-order-dashboard-${width}.png` });
+    await page.screenshot({ path: `${shots}/marquee-order-dashboard-${width}.png` });
     await page.reload();
     await expect(page.locator("#recent .poster-card")).toHaveCount(6);
     expect(await page.evaluate(() => document.querySelector("#calendar-section").getBoundingClientRect().top < document.querySelector("#search-section").getBoundingClientRect().top)).toBe(true);
@@ -1945,8 +1981,10 @@ for (const width of [1440, 393]) {
     await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
     await page.locator('[data-pref="watchlist"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
+    await view(page, "home");
     await expect(page.locator("#watchlist-section")).toBeVisible();
     await expect(page.locator("#watchlist-section").getByRole("button", { name: "Collapse Watchlist" })).toBeVisible();
+  await view(page, "home");
     await page.locator("#watchlist-section").getByRole("button", { name: "Collapse Watchlist" }).click();
     await expect(page.locator("#watchlist-content")).toBeHidden();
     await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -1979,7 +2017,7 @@ test("section ordering keeps separated search/weather and saves touch drag", asy
   expect(await page.locator("#weather").evaluate(el => el.parentElement.tagName)).toBe("MAIN");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.locator("#weather").scrollIntoViewIfNeeded();
-  await page.screenshot({ path: "/downloads/marquee-order-weather-separated.png" });
+  await page.screenshot({ path: `${shots}/marquee-order-weather-separated.png` });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Reset order", exact: true }).click();
   await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
@@ -2001,12 +2039,13 @@ test("continue watching renders series, movies and episode labels without changi
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.locator('[data-pref="continueWatching"]').check();
   await page.getByRole("button", { name: "Close settings" }).click();
+  await view(page, "home");
   const shelf = page.locator("#continueWatching-section");
   await expect(shelf).toContainText("S2E4 · The Wedding");
   await expect(shelf).toContainText("2024 · Series");
   await expect(shelf).toContainText("2026 · Movie");
   await expect(shelf).toContainText("S2E3 · Episode title");
-  await shelf.screenshot({ path: "/downloads/marquee-episode-fixed.png" });
+  await shelf.screenshot({ path: `${shots}/marquee-episode-fixed.png` });
   await shelf.locator("[data-personal]").first().click();
   await expect(page.locator("#episode-subtitle")).toHaveText("S2E4 · The Wedding");
   await expect(page.locator("#episode-play")).toHaveAttribute("href", "https://jellyfin.example/episode-great");
@@ -2015,7 +2054,7 @@ test("continue watching renders series, movies and episode labels without changi
   await expect(page.locator("#episode-request")).toBeHidden();
   await expect(page.locator("#episode-facts")).toBeVisible();
   await expect(page.locator("#episode-save")).toBeVisible();
-  await page.locator("#episode-detail").screenshot({ path: "/downloads/marquee-personal-popup-fixed.png" });
+  await page.locator("#episode-detail").screenshot({ path: `${shots}/marquee-personal-popup-fixed.png` });
 });
 
 for (const width of [1440, 393, 280]) {
@@ -2025,6 +2064,7 @@ for (const width of [1440, 393, 280]) {
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     for (const key of ["watchlist", "continueWatching", "nextUp"]) await page.locator(`[data-pref="${key}"]`).check();
     await page.getByRole("button", { name: "Close settings" }).click();
+    await view(page, "home");
     for (const key of ["watchlist", "continueWatching", "nextUp"]) {
       const header = page.locator(`#${key}-section .section-heading`), button = header.locator("button");
       const heading = await header.locator("h2").boundingBox(), arrow = await button.boundingBox();
@@ -2036,12 +2076,14 @@ for (const width of [1440, 393, 280]) {
       expect(await button.locator("svg").evaluate(el => getComputedStyle(el).transform)).not.toBe("none");
       await button.click();
     }
-    await page.locator("#nextUp-section .section-heading").screenshot({ path: `/downloads/marquee-arrow-header-${width}.png` });
+  await view(page, "home");
+    await page.locator("#nextUp-section .section-heading").screenshot({ path: `${shots}/marquee-arrow-header-${width}.png` });
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Move Next up up", exact: true }).click();
     await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#nextUp-section h2")).toBeVisible();
-    await page.locator("#nextUp-section").screenshot({ path: `/downloads/marquee-arrow-section-${width}.png` });
+  await view(page, "home");
+    await page.locator("#nextUp-section").screenshot({ path: `${shots}/marquee-arrow-section-${width}.png` });
   });
 }
 
@@ -2055,7 +2097,7 @@ test("media shelves auto-refresh quietly, skip disabled/hidden tabs, and defer f
   await page.locator('[data-pref="nextUp"]').check();
   await page.locator("#shelf-refresh-minutes").selectOption("1");
   await page.getByRole("button", { name: "Close settings" }).click();
-  await page.locator("#continueWatching-content .poster-card").first().waitFor();
+  await page.locator("#continueWatching-content .poster-card").first().waitFor({ state: "attached" });
   const recent = (await (await page.request.get("/api/recent")).json()).items;
   let calls = { recent: 0, continueWatching: 0, nextUp: 0, watchlist: 0 };
   let version = 0;
@@ -2068,13 +2110,13 @@ test("media shelves auto-refresh quietly, skip disabled/hidden tabs, and defer f
   version = 1;
   await page.clock.runFor(75000);
   await expect(page.locator("#recent")).toContainText("Updated 1");
-  await expect(page.locator("#continueWatching-content")).toContainText("Updated 1");
-  await expect(page.locator("#nextUp-content")).toContainText("Updated 1");
+  expect(calls.continueWatching).toBe(0); expect(calls.nextUp).toBe(0);
   expect(calls.watchlist).toBe(0);
   expect(await page.locator("#recent").evaluate(el => el.scrollLeft)).toBe(savedScroll);
   const beforeNode = await page.locator("#recent .poster-card").first().elementHandle();
   await page.clock.runFor(75000);
   expect(await beforeNode.evaluate(el => el.isConnected)).toBe(true);
+  await view(page, "discover");
   await page.locator("#recent .recent-detail").first().focus();
   const beforeCalls = { ...calls }; version = 2;
   await page.clock.runFor(75000);
@@ -2082,7 +2124,7 @@ test("media shelves auto-refresh quietly, skip disabled/hidden tabs, and defer f
   await page.evaluate(() => document.activeElement.blur());
   await page.clock.runFor(15000);
   await expect(page.locator("#recent")).toContainText("Updated 2");
-  await page.locator("#continueWatching-content [data-personal]").first().click();
+  await page.locator("#recent .recent-detail").first().click();
   const popupTitle = await page.locator("#episode-title").textContent();
   const popupCalls = { ...calls }; version = 3;
   await page.clock.runFor(75000);
@@ -2147,14 +2189,15 @@ for (const width of [1440, 834, 393, 280]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const unnamed = await page.locator("button").evaluateAll(buttons => buttons.filter(el => el.getClientRects().length && !el.textContent.trim() && !el.getAttribute("aria-label") && !el.getAttribute("aria-labelledby") && !el.getAttribute("title")).map(el => el.outerHTML));
     expect(unnamed).toEqual([]);
+    await view(page, "home");
     for (const key of ["continueWatching", "nextUp"]) {
       await page.locator(`#${key}-content [data-personal]`).first().click();
       await expect(page.locator("#episode-title")).not.toBeEmpty();
       await page.getByRole("button", { name: "Close episode details" }).click();
     }
-    await page.screenshot({ path: `/downloads/marquee-audit-full-${width}.png`, fullPage: true });
+    await page.screenshot({ path: `${shots}/marquee-audit-full-${width}.png`, fullPage: true });
     await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.locator("#settings").screenshot({ path: `/downloads/marquee-audit-settings-${width}.png` });
+    await page.locator("#settings").screenshot({ path: `${shots}/marquee-audit-settings-${width}.png` });
     expect(errors).toEqual([]);
   });
 }
@@ -2167,6 +2210,7 @@ test("refresh interval persists and syncs, collapsed shelves remain collapsed af
   await expect.poll(async () => (await (await page.request.get("/api/display-preferences")).json()).preferences?.shelfRefreshMinutes).toBe(2);
   await page.locator('[data-pref="continueWatching"]').check();
   await page.getByRole("button", { name: "Close settings" }).click();
+  await view(page, "home");
   await page.getByRole("button", { name: "Collapse Continue watching", exact: true }).click();
   await page.evaluate(() => document.activeElement.blur());
   await page.route("**/api/personal/continueWatching", route => route.fulfill({ json: { items: [{ id: "new", title: "Fresh episode", subtitle: "S1E3", art: "north", detail: {} }] } }));
@@ -2193,12 +2237,14 @@ for (const width of [1440, 393]) {
     await page.locator('[data-pref="nextUp"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#nextUp-content .watched-badge")).toHaveAttribute("aria-label", "Episode watched");
-    await page.locator("#recent-section").screenshot({ path: `/downloads/marquee-watched-preview-${width}.png` });
-    await page.locator("#nextUp-section").screenshot({ path: `/downloads/marquee-watched-episode-${width}.png` });
+    await page.locator("#recent-section").screenshot({ path: `${shots}/marquee-watched-preview-${width}.png` });
+  await view(page, "home");
+    await page.locator("#nextUp-section").screenshot({ path: `${shots}/marquee-watched-episode-${width}.png` });
+  await view(page, "discover");
     await page.locator("#recent .recent-detail").first().click();
     await expect(page.locator("#episode-poster-status .watched-badge")).toBeVisible();
     await expect(page.locator('#episode-poster-status [aria-label="In your library"]')).toBeVisible();
-    await page.locator("#episode-detail").screenshot({ path: `/downloads/marquee-watched-popup-${width}.png` });
+    await page.locator("#episode-detail").screenshot({ path: `${shots}/marquee-watched-popup-${width}.png` });
   });
 }
 
@@ -2210,20 +2256,138 @@ for (const width of [1440, 393]) {
     await page.locator('[data-pref="recommendations"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#recommendation-seed")).toContainText("Because you watched");
+  await view(page, "discover");
     await page.locator("#recent .recent-detail").nth(1).click();
     // Demo library fixture has a known parent series identity, no Seerr dependency.
     await page.evaluate(() => { currentDetail.favoriteId = "demo-series"; currentDetail.favorite = false; setDetailSave(currentDetail); });
     await expect(page.locator("#episode-save")).toHaveAttribute("aria-pressed", "false");
-    await page.locator("#episode-detail").screenshot({ path: `/downloads/marquee-heart-empty-${width}.png` });
+    await page.locator("#episode-detail").screenshot({ path: `${shots}/marquee-heart-empty-${width}.png` });
     await page.getByRole("button", { name: "Add to Jellyfin favorites", exact: true }).click();
     await expect(page.locator("#episode-save")).toHaveAttribute("aria-pressed", "true");
-    await page.locator("#episode-detail").screenshot({ path: `/downloads/marquee-heart-filled-${width}.png` });
+    await page.locator("#episode-detail").screenshot({ path: `${shots}/marquee-heart-filled-${width}.png` });
     await page.getByRole("button", { name: "Close episode details" }).click();
     await expect(page.locator("#watchlist-content .poster-card")).toHaveCount(1);
-    await page.locator("#watchlist-section").screenshot({ path: `/downloads/marquee-favorites-row-${width}.png` });
-    await page.locator("#recommendations-section").screenshot({ path: `/downloads/marquee-recommendations-${width}.png` });
+  await view(page, "home");
+    await page.locator("#watchlist-section").screenshot({ path: `${shots}/marquee-favorites-row-${width}.png` });
+  await view(page, "discover");
+    await page.locator("#recommendations-section").screenshot({ path: `${shots}/marquee-recommendations-${width}.png` });
+  await view(page, "home");
     await page.locator("#requests-filter").selectOption("mine");
     await expect(page.locator("#requests .request-row")).toHaveCount(1);
-    await page.locator("#requests-section").screenshot({ path: `/downloads/marquee-myrequests-${width}.png` });
+  await view(page, "home");
+    await page.locator("#requests-section").screenshot({ path: `${shots}/marquee-myrequests-${width}.png` });
   });
 }
+
+for (const width of [1440, 393, 280]) {
+  test(`Maintainerr Leaving soon preview, defaults and safe popout at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 }); await login(page);
+    await expect(page.locator("#leavingSoon-section")).toBeHidden();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[data-pref="leavingSoon"]').check();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#leavingSoon-content .poster-card")).toHaveCount(3);
+    await expect(page.locator("#leavingSoon-section")).toContainText("eligibility, not guaranteed removal");
+    await expect(page.locator("#leavingSoon-content .leaving-date").first()).toContainText("Eligible");
+  await view(page, "home");
+    await page.locator("#leavingSoon-section").screenshot({ path: `${shots}/marquee-leaving-soon-${width}.png` });
+  await view(page, "home");
+    await page.locator("#leavingSoon-content [data-personal]").first().click();
+    await expect(page.locator("#episode-title")).toContainText(await page.locator("#leavingSoon-content h3").first().textContent());
+    await page.getByRole("button", { name: "Close episode details" }).click();
+    await page.getByRole("button", { name: "Collapse Leaving soon", exact: true }).click();
+    await expect(page.locator("#leavingSoon-content")).toBeHidden();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.reload(); await expect(page.locator("#leavingSoon-content")).toBeHidden();
+  });
+}
+
+
+for (const width of [1440, 393, 280]) {
+  test(`two focused tabs navigation preview at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/"); await page.getByRole("button", { name: "Explore demo" }).click();
+    await expect(page.locator("#recent .poster-card")).toHaveCount(6);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    for (const key of ["watchlist", "continueWatching", "nextUp", "leavingSoon", "recommendations"]) await page.locator(`[data-pref="${key}"]`).check();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    for (const view of ["discover", "home"]) {
+      await page.locator(`button[data-page="${view}"]`).click();
+      await expect(page.locator(`button[data-page="${view}"]`)).toHaveAttribute("aria-current", "page");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: `${shots}/marquee-nav-${view}-${width}.png` });
+    }
+    await expect(page.locator("#calendar-section")).toBeHidden();
+    await view(page, "home");
+  await expect(page.locator("#requests-section")).toBeVisible();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator("#tab-order").selectOption("home");
+    await expect(page.locator("#page-nav button").first()).toHaveText("Home");
+    await page.locator("#tab-order-settings").screenshot({ path: `${shots}/marquee-nav-settings-${width}.png` });
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.reload(); await expect(page.locator('button[data-page="home"]')).toHaveAttribute("aria-current", "page");
+  });
+}
+
+for (const width of [1440, 393, 280]) {
+  test(`five day weather tab mockup at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 }); await page.goto("/");
+    await page.getByRole("button", { name: "Explore demo" }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByPlaceholder("City name").fill("Sample");
+    await page.getByRole("button", { name: "Find city", exact: true }).click();
+    await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
+    await page.locator('[data-pref="weather"]').check();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#weather-forecast .forecast-day")).toHaveCount(5);
+    if (width >= 1100) {
+      const alignment = await page.evaluate(() => ({
+        left: document.querySelector("#view-kicker").getBoundingClientRect().top,
+        right: document.querySelector("#weather .eyebrow").getBoundingClientRect().top,
+        search: document.querySelector("#search-section").getBoundingClientRect().width,
+        weather: document.querySelector("#weather").getBoundingClientRect().width,
+      }));
+      expect(Math.abs(alignment.left - alignment.right)).toBeLessThan(6);
+      expect(Math.abs(alignment.search - alignment.weather)).toBeLessThan(2);
+    }
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.screenshot({ path: `${shots}/marquee-nav-weather-${width}.png` });
+    await page.locator("#weather").screenshot({ path: `${shots}/marquee-five-days-${width}.png` });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
+
+test("tab startup sync, empty states and shelf order stay independent", async ({ page }) => {
+  await login(page);
+  const order = (await (await page.request.get("/api/section-order")).json()).order;
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator("#sync-display").check();
+  await page.locator("#tab-order").selectOption("home");
+  for (const key of ["watchlist", "continueWatching", "nextUp", "leavingSoon", "requests"]) await page.locator(`[data-pref="${key}"]`).uncheck();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await view(page, "home");
+  await expect(page.locator("#nothing")).toBeVisible();
+  expect((await (await page.request.get("/api/section-order")).json()).order).toEqual(order);
+  await expect.poll(async () => (await (await page.request.get("/api/display-preferences")).json()).preferences?.firstTab).toBe("home");
+  await page.evaluate(() => localStorage.setItem("marquee:Demo viewer:preferences", JSON.stringify({ syncDisplay: true })));
+  await page.reload();
+  await expect(page.locator('#page-nav button[data-page="home"]')).toHaveAttribute("aria-current", "page");
+  await view(page, "discover");
+  await expect(page.locator("#nothing")).toBeHidden();
+});
+
+test("Home refreshes its active personal shelves without polling Discover", async ({ page }) => {
+  await page.clock.install(); await login(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  for (const key of ["continueWatching", "nextUp"]) await page.locator(`[data-pref="${key}"]`).check();
+  await page.locator("#shelf-refresh-minutes").selectOption("1");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(page.locator("#continueWatching-content .poster-card")).toHaveCount(3);
+  await expect(page.locator("#nextUp-content .poster-card")).toHaveCount(2);
+  let recent = 0, personal = 0;
+  await page.route("**/api/recent", route => { recent++; route.fulfill({ json: { items: [] } }); });
+  for (const key of ["continueWatching", "nextUp"]) await page.route(`**/api/personal/${key}`, route => { personal++; route.fulfill({ json: { items: [] } }); });
+  await view(page, "home"); await page.evaluate(() => document.activeElement.blur());
+  await page.clock.runFor(75000);
+  await expect.poll(() => personal).toBeGreaterThanOrEqual(2); expect(recent).toBe(0);
+});

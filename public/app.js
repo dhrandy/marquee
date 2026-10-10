@@ -36,7 +36,7 @@ const defaults = {
   defaultView: "auto",
   watchlist: false, continueWatching: false, nextUp: false,
   watchlistCollapsed: false, continueWatchingCollapsed: false, nextUpCollapsed: false,
-  recommendations: false, myRequests: false,
+  firstTab: "discover", leavingSoon: false, leavingSoonCollapsed: false, recommendations: false, myRequests: false,
   syncDisplay: false,
   shelfRefreshMinutes: 5,
 };
@@ -112,7 +112,7 @@ $("#sync-display").addEventListener("change", async event => {
   try {
     if (enabled) {
       const { preferences } = await api("/api/display-preferences");
-      if (preferences) Object.assign(state.prefs, preferences);
+      if (preferences) { Object.assign(state.prefs, preferences); pageInitialized = false; }
     }
     state.prefs.syncDisplay = enabled;
     state.view = state.prefs.lastView || (state.prefs.defaultView === "auto" ? "agenda" : state.prefs.defaultView);
@@ -142,7 +142,7 @@ function saveWeather() {
     });
   return weatherWrites;
 }
-const sectionLabels = { search: "Search and request", weather: "Weather", watchlist: "Watchlist", continueWatching: "Continue watching", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", recommendations: "Recommendations", popular: "Popular right now", requests: "Request status" };
+const sectionLabels = { search: "Search and request", weather: "Weather", watchlist: "Watchlist", continueWatching: "Continue watching", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", leavingSoon: "Leaving soon", recommendations: "Recommendations", popular: "Popular right now", requests: "Request status" };
 const defaultSectionOrder = Object.keys(sectionLabels);
 let sectionOrder = [...defaultSectionOrder], orderWrites = Promise.resolve();
 const sectionElement = key => $(key === "weather" ? "#weather" : key === "popular" ? "#popular-wrap" : `#${key}-section`);
@@ -165,7 +165,40 @@ function applySectionOrder() {
     for (const el of desired) main.insertBefore(el, $("#nothing"));
   }
   $("#personal-shelves").hidden = true;
+  applyDashboardPage();
 }
+let dashboardPage = "discover";
+const pageSections = { home: ["watchlist", "continueWatching", "nextUp", "leavingSoon", "requests"], discover: ["weather", "search", "recent", "popular", "calendar", "recommendations"] };
+let pageInitialized = false;
+function applyDashboardPage() {
+  if (!pageInitialized) { dashboardPage = state.prefs.firstTab === "home" ? "home" : "discover"; pageInitialized = true; }
+  const home = dashboardPage === "home";
+  const intro = $(".view-intro");
+  if (!home && state.prefs.search) $("#search-section").prepend(intro);
+  else $("#dashboard main").prepend(intro);
+  $("#dashboard").dataset.page = dashboardPage;
+  $("#view-kicker").textContent = home ? "YOUR COLLECTION, YOUR PACE" : "FIND YOUR NEXT FAVORITE";
+  $("#view-title").textContent = home ? "Right where you left off." : "Something good is waiting.";
+  $("#view-description").textContent = home ? "Keep watching, save a favorite, and catch it before it's gone." : "Explore the latest arrivals, see what's next, and find your next watch.";
+  const visible = pageSections[dashboardPage];
+  for (const key of sectionOrder) {
+    const element = sectionElement(key);
+    if (element) element.classList.toggle("page-away", !visible.includes(key));
+  }
+  $("#nothing").hidden = visible.some(key => sectionElement(key) && !sectionElement(key).hidden);
+  $("#nothing").textContent = home ? "Your Home shelves are off. Turn on a personal shelf or Requests in Settings." : "Your Discover sections are off. Turn one on in Settings.";
+  $("#page-nav").append(...(state.prefs.firstTab === "home" ? [$('button[data-page="home"]'), $('button[data-page="discover"]')] : [$('button[data-page="discover"]'), $('button[data-page="home"]')]));
+  $("#tab-order").value = state.prefs.firstTab || "discover";
+  all("button[data-page]").forEach(button => { if (button.dataset.page === dashboardPage) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current"); });
+}
+$("#tab-order").addEventListener("change", event => { state.prefs.firstTab = event.target.value; persist(); applyDashboardPage(); });
+$("#page-nav").addEventListener("click", event => {
+  const button = event.target.closest("[data-page]");
+  if (!button) return;
+  dashboardPage = button.dataset.page; applyDashboardPage();
+  scrollTo({ top: 0, behavior: "instant" });
+  autoRefreshShelves();
+});
 function buildSectionOrder() {
   $("#section-order-list").innerHTML = sectionOrder.map((key, index) => `<li data-order-key="${key}"><button type="button" class="order-handle" aria-label="Drag ${sectionLabels[key]}" title="Drag to reorder">⠿</button><span class="order-name">${sectionLabels[key]}<small>${sectionElement(key)?.hidden ? "Hidden" : "Visible"}</small></span><button type="button" data-order-move="-1" aria-label="Move ${sectionLabels[key]} up" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-order-move="1" aria-label="Move ${sectionLabels[key]} down" ${index === sectionOrder.length - 1 ? "disabled" : ""}>↓</button></li>`).join("");
 }
@@ -256,7 +289,7 @@ function applyPrefs() {
   all(".poster-card time").forEach((el) => {
     el.hidden = !state.prefs.addedDates;
   });
-  for (const key of ["watchlist", "continueWatching", "nextUp"]) {
+  for (const key of ["watchlist", "continueWatching", "nextUp", "leavingSoon"]) {
     const section = $(`#${key}-section`);
     if (section) section.hidden = !state.prefs[key];
     const content = $(`#${key}-content`);
@@ -265,11 +298,11 @@ function applyPrefs() {
     if (collapse) {
       collapse.setAttribute("aria-expanded", !state.prefs[`${key}Collapsed`]);
       collapse.title = `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${sectionLabels[key]}`;
-      collapse.setAttribute("aria-label", `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${{ watchlist: "Watchlist", continueWatching: "Continue watching", nextUp: "Next up" }[key]}`);
+      collapse.setAttribute("aria-label", `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${{ watchlist: "Watchlist", continueWatching: "Continue watching", nextUp: "Next up", leavingSoon: "Leaving soon" }[key]}`);
     }
   }
-  $("#personal-shelves").hidden = !["watchlist", "continueWatching", "nextUp"].some(key => state.prefs[key]);
-  $("#nothing").hidden = state.prefs.recent || state.prefs.calendar || state.prefs.watchlist || state.prefs.continueWatching || state.prefs.nextUp;
+  $("#personal-shelves").hidden = !["watchlist", "continueWatching", "nextUp", "leavingSoon"].some(key => state.prefs[key]);
+  $("#nothing").hidden = state.prefs.recent || state.prefs.calendar || state.prefs.watchlist || state.prefs.continueWatching || state.prefs.nextUp || state.prefs.leavingSoon || state.prefs.recommendations;
   $("#weather").hidden = !state.prefs.weather;
   if (state.prefs.weather) loadWeather();
   scheduleWeather();
@@ -279,6 +312,7 @@ function applyPrefs() {
 function buildSettings() {
   const labels = {
     watchlist: "Watchlist - Jellyfin favorites (off by default)",
+    leavingSoon: "Leaving soon (Maintainerr, off by default)",
     recommendations: "Recommendations (off by default)",
     continueWatching: "Continue watching (off by default)",
     nextUp: "Next up (off by default)",
@@ -315,7 +349,7 @@ function buildSettings() {
       if (el.dataset.pref === "recent" && el.checked) loadRecent();
       if (el.dataset.pref === "popular" && el.checked) loadPopular();
       if (el.dataset.pref === "requests" && el.checked) loadRequests();
-      if (["watchlist", "continueWatching", "nextUp"].includes(el.dataset.pref)) loadPersonalShelves();
+      if (["watchlist", "continueWatching", "nextUp", "leavingSoon"].includes(el.dataset.pref)) loadPersonalShelves();
     }),
   );
   buildSectionOrder();
@@ -347,10 +381,11 @@ async function enter(name) {
     try { const { preferences } = await api("/api/display-preferences"); if (preferences) Object.assign(state.prefs, preferences); }
     catch { /* Offline sync keeps this device's saved choices. */ }
   }
+  pageInitialized = false;
   sectionOrder = [...defaultSectionOrder];
   try {
     let { order } = await api("/api/section-order");
-    if (Array.isArray(order) && order.length === defaultSectionOrder.length - 1 && !order.includes("recommendations")) { order = [...order]; order.splice(order.indexOf("popular"), 0, "recommendations"); }
+    if (Array.isArray(order) && [9, 10].includes(order.length)) { order = [...order]; for (const key of ["leavingSoon", "recommendations"]) if (!order.includes(key)) order.splice(order.indexOf("popular"), 0, key); }
     if (Array.isArray(order) && order.length === defaultSectionOrder.length && new Set(order).size === order.length && order.every(key => defaultSectionOrder.includes(key))) sectionOrder = order;
   } catch (error) { $("#section-order-status").textContent = error.message; }
   const [weatherSettings, accessibilitySettings] = await Promise.all([
@@ -489,7 +524,7 @@ function scheduleShelfRefresh() {
 async function autoRefreshShelves() {
   if (shelfRefreshBusy || !shelfRefreshInterval() || !safeShelfRefresh()) return;
   const interval = shelfRefreshInterval() * 60000;
-  const keys = ["recent", "continueWatching", "nextUp"].filter(key => state.prefs[key] && Date.now() - (shelfLastLoaded[key] || 0) >= interval);
+  const keys = ["recent", "continueWatching", "nextUp"].filter(key => pageSections[dashboardPage].includes(key) && state.prefs[key] && Date.now() - (shelfLastLoaded[key] || 0) >= interval);
   if (!keys.length) return;
   shelfRefreshBusy = true;
   try {
@@ -1616,12 +1651,12 @@ document.addEventListener("error", (event) => {
     img.replaceWith(Object.assign(document.createElement("span"), { className: "flag-code", textContent: img.dataset.code || "" }));
 }, true);
 
-const personalLabels = { watchlist: "Watchlist", continueWatching: "Continue watching", nextUp: "Next up" };
+const personalLabels = { leavingSoon: "Leaving soon", watchlist: "Watchlist", continueWatching: "Continue watching", nextUp: "Next up" };
 let personalLoad = 0;
 async function loadPersonalShelves() {
   const seq = ++personalLoad;
   if (!$("#watchlist-section")) {
-    $("#personal-shelves").innerHTML = Object.entries(personalLabels).map(([key, label]) => `<section id="${key}-section" class="personal-section" hidden><div class="section-heading"><div><span class="eyebrow">JUST FOR YOU</span><h2>${label}</h2></div><button class="personal-collapse" data-collapse="${key}" aria-controls="${key}-content" aria-expanded="true" aria-label="Collapse ${label}" title="Collapse ${label}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><div id="${key}-content" class="poster-row"></div></section>`).join("");
+    $("#personal-shelves").innerHTML = Object.entries(personalLabels).map(([key, label]) => `<section id="${key}-section" class="personal-section" hidden><div class="section-heading"><div><span class="eyebrow">JUST FOR YOU</span><h2>${label}</h2>${key === "leavingSoon" ? `<p class="departure-note">Scheduled by Maintainerr. Dates show eligibility, not guaranteed removal.</p>` : ""}</div><button class="personal-collapse" data-collapse="${key}" aria-controls="${key}-content" aria-expanded="true" aria-label="Collapse ${label}" title="Collapse ${label}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><div id="${key}-content" class="poster-row"></div></section>`).join("");
   }
   applyPrefs();
   await Promise.all(Object.keys(personalLabels).map(key => {
@@ -1633,7 +1668,7 @@ const personalRequests = {};
 async function loadPersonalShelf(key, { quiet = false, seq = personalLoad } = {}) {
   const request = (personalRequests[key] || 0) + 1; personalRequests[key] = request;
   try {
-    const { items } = await shelfApi(key === "watchlist" ? "/api/watchlist" : `/api/personal/${key}`);
+    const { items } = await shelfApi(key === "leavingSoon" ? "/api/leaving-soon" : key === "watchlist" ? "/api/watchlist" : `/api/personal/${key}`);
     if (request !== personalRequests[key] || seq !== personalLoad) return;
     if (quiet && !safeShelfRefresh()) { delete shelfLastLoaded[key]; return; }
     shelfLastLoaded[key] = Date.now();
@@ -1647,11 +1682,16 @@ async function loadPersonalShelf(key, { quiet = false, seq = personalLoad } = {}
     $(`#${key}-content`).innerHTML = `<p class="empty">${escape(error.message)}</p>`;
   }
 }
+function leavingLabel(item) {
+  if (item.immediate) return "Eligible next Maintainerr run";
+  const date = new Date(item.leavingAt);
+  return date <= new Date() ? "Eligible for removal" : `Eligible ${date.toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" })}`;
+}
 function renderPersonalShelf(key, items) {
   $(`#${key}-content`).innerHTML = items.length ? items.map((item, index) => {
     const poster = item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`;
-    return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}</div><h3>${escape(item.title)}</h3></button><p>${escape(item.subtitle || item.year || "")}</p>${key === "continueWatching" ? `<progress max="100" value="${Number(item.progress) || 0}" aria-label="${escape(item.title)} progress"></progress><p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-id="${escape(item.favoriteId)}" aria-label="Remove ${escape(item.title)} from Jellyfin favorites">Remove favorite</button>` : ""}</article>`;
-  }).join("") : `<p class="empty">${key === "watchlist" ? "Your Jellyfin movie and series favorites appear here. Use the heart in a title's popout to add one." : key === "continueWatching" ? "Nothing in progress. Start watching in Jellyfin and it appears here." : "No next episodes yet. Your Jellyfin viewing history fills this shelf."}</p>`;
+    return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}</div><h3>${escape(item.title)}</h3></button><p>${escape(item.subtitle || item.year || "")}</p>${key === "leavingSoon" ? `<p class="leaving-date">${escape(leavingLabel(item))}</p>` : ""}${key === "continueWatching" ? `<progress max="100" value="${Number(item.progress) || 0}" aria-label="${escape(item.title)} progress"></progress><p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-id="${escape(item.favoriteId)}" aria-label="Remove ${escape(item.title)} from Jellyfin favorites">Remove favorite</button>` : ""}</article>`;
+  }).join("") : `<p class="empty">${key === "leavingSoon" ? "No eligible scheduled departures in your Jellyfin library." : key === "watchlist" ? "Your Jellyfin movie and series favorites appear here. Use the heart in a title's popout to add one." : key === "continueWatching" ? "Nothing in progress. Start watching in Jellyfin and it appears here." : "No next episodes yet. Your Jellyfin viewing history fills this shelf."}</p>`;
   fixBrokenPosters();
 }
 async function updateWatchlist(itemId, saved) {
@@ -1674,5 +1714,5 @@ $("#dashboard main").addEventListener("click", async event => {
   const button = event.target.closest("[data-personal]");
   if (!button) return;
   const key = button.dataset.personal, item = (key === "watchlist" ? state.watchlistItems : state.personalItems[key])[Number(button.dataset.index)];
-  { showDetail({ ...item.detail, favoriteId: item.favoriteId, favorite: item.favorite, watched: item.watched, watchedScope: item.watchedScope, poster: item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`, backdrop: item.backdropId ? `/api/image/${encodeURIComponent(item.backdropId)}?type=Backdrop` : null, playLink: item.link, availability: 5, factsUrl: `/api/library/${encodeURIComponent(item.id)}/facts` }); $("#episode-play").textContent = key === "continueWatching" ? "Resume in Jellyfin ↗" : "Play in Jellyfin ↗"; }
+  { showDetail({ title: item.title, subtitle: item.subtitle, ...item.detail, favoriteId: item.favoriteId, favorite: item.favorite, watched: item.watched, watchedScope: item.watchedScope, poster: item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`, backdrop: item.backdropId ? `/api/image/${encodeURIComponent(item.backdropId)}?type=Backdrop` : null, playLink: item.link, availability: 5, factsUrl: `/api/library/${encodeURIComponent(item.id)}/facts` }); $("#episode-play").textContent = key === "continueWatching" ? "Resume in Jellyfin ↗" : "Play in Jellyfin ↗"; }
 });

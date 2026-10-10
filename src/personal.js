@@ -3,8 +3,8 @@ export const displayPreferenceDefaults = {
   recent: true, calendar: true, legend: true, addedDates: true,
   shelfNavigation: true, search: true, hideUnmonitored: false,
   requests: true, popular: true, ratings: true, jellyfinLink: true,
-  popularCollapsed: false, defaultView: "auto", watchlist: false,
-  recommendations: false, myRequests: false, continueWatching: false, nextUp: false, watchlistCollapsed: false,
+  firstTab: "discover", popularCollapsed: false, defaultView: "auto", watchlist: false,
+  leavingSoon: false, leavingSoonCollapsed: false, recommendations: false, myRequests: false, continueWatching: false, nextUp: false, watchlistCollapsed: false,
   continueWatchingCollapsed: false, nextUpCollapsed: false,
 };
 export function cleanDisplayPreferences(value) {
@@ -14,6 +14,7 @@ export function cleanDisplayPreferences(value) {
     if (!(key in value)) continue;
     if (typeof defaultValue === "boolean") {
       if (typeof value[key] !== "boolean") return null;
+    } else if (key === "firstTab") { if (!["discover", "home"].includes(value[key])) return null;
     } else if (!["auto", "month", "week", "day", "agenda", "list"].includes(value[key])) return null;
     clean[key] = value[key];
   }
@@ -28,9 +29,12 @@ export function cleanDisplayPreferences(value) {
   return clean;
 }
 
-export const sectionOrderDefaults = ["search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "calendar", "recommendations", "popular", "requests"];
+export const sectionOrderDefaults = ["search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "calendar", "leavingSoon", "recommendations", "popular", "requests"];
 export function cleanSectionOrder(value) {
-  if (Array.isArray(value) && value.length === sectionOrderDefaults.length - 1 && !value.includes("recommendations") && new Set(value).size === value.length && value.every(key => sectionOrderDefaults.includes(key))) { value = [...value]; value.splice(value.indexOf("popular"), 0, "recommendations"); }
+  if (Array.isArray(value) && [9, 10].includes(value.length) && new Set(value).size === value.length && value.every(key => sectionOrderDefaults.includes(key)) && sectionOrderDefaults.filter(key => !["recommendations", "leavingSoon"].includes(key)).every(key => value.includes(key))) {
+    value = [...value];
+    for (const key of ["leavingSoon", "recommendations"]) if (!value.includes(key)) value.splice(value.indexOf("popular"), 0, key);
+  }
   if (!Array.isArray(value) || value.length !== sectionOrderDefaults.length || new Set(value).size !== value.length || value.some(key => !sectionOrderDefaults.includes(key))) return null;
   return [...value];
 }

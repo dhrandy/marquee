@@ -1229,7 +1229,7 @@ try {
     assert.equal((await post("/api/watchlist", alice, { itemId: "great-series", saved: true })).status, 200);
     assert.equal((await get("/api/watchlist", alice)).items[0].title, "Favorite title");
     assert.equal((await get("/api/watchlist", alice)).items[0].watched, true);
-    const order = ["calendar", "search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "recommendations", "popular", "requests"];
+    const order = ["calendar", "search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "leavingSoon", "recommendations", "popular", "requests"];
     assert.equal((await post("/api/section-order", alice, { order })).status, 200);
     assert.deepEqual((await get("/api/section-order", alice)).order, order);
     assert.notDeepEqual((await get("/api/section-order", bob)).order, order);

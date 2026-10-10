@@ -393,3 +393,9 @@ Country flags are served from the [flag-icons](https://github.com/lipis/flag-ico
 ## Rights
 
 Copyright (c) 2026 dhrandy. All rights reserved. Marquee is proprietary; no open-source license is granted. Third-party asset notices apply only to those assets.
+
+### Maintainerr Leaving soon (optional)
+
+Set `MAINTAINERR_URL` to its internal container/LAN base URL (include its `BASE_PATH`, if set). `MAINTAINERR_API_KEY` is an optional `X-Api-Key` header, not authentication: Maintainerr does not validate inbound API keys. Do not publish Maintainerr's port publicly assuming a key protects it. Enable Leaving soon in Settings, where a connection test is also available.
+
+The shelf is read-only and shows up to 24 accessible Jellyfin titles from active Maintainerr delete-file collections, earliest eligibility first. `addDate + deleteAfterDays` is eligibility, not a guaranteed deletion date: handler schedules, playback and later rule changes can defer removal. A missing timer is eligible at the next run. Non-delete actions and "delete show if empty" are not shown as departures. Exclusions (including parent shows/seasons), failed rule evaluations and this viewer's Jellyfin access are checked; unverified exclusions stop the shelf rather than inventing dates. Old/Plex-only Maintainerr installs and versions without `/api/collections/overlay-data` are not supported. No Maintainerr settings or secrets are read, no actions are triggered, and no files are deleted by Marquee.

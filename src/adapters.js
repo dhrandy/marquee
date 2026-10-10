@@ -337,7 +337,7 @@ const webBase = (external, internal) =>
   (external || internal || "").replace(/\/$/, "");
 const jellyfinWebBase = () =>
   webBase(process.env.JELLYFIN_WEB_URL, process.env.JELLYFIN_URL);
-const jellyfinLink = (id) => {
+export const jellyfinLink = (id) => {
   const base = jellyfinWebBase();
   return base
     ? `${base}/web/index.html#!/details?id=${encodeURIComponent(id)}`
@@ -735,6 +735,7 @@ export async function testService(name) {
       path: "/api/v3/system/status",
       key: process.env.RADARR_API_KEY,
     },
+    maintainerr: { base: process.env.MAINTAINERR_URL, path: "/api/collections/overlay-data", key: process.env.MAINTAINERR_API_KEY },
     seerr: {
       base: process.env.SEERR_URL,
       path: "/api/v1/status",
@@ -745,9 +746,10 @@ export async function testService(name) {
   if (!service) return { ok: false, error: "Unknown service." };
   if (!service.base) return { ok: false, error: `${name} is not configured.` };
   try {
-    await upstream(service.base, service.path, {
+    const data = await upstream(service.base, service.path, {
       headers: service.key ? { "X-Api-Key": service.key } : {},
     });
+    if (name === "maintainerr" && !Array.isArray(data)) throw new Error("Maintainerr did not return a collections list.");
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error.message };

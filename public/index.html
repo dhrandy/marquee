@@ -47,7 +47,12 @@
           <button id="logout" class="icon-btn" aria-label="Sign out" title="Sign out"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M7.5 3.75C6.67157 3.75 6 4.42157 6 5.25L6 18.75C6 19.5784 6.67157 20.25 7.5 20.25H13.5C14.3284 20.25 15 19.5784 15 18.75V15C15 14.5858 15.3358 14.25 15.75 14.25C16.1642 14.25 16.5 14.5858 16.5 15V18.75C16.5 20.4069 15.1569 21.75 13.5 21.75H7.5C5.84315 21.75 4.5 20.4069 4.5 18.75L4.5 5.25C4.5 3.59315 5.84315 2.25 7.5 2.25L13.5 2.25C15.1569 2.25 16.5 3.59315 16.5 5.25V9C16.5 9.41421 16.1642 9.75 15.75 9.75C15.3358 9.75 15 9.41421 15 9V5.25C15 4.42157 14.3284 3.75 13.5 3.75L7.5 3.75ZM18.2197 8.46967C18.5126 8.17678 18.9874 8.17678 19.2803 8.46967L22.2803 11.4697C22.5732 11.7626 22.5732 12.2374 22.2803 12.5303L19.2803 15.5303C18.9874 15.8232 18.5126 15.8232 18.2197 15.5303C17.9268 15.2374 17.9268 14.7626 18.2197 14.4697L19.9393 12.75L9 12.75C8.58579 12.75 8.25 12.4142 8.25 12C8.25 11.5858 8.58579 11.25 9 11.25L19.9393 11.25L18.2197 9.53033C17.9268 9.23744 17.9268 8.76256 18.2197 8.46967Z" /></svg></button>
         </div>
       </header>
+      <nav id="page-nav" class="page-nav" aria-label="Main navigation">
+        <button type="button" data-page="discover" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"/></svg><span>Discover</span></button>
+        <button type="button" data-page="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M5 10v10h14V10M9 20v-7h6v7"/></svg><span>Home</span></button>
+      </nav>
       <main>
+        <div class="view-intro"><span id="view-kicker" class="eyebrow">FIND YOUR NEXT FAVORITE</span><h1 id="view-title">Something good is waiting.</h1><p id="view-description">Explore the latest arrivals, see what's next, and find your next watch.</p></div>
         <p id="global-error" role="alert" hidden></p>
         <div class="home-top-row">
         <section id="search-section">
@@ -156,9 +161,9 @@
       </div>
       <p>Display preferences are saved on this device, for this Jellyfin account.</p>
       <div class="settings-group" id="section-order-settings">
-        <h3>Section order</h3>
-        <p>Drag the handles to arrange your dashboard, top to bottom. Arrow buttons work too.</p>
-        <small>Saved to your Jellyfin account on the server, even when display sync is off. Hidden sections keep their place. Search and weather share a row when side by side.</small>
+        <h3>Shelf order within tabs</h3>
+        <p>Drag the handles to arrange shelves within their tabs, top to bottom. Arrow buttons work too.</p>
+        <small>Saved to your Jellyfin account on the server, even when display sync is off. Discover and Home keep their assigned shelves; dragging does not change tabs. Hidden sections keep their place. Search and weather share a row when side by side.</small>
         <ol id="section-order-list" aria-label="Dashboard section order"></ol>
         <div class="order-footer"><button id="reset-section-order" type="button">Reset order</button><span id="section-order-status" role="status"></span></div>
       </div>
@@ -200,6 +205,7 @@
         <div class="settings-input-row"><input id="display-name" maxlength="40" value="Marquee" /><button id="save-display-name">Save name</button></div>
         <p id="display-name-status" role="status"></p>
       </div>
+      <div id="tab-order-settings" class="settings-group"><span class="eyebrow">YOUR STARTING POINT</span><h3>Tab order &amp; startup</h3><p>Choose which tab comes first and opens when you sign in. This does not move any shelves.</p><label>First tab<select id="tab-order"><option value="discover">Discover, then Home</option><option value="home">Home, then Discover</option></select></label></div>
       <div class="connections">
         <h3>Connections</h3>
         <p>Test each service with the server's saved settings.</p>
@@ -207,6 +213,7 @@
           <button data-test="jellyfin">Jellyfin</button>
           <button data-test="sonarr">Sonarr</button>
           <button data-test="radarr">Radarr</button>
+          <button data-test="maintainerr">Maintainerr</button>
           <button data-test="seerr">Seerr</button>
         </div>
         <p id="connection-result" role="status"></p>

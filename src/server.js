@@ -1,3 +1,4 @@
+import { leavingSoon } from "./maintainerr.js";
 import express from "express";
 import { cleanDisplayPreferences, cleanSectionOrder, sectionOrderDefaults } from "./personal.js";
 import { proxyTrust, allowedOrigin } from "./security.js";
@@ -645,10 +646,18 @@ app.get("/api/seerr/search", requireUser, async (req, res) => {
 });
 app.post("/api/test-connection", requireUser, async (req, res) => {
   const { service } = req.body || {};
-  if (!["jellyfin", "sonarr", "radarr", "seerr"].includes(service))
+  if (!["jellyfin", "sonarr", "radarr", "seerr", "maintainerr"].includes(service))
     return res.status(400).json({ error: "Unknown service." });
   if (demo) return res.json({ ok: true });
   res.json(await testService(service));
+});
+app.get("/api/leaving-soon", requireUser, async (req, res) => {
+  if (!demo && !process.env.MAINTAINERR_URL) return res.status(503).json({ error: "Set MAINTAINERR_URL on the server to see scheduled departures." });
+  try {
+    const items = demo ? titles.slice(0, 3).map((item, index) => ({ ...item, favoriteId: item.id, favorite: false, leavingAt: new Date(Date.now() + (index + 2) * 86400000).toISOString() })) : await leavingSoon(req.user);
+    for (const item of items) req.user.state.allowedImages.add(item.id);
+    res.json({ items });
+  } catch { res.status(502).json({ error: "Could not verify Maintainerr departures. Check its URL, version, collections and exclusions." }); }
 });
 app.get("/api/recommendations", requireUser, async (req, res) => {
   if (demo) return res.json({ seed: "North of Nowhere", items: demoSearch("") });
@@ -1065,10 +1074,10 @@ app.get("/api/weather", requireUser, weatherLimit, async (req, res) => {
       current: { temperature_2m: celsius ? 20 : 68, weather_code: 2 },
       current_units: { temperature_2m: celsius ? "°C" : "°F" },
       daily: {
-        time: ["2026-10-07", "2026-10-08", "2026-10-09"],
-        weather_code: [2, 3, 61],
-        temperature_2m_max: celsius ? [22, 23, 22] : [72, 74, 71],
-        temperature_2m_min: celsius ? [12, 13, 11] : [54, 56, 52],
+        time: ["2026-10-10", "2026-10-11", "2026-10-12", "2026-10-13", "2026-10-14"],
+        weather_code: [2, 3, 61, 0, 2],
+        temperature_2m_max: celsius ? [22, 23, 22, 24, 21] : [72, 74, 71, 75, 70],
+        temperature_2m_min: celsius ? [12, 13, 11, 12, 10] : [54, 56, 52, 54, 50],
       },
     });
   }
@@ -1081,7 +1090,7 @@ app.get("/api/weather", requireUser, weatherLimit, async (req, res) => {
       longitude,
       current: "temperature_2m,weather_code",
       daily: "temperature_2m_max,temperature_2m_min,weather_code",
-      forecast_days: "3",
+      forecast_days: "5",
       timezone: "auto",
       temperature_unit: units,
     });
