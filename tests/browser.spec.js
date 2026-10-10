@@ -1707,3 +1707,50 @@ for (const selected of ["2026-10-04", "2026-10-07", "2026-10-10", "2027-01-01", 
     }, agenda.start)).toBe(selected);
   });
 }
+
+for (const width of [1440, 834, 393, 320, 280]) {
+  test(`page spacing idle and search states at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1100 });
+    await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByPlaceholder("City name").fill("Sample");
+    await page.getByRole("button", { name: "Find city", exact: true }).click();
+    await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
+    await page.locator('[data-pref="weather"]').check();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#weather-content")).toContainText("68°F");
+    const gap = () => page.evaluate(() => document.querySelector("#weather").getBoundingClientRect().top - document.querySelector("#search-form").getBoundingClientRect().bottom);
+    const idleGap = await gap();
+    expect(idleGap).toBe(28);
+    await expect(page.locator("#search-status")).toBeHidden();
+    await expect(page.locator("#search-results")).toBeHidden();
+    await page.screenshot({ path: `/downloads/marquee-spacing-after-${width}.png`, fullPage: true });
+    const input = page.getByPlaceholder("Search movies and shows");
+    await input.fill("o");
+    await input.press("Enter");
+    await expect(page.locator("#search-results .result-card")).toHaveCount(3);
+    await page.locator("#search-results").evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished)));
+    await page.screenshot({ path: `/downloads/marquee-spacing-results-${width}.png`, fullPage: true });
+    await input.press("Escape");
+    await expect(page.locator("#search-results .result-card")).toHaveCount(0);
+    expect(await gap()).toBe(idleGap);
+    // Errors need their own space even when there are no result rows.
+    await page.route("**/api/seerr/search?**", route => route.fulfill({ status: 503, json: { error: "Search temporarily unavailable" } }));
+    await input.fill("error");
+    await input.press("Enter");
+    await expect(page.locator("#search-status")).toContainText("Search temporarily unavailable");
+    await expect(page.locator("#search-status")).toBeVisible();
+    await input.press("Escape");
+    expect(await gap()).toBe(idleGap);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[data-pref="weather"]').uncheck();
+    await page.locator('[data-pref="recent"]').uncheck();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#weather")).toBeHidden();
+    await expect(page.locator("#recent-section")).toBeHidden();
+    const hiddenGap = await page.evaluate(() => document.querySelector("#calendar-section").getBoundingClientRect().top - document.querySelector("#search-form").getBoundingClientRect().bottom);
+    expect(hiddenGap).toBeGreaterThanOrEqual(24);
+    expect(hiddenGap).toBeLessThanOrEqual(60);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}

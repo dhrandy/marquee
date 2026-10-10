@@ -1331,3 +1331,15 @@ button[aria-label="Close settings"]:hover { background: #b9a3f7; }
 .search-clear[hidden] { display: none; }
 .search-clear:hover { color: var(--ink); border-color: var(--purple); }
 .search-clear svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+/* Empty search helpers should not reserve a blank result row on the home page. */
+#search-status:empty,
+#search-results:empty { display: none; }
+/* Keep a steady section rhythm, including when weather or shelves are hidden. */
+#requests-section,
+#popular-wrap { margin-top: 32px; }
+/* Don't stack the shelf's scrollbar padding onto the next section's gap. */
+.calendar-heading { margin-top: 24px; }
+@media (max-width: 600px) {
+  .weather { gap: 8px; }
+}
