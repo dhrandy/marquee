@@ -354,3 +354,9 @@ test("personal media labels do not mistake series or seasons for movies", async 
   assert.equal(personalItemSubtitle({ SeriesId: "series" }), "Series");
   assert.equal(personalItemSubtitle({ Type: "Other" }), "Media");
 });
+
+test("shelf refresh intervals accept only supported numeric choices", async () => {
+  const { cleanDisplayPreferences } = await import("../src/personal.js");
+  for (const shelfRefreshMinutes of [0, 1, 2, 5, 10, 15]) assert.deepEqual(cleanDisplayPreferences({ shelfRefreshMinutes }), { shelfRefreshMinutes });
+  for (const shelfRefreshMinutes of [-1, 0.1, 100, "5", null]) assert.equal(cleanDisplayPreferences({ shelfRefreshMinutes }), null);
+});

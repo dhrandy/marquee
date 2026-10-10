@@ -37,6 +37,7 @@ const defaults = {
   watchlist: false, continueWatching: false, nextUp: false,
   watchlistCollapsed: false, continueWatchingCollapsed: false, nextUpCollapsed: false,
   syncDisplay: false,
+  shelfRefreshMinutes: 5,
 };
 const statusLabel = {
   available: "Available",
@@ -260,6 +261,7 @@ function applyPrefs() {
     const collapse = $(`[data-collapse="${key}"]`);
     if (collapse) {
       collapse.setAttribute("aria-expanded", !state.prefs[`${key}Collapsed`]);
+      collapse.title = `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${sectionLabels[key]}`;
       collapse.setAttribute("aria-label", `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${{ watchlist: "Watchlist", continueWatching: "Continue watching", nextUp: "Next up" }[key]}`);
     }
   }
@@ -269,6 +271,7 @@ function applyPrefs() {
   if (state.prefs.weather) loadWeather();
   scheduleWeather();
   applySectionOrder();
+  scheduleShelfRefresh();
 }
 function buildSettings() {
   const labels = {
@@ -304,6 +307,7 @@ function buildSettings() {
           body: JSON.stringify({ colorblind: el.checked }),
         }).catch(report);
       if (el.dataset.pref === "weather") saveWeather();
+      if (el.dataset.pref === "recent" && el.checked) loadRecent();
       if (el.dataset.pref === "popular" && el.checked) loadPopular();
       if (el.dataset.pref === "requests" && el.checked) loadRequests();
       if (["watchlist", "continueWatching", "nextUp"].includes(el.dataset.pref)) loadPersonalShelves();
@@ -311,6 +315,7 @@ function buildSettings() {
   );
   buildSectionOrder();
   $("#sync-display").checked = Boolean(state.prefs.syncDisplay);
+  $("#shelf-refresh-minutes").value = shelfRefreshInterval();
   $("#default-view").value = state.prefs.defaultView;
   $("#weather-units").value = state.prefs.weatherUnits;
   $("#weather-location").checked = Boolean(state.prefs.weatherLocation);
@@ -418,11 +423,18 @@ function ratingHtml(rating) {
     ? `<p class="media-rating" ${state.prefs.ratings ? "" : "hidden"}>${escape(text)}</p>`
     : "";
 }
-async function loadRecent() {
-  try {
-    const { items } = await api("/api/recent");
-    state.recentItems = items;
-    $("#recent").innerHTML = items.length
+const shelfRequests = new Map(), shelfLastLoaded = {};
+function shelfApi(path) {
+  if (!shelfRequests.has(path)) shelfRequests.set(path, api(path).finally(() => shelfRequests.delete(path)));
+  return shelfRequests.get(path);
+}
+function replaceShelfContent(row, render) {
+  const left = row.scrollLeft, top = window.scrollY;
+  render(); row.scrollLeft = left;
+  if (window.scrollY !== top) window.scrollTo({ top, behavior: "instant" });
+}
+function renderRecent(items) {
+  $("#recent").innerHTML = items.length
       ? items
           .map((item) => {
             const art = `<div class="poster-art"><img src="${item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${escape(item.art)}.svg`}" alt="${escape(item.title)} poster" loading="lazy"></div>`;
@@ -433,11 +445,55 @@ async function loadRecent() {
           })
           .join("")
       : '<p class="empty">No recent titles in your Jellyfin library.</p>';
-    fixBrokenPosters();
+  fixBrokenPosters();
+}
+let recentRequest = 0;
+async function loadRecent({ quiet = false } = {}) {
+  const request = ++recentRequest;
+  try {
+    const { items } = await shelfApi("/api/recent");
+    if (request !== recentRequest) return;
+    if (quiet && !safeShelfRefresh()) { delete shelfLastLoaded.recent; return; }
+    shelfLastLoaded.recent = Date.now();
+    if (JSON.stringify(state.recentItems) === JSON.stringify(items) && $("#recent .poster-card")) return;
+    state.recentItems = items;
+    replaceShelfContent($("#recent"), () => renderRecent(items));
   } catch (error) {
+    if (quiet) { $("#shelf-refresh-status").textContent = "Refresh unavailable. Keeping the last loaded shelves."; return; }
     $("#recent").innerHTML = `<p class="empty">${escape(error.message)}</p>`;
   }
 }
+let shelfTimer = null, shelfRefreshBusy = false, shelfInteractionAt = 0;
+function safeShelfRefresh() {
+  if (document.hidden || $("#dashboard").hidden || $("dialog[open]") || Date.now() - shelfInteractionAt < 5000) return false;
+  const focused = document.activeElement;
+  return !focused?.closest(".poster-row, .popular-row, .search-bar");
+}
+for (const name of ["pointerdown", "pointermove", "keydown", "wheel", "touchstart"]) document.addEventListener(name, () => { shelfInteractionAt = Date.now(); }, { passive: true });
+function shelfRefreshInterval() {
+  return [0, 1, 2, 5, 10, 15].includes(state.prefs.shelfRefreshMinutes) ? state.prefs.shelfRefreshMinutes : 5;
+}
+function scheduleShelfRefresh() {
+  if (shelfTimer) clearInterval(shelfTimer);
+  shelfTimer = null;
+  if (!shelfRefreshInterval() || $("#dashboard").hidden) return;
+  shelfTimer = setInterval(autoRefreshShelves, 15000);
+}
+async function autoRefreshShelves() {
+  if (shelfRefreshBusy || !shelfRefreshInterval() || !safeShelfRefresh()) return;
+  const interval = shelfRefreshInterval() * 60000;
+  const keys = ["recent", "continueWatching", "nextUp"].filter(key => state.prefs[key] && Date.now() - (shelfLastLoaded[key] || 0) >= interval);
+  if (!keys.length) return;
+  shelfRefreshBusy = true;
+  try {
+    // Failed reads also wait one interval instead of hammering an unavailable server.
+    for (const key of keys) shelfLastLoaded[key] = Date.now();
+    $("#shelf-refresh-status").textContent = "";
+    await Promise.all(keys.map(key => key === "recent" ? loadRecent({ quiet: true }) : loadPersonalShelf(key, { quiet: true })));
+  } finally { shelfRefreshBusy = false; }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) autoRefreshShelves(); });
+$("#shelf-refresh-minutes").addEventListener("change", event => { state.prefs.shelfRefreshMinutes = Number(event.target.value); persist(); scheduleShelfRefresh(); });
 $("#recent").addEventListener("click", (event) => {
   const button = event.target.closest("[data-recent-index]");
   if (!button) return;
@@ -1530,19 +1586,31 @@ let personalLoad = 0;
 async function loadPersonalShelves() {
   const seq = ++personalLoad;
   if (!$("#watchlist-section")) {
-    $("#personal-shelves").innerHTML = Object.entries(personalLabels).map(([key, label]) => `<section id="${key}-section" class="personal-section" hidden><div class="section-heading"><div><span class="eyebrow">JUST FOR YOU</span><h2>${label}</h2></div><button class="personal-collapse" data-collapse="${key}" aria-controls="${key}-content" aria-expanded="true" aria-label="Collapse ${label}">⌄</button></div><div id="${key}-content" class="poster-row"></div></section>`).join("");
+    $("#personal-shelves").innerHTML = Object.entries(personalLabels).map(([key, label]) => `<section id="${key}-section" class="personal-section" hidden><div class="section-heading"><div><span class="eyebrow">JUST FOR YOU</span><h2>${label}</h2></div><button class="personal-collapse" data-collapse="${key}" aria-controls="${key}-content" aria-expanded="true" aria-label="Collapse ${label}" title="Collapse ${label}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><div id="${key}-content" class="poster-row"></div></section>`).join("");
   }
   applyPrefs();
-  await Promise.all(Object.keys(personalLabels).map(async key => {
+  await Promise.all(Object.keys(personalLabels).map(key => {
     if (key !== "watchlist" && !state.prefs[key]) return;
-    try {
-      const { items } = await api(key === "watchlist" ? "/api/watchlist" : `/api/personal/${key}`);
-      if (seq !== personalLoad) return;
-      if (key === "watchlist") state.watchlistItems = items;
-      else state.personalItems[key] = items;
-      renderPersonalShelf(key, items);
-    } catch (error) { $(`#${key}-content`).innerHTML = `<p class="empty">${escape(error.message)}</p>`; }
+    return loadPersonalShelf(key, { seq });
   }));
+}
+const personalRequests = {};
+async function loadPersonalShelf(key, { quiet = false, seq = personalLoad } = {}) {
+  const request = (personalRequests[key] || 0) + 1; personalRequests[key] = request;
+  try {
+    const { items } = await shelfApi(key === "watchlist" ? "/api/watchlist" : `/api/personal/${key}`);
+    if (request !== personalRequests[key] || seq !== personalLoad) return;
+    if (quiet && !safeShelfRefresh()) { delete shelfLastLoaded[key]; return; }
+    shelfLastLoaded[key] = Date.now();
+    const previous = key === "watchlist" ? state.watchlistItems : state.personalItems[key];
+    if (JSON.stringify(previous) === JSON.stringify(items) && $(`#${key}-content .poster-card`)) return;
+    if (key === "watchlist") state.watchlistItems = items;
+    else state.personalItems[key] = items;
+    replaceShelfContent($(`#${key}-content`), () => renderPersonalShelf(key, items));
+  } catch (error) {
+    if (quiet) { $("#shelf-refresh-status").textContent = "Refresh unavailable. Keeping the last loaded shelves."; return; }
+    $(`#${key}-content`).innerHTML = `<p class="empty">${escape(error.message)}</p>`;
+  }
 }
 function renderPersonalShelf(key, items) {
   $(`#${key}-content`).innerHTML = items.length ? items.map((item, index) => {

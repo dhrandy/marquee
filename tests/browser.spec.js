@@ -2017,3 +2017,165 @@ test("continue watching renders series, movies and episode labels without changi
   await expect(page.locator("#episode-save")).toBeVisible();
   await page.locator("#episode-detail").screenshot({ path: "/downloads/marquee-personal-popup-fixed.png" });
 });
+
+for (const width of [1440, 393, 280]) {
+  test(`personal collapse arrows stay with reordered headers at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1100 });
+    await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    for (const key of ["watchlist", "continueWatching", "nextUp"]) await page.locator(`[data-pref="${key}"]`).check();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    for (const key of ["watchlist", "continueWatching", "nextUp"]) {
+      const header = page.locator(`#${key}-section .section-heading`), button = header.locator("button");
+      const heading = await header.locator("h2").boundingBox(), arrow = await button.boundingBox();
+      expect(arrow.x).toBeGreaterThanOrEqual(heading.x + heading.width);
+      expect(arrow.y + arrow.height).toBeLessThanOrEqual(heading.y + heading.height + 1);
+      await expect(button.locator("svg")).toBeVisible();
+      await button.click();
+      await expect(button).toHaveAttribute("aria-expanded", "false");
+      expect(await button.locator("svg").evaluate(el => getComputedStyle(el).transform)).not.toBe("none");
+      await button.click();
+    }
+    await page.locator("#nextUp-section .section-heading").screenshot({ path: `/downloads/marquee-arrow-header-${width}.png` });
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Move Next up up", exact: true }).click();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#nextUp-section h2")).toBeVisible();
+    await page.locator("#nextUp-section").screenshot({ path: `/downloads/marquee-arrow-section-${width}.png` });
+  });
+}
+
+test("media shelves auto-refresh quietly, skip disabled/hidden tabs, and defer focused cards/popouts", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 900 });
+  await page.clock.install();
+  await login(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.locator("#shelf-refresh-minutes")).toHaveValue("5");
+  await page.locator('[data-pref="continueWatching"]').check();
+  await page.locator('[data-pref="nextUp"]').check();
+  await page.locator("#shelf-refresh-minutes").selectOption("1");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await page.locator("#continueWatching-content .poster-card").first().waitFor();
+  const recent = (await (await page.request.get("/api/recent")).json()).items;
+  let calls = { recent: 0, continueWatching: 0, nextUp: 0, watchlist: 0 };
+  let version = 0;
+  await page.route("**/api/recent", route => { calls.recent++; route.fulfill({ json: { items: recent.map((item, i) => i === 0 ? { ...item, title: `Updated ${version}` } : item) } }); });
+  for (const key of ["continueWatching", "nextUp"]) await page.route(`**/api/personal/${key}`, route => { calls[key]++; route.fulfill({ json: { items: [{ id: key, title: `Updated ${version}`, subtitle: "S1E2 · Test", art: "north", progress: version, remaining: 10, detail: { title: "Test" } }] } }); });
+  await page.route("**/api/watchlist", route => { calls.watchlist++; route.fulfill({ json: { items: [] } }); });
+  await page.evaluate(() => { document.activeElement.blur(); document.querySelector("#recent").scrollLeft = 80; });
+  await page.clock.runFor(1000);
+  const savedScroll = await page.locator("#recent").evaluate(el => el.scrollLeft);
+  version = 1;
+  await page.clock.runFor(75000);
+  await expect(page.locator("#recent")).toContainText("Updated 1");
+  await expect(page.locator("#continueWatching-content")).toContainText("Updated 1");
+  await expect(page.locator("#nextUp-content")).toContainText("Updated 1");
+  expect(calls.watchlist).toBe(0);
+  expect(await page.locator("#recent").evaluate(el => el.scrollLeft)).toBe(savedScroll);
+  const beforeNode = await page.locator("#recent .poster-card").first().elementHandle();
+  await page.clock.runFor(75000);
+  expect(await beforeNode.evaluate(el => el.isConnected)).toBe(true);
+  await page.locator("#recent .recent-detail").first().focus();
+  const beforeCalls = { ...calls }; version = 2;
+  await page.clock.runFor(75000);
+  expect(calls).toEqual(beforeCalls);
+  await page.evaluate(() => document.activeElement.blur());
+  await page.clock.runFor(15000);
+  await expect(page.locator("#recent")).toContainText("Updated 2");
+  await page.locator("#continueWatching-content [data-personal]").first().click();
+  const popupTitle = await page.locator("#episode-title").textContent();
+  const popupCalls = { ...calls }; version = 3;
+  await page.clock.runFor(75000);
+  expect(calls).toEqual(popupCalls);
+  await expect(page.locator("#episode-title")).toHaveText(popupTitle);
+  await page.getByRole("button", { name: "Close episode details" }).click();
+  await page.evaluate(() => document.activeElement.blur());
+  await page.clock.runFor(15000);
+  await expect(page.locator("#recent")).toContainText("Updated 3");
+  await page.evaluate(() => Object.defineProperty(document, "hidden", { configurable: true, value: true }));
+  const hiddenCalls = { ...calls }; version = 4;
+  await page.clock.runFor(75000);
+  expect(calls).toEqual(hiddenCalls);
+  await page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, value: false }); document.dispatchEvent(new Event("visibilitychange")); });
+  await expect(page.locator("#recent")).toContainText("Updated 4");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator('[data-pref="nextUp"]').uncheck();
+  await page.locator('[data-pref="continueWatching"]').uncheck();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await page.evaluate(() => document.activeElement.blur());
+  const disabledCalls = { ...calls }; version = 5;
+  await page.clock.runFor(75000);
+  await expect(page.locator("#recent")).toContainText("Updated 5");
+  expect(calls.nextUp).toBe(disabledCalls.nextUp); expect(calls.continueWatching).toBe(disabledCalls.continueWatching);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator("#shelf-refresh-minutes").selectOption("0");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  const stoppedCalls = { ...calls };
+  await page.clock.runFor(120000);
+  expect(calls).toEqual(stoppedCalls);
+});
+
+test("auto refresh failures preserve loaded cards and slow requests never overlap", async ({ page }) => {
+  await page.clock.install(); await login(page);
+  await page.evaluate(() => { state.prefs.shelfRefreshMinutes = 1; persist(); document.activeElement.blur(); });
+  await page.route("**/api/recent", route => route.fulfill({ status: 502, json: { error: "Unavailable" } }));
+  await page.clock.runFor(75000);
+  await expect(page.locator("#recent .poster-card")).toHaveCount(6);
+  await expect(page.locator("#shelf-refresh-status")).toContainText("Keeping the last loaded shelves");
+  let calls = 0, pending;
+  await page.unroute("**/api/recent");
+  await page.route("**/api/recent", route => { calls++; pending = route; });
+  await page.clock.runFor(75000); await expect.poll(() => calls).toBe(1);
+  await page.clock.runFor(180000); expect(calls).toBe(1);
+  await pending.fulfill({ json: { items: [] } });
+  await expect(page.locator("#recent")).toContainText("No recent titles");
+});
+
+for (const width of [1440, 834, 393, 280]) {
+  test(`whole app audit enabled sections, dialogs, console and accessible controls at ${width}px`, async ({ page }) => {
+    const errors = []; page.on("pageerror", error => errors.push(error.message));
+    await page.setViewportSize({ width, height: 1100 }); await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    for (const key of ["watchlist", "continueWatching", "nextUp", "weather"]) await page.locator(`[data-pref="${key}"]`).check();
+    await page.getByPlaceholder("City name").fill("Sample");
+    await page.getByRole("button", { name: "Find city", exact: true }).click();
+    await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#weather-content")).toContainText("68°F");
+    await expect(page.locator("#continueWatching-content .poster-card")).toHaveCount(3);
+    await expect(page.locator("#nextUp-content .poster-card")).toHaveCount(2);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const unnamed = await page.locator("button").evaluateAll(buttons => buttons.filter(el => el.getClientRects().length && !el.textContent.trim() && !el.getAttribute("aria-label") && !el.getAttribute("aria-labelledby") && !el.getAttribute("title")).map(el => el.outerHTML));
+    expect(unnamed).toEqual([]);
+    for (const key of ["continueWatching", "nextUp"]) {
+      await page.locator(`#${key}-content [data-personal]`).first().click();
+      await expect(page.locator("#episode-title")).not.toBeEmpty();
+      await page.getByRole("button", { name: "Close episode details" }).click();
+    }
+    await page.screenshot({ path: `/downloads/marquee-audit-full-${width}.png`, fullPage: true });
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator("#settings").screenshot({ path: `/downloads/marquee-audit-settings-${width}.png` });
+    expect(errors).toEqual([]);
+  });
+}
+
+test("refresh interval persists and syncs, collapsed shelves remain collapsed after updates", async ({ page }) => {
+  await page.clock.install(); await login(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator("#shelf-refresh-minutes").selectOption("2");
+  await page.locator("#sync-display").check();
+  await expect.poll(async () => (await (await page.request.get("/api/display-preferences")).json()).preferences?.shelfRefreshMinutes).toBe(2);
+  await page.locator('[data-pref="continueWatching"]').check();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await page.getByRole("button", { name: "Collapse Continue watching", exact: true }).click();
+  await page.evaluate(() => document.activeElement.blur());
+  await page.route("**/api/personal/continueWatching", route => route.fulfill({ json: { items: [{ id: "new", title: "Fresh episode", subtitle: "S1E3", art: "north", detail: {} }] } }));
+  await page.clock.runFor(150000);
+  await expect(page.locator("#continueWatching-content")).toBeHidden();
+  await expect(page.locator("#continueWatching-content")).toContainText("Fresh episode");
+  await page.reload();
+  await expect(page.locator("#recent .poster-card")).toHaveCount(6);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.locator("#shelf-refresh-minutes")).toHaveValue("2");
+  await expect(page.locator("#sync-display")).toBeChecked();
+});

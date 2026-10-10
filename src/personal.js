@@ -1,7 +1,7 @@
 // Only display preferences can be synced. Device location and API credentials never can.
 export const displayPreferenceDefaults = {
   recent: true, calendar: true, legend: true, addedDates: true,
-  shelfNavigation: true, search: false, hideUnmonitored: false,
+  shelfNavigation: true, search: true, hideUnmonitored: false,
   requests: true, popular: true, ratings: true, jellyfinLink: true,
   popularCollapsed: false, defaultView: "auto", watchlist: false,
   continueWatching: false, nextUp: false, watchlistCollapsed: false,
@@ -16,6 +16,10 @@ export function cleanDisplayPreferences(value) {
       if (typeof value[key] !== "boolean") return null;
     } else if (!["auto", "month", "week", "day", "agenda", "list"].includes(value[key])) return null;
     clean[key] = value[key];
+  }
+  if (value.shelfRefreshMinutes !== undefined) {
+    if (![0, 1, 2, 5, 10, 15].includes(value.shelfRefreshMinutes)) return null;
+    clean.shelfRefreshMinutes = value.shelfRefreshMinutes;
   }
   if (value.lastView !== undefined) {
     if (!["month", "week", "day", "agenda", "list"].includes(value.lastView)) return null;
