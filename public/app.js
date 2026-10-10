@@ -25,7 +25,7 @@ const defaults = {
   weatherLocation: false,
   weatherCity: null,
   weatherUnits: "fahrenheit",
-  search: false,
+  search: true,
   hideUnmonitored: false,
   requests: true,
   popular: true,

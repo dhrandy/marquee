@@ -53,7 +53,7 @@ During beta, updates are manual. Pull the latest image yourself when updating an
 - Poster and title taps deep-link into Jellyfin's web player through the external URL setting.
 - Settings includes per-service connection tests with real error messages (DNS failure, connection refused, timeout, or HTTP status).
 - Installable as a PWA (manifest and service worker). Only static assets are cached; media API responses are never cached.
-- Settings can hide either main section, weather, the status legend, added dates, and poster navigation arrows. Search is off on browsers with no saved display preferences; turn it on in Settings. Existing saved preferences keep their current search choice (older records without a search field keep it on).
+- Settings can hide either main section, weather, the status legend, added dates, and poster navigation arrows. Search is on by default; turn it off in Settings if preferred. Existing saved preferences keep their current search choice (older records without a search field keep it on).
 - Mobile defaults to Agenda. Month/week remain available with horizontal scrolling instead of squeezed columns.
 - Display preferences are stored on the current device. Weather enabled state, city and F/C units are saved server-side per Jellyfin account and follow that user across devices. The display name is shared.
 - Demo mode with fictional titles and original sample poster art. No external credentials required.

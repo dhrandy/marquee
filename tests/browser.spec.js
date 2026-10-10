@@ -1762,7 +1762,7 @@ for (const width of [1440, 834, 393, 320, 280]) {
 }
 
 for (const [label, saved, enabled] of [
-  ["fresh", null, false],
+  ["fresh", null, true],
   ["legacy", { recent: true, calendar: true }, true],
   ["enabled", { search: true }, true],
   ["disabled", { search: false }, false],
@@ -1791,11 +1791,11 @@ for (const [label, saved, enabled] of [
     await expect(page.locator("#search-section")).toBeVisible({ visible: !enabled });
     if (label === "fresh") {
       await page.getByRole("button", { name: "Settings", exact: true }).click();
-      await page.locator('[data-pref="search"]').uncheck();
+      await page.locator('[data-pref="search"]').check();
       await page.getByRole("button", { name: "Close settings" }).click();
-      await page.screenshot({ path: "/downloads/marquee-search-default-off-tablet.png" });
+      await page.screenshot({ path: "/downloads/marquee-search-default-on-tablet.png" });
       await page.setViewportSize({ width: 393, height: 852 });
-      await page.screenshot({ path: "/downloads/marquee-search-default-off-phone.png" });
+      await page.screenshot({ path: "/downloads/marquee-search-default-on-phone.png" });
     }
   });
 }
