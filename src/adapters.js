@@ -197,6 +197,7 @@ export async function recentItems(user) {
   return Promise.all(
     [...groups.values()].map(async (item) => {
       let count;
+      let played = item.Type === "Episode" ? null : typeof item.UserData?.Played === "boolean" ? item.UserData.Played : null;
       let seasonNumber = Number.isInteger(item.ParentIndexNumber)
         ? item.ParentIndexNumber
         : null;
@@ -214,6 +215,8 @@ export async function recentItems(user) {
         try {
           const season = await upstream(process.env.JELLYFIN_URL, `/Items?${params}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
           count = season.TotalRecordCount;
+          const details = await upstream(process.env.JELLYFIN_URL, `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(item.SeasonId)}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+          played = typeof details.UserData?.Played === "boolean" ? details.UserData.Played : null;
         } catch (error) {
           // Optional episode counts must not blank the entire shelf on a transient failure.
           if (/HTTP (401|403)/.test(error.message)) throw error;
@@ -238,6 +241,8 @@ export async function recentItems(user) {
       const imageId = item.SeriesId || item.Id;
       return {
         id: imageId,
+        watched: played,
+        watchedScope: item.Type === "Episode" ? "season" : "movie",
         title: item.SeriesName || item.Name,
         subtitle:
           item.Type === "Episode"
@@ -831,6 +836,7 @@ export async function personalItems(user, kind) {
     const progress = item.RunTimeTicks > 0 ? Math.max(0, Math.min(100, Math.round(ticks / item.RunTimeTicks * 100))) : 0;
     return {
       id: item.SeriesId || item.Id, title: item.SeriesName || item.Name,
+      watched: typeof item.UserData?.Played === "boolean" ? item.UserData.Played : null, watchedScope: item.Type === "Episode" ? "episode" : item.Type === "Series" ? "series" : item.Type === "Season" ? "season" : "movie",
       subtitle: personalItemSubtitle(item),
       image: Boolean(item.ImageTags?.Primary || item.SeriesId), art: "placeholder", link: jellyfinLink(item.Id),
       backdropId: item.ParentBackdropItemId || (item.BackdropImageTags?.length ? item.Id : item.SeriesId || null),
@@ -838,4 +844,32 @@ export async function personalItems(user, kind) {
       detail: { title: item.SeriesName || item.Name, subtitle: personalItemSubtitle(item), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), network: (item.Studios || []).slice(0, 3).map(studio => studio.Name).join(", "), year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
     };
   });
+}
+
+// Match Seerr/TMDB titles to this viewer's Jellyfin items by verified provider ID,
+// never by title similarity or library availability alone.
+const watchedCache = new Map();
+export async function withWatched(user, items) {
+  const result = items.map(item => ({ ...item, watched: null }));
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(4, result.length) }, async () => {
+    while (cursor < result.length) {
+      const item = result[cursor++], type = item.mediaType;
+      const id = item.mediaId || item.id;
+      if (!["movie", "tv"].includes(type) || !Number.isSafeInteger(id) || !item.title) continue;
+      item.watchedScope = type === "tv" ? "series" : "movie";
+      const key = `${user.id}:${user.token}:${type}:${id}`, hit = watchedCache.get(key);
+      if (hit && hit.until > Date.now()) { item.watched = hit.played; continue; }
+      try {
+        const query = new URLSearchParams({ UserId: user.id, SearchTerm: item.title, Recursive: "true", IncludeItemTypes: type === "movie" ? "Movie" : "Series", Fields: "ProviderIds", EnableUserData: "true", Limit: "50" });
+        const data = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+        const matches = (data.Items || []).filter(candidate => Number(candidate.ProviderIds?.Tmdb) === id && candidate.Type === (type === "movie" ? "Movie" : "Series"));
+        const played = matches.length && matches.every(candidate => typeof candidate.UserData?.Played === "boolean") ? matches.every(candidate => candidate.UserData.Played) : null;
+        item.watched = played; item.watchedScope = type === "tv" ? "series" : "movie";
+        if (watchedCache.size > 500) watchedCache.clear();
+        watchedCache.set(key, { played, until: Date.now() + 60000 });
+      } catch { /* Watched is optional; unknown never becomes unwatched or watched. */ }
+    }
+  }));
+  return result;
 }

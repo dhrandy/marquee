@@ -61,6 +61,13 @@ const service = http.createServer(async (req, res) => {
       res.writeHead(403);
       return res.end("{}");
     }
+    if (url.searchParams.has("SearchTerm") && url.searchParams.get("Fields") === "ProviderIds") {
+      return res.end(JSON.stringify({ Items: [
+        { Id: "watched-film", Name: "Film", Type: "Movie", ProviderIds: { Tmdb: "9001" }, UserData: { Played: user === "alice" } },
+        { Id: "wrong-match", Name: "Same title", Type: "Movie", ProviderIds: { Tmdb: "9002" }, UserData: { Played: true } },
+        { Id: "watched-series", Name: "Series", Type: "Series", ProviderIds: { Tmdb: "7" }, UserData: { Played: user === "alice" } },
+      ] }));
+    }
     if (url.searchParams.has("ParentId")) {
       if (user === "count-failure-viewer") { res.writeHead(500); return res.end("{}"); }
       return res.end(JSON.stringify({ TotalRecordCount: 4 }));
@@ -1180,9 +1187,17 @@ try {
     assert.deepEqual((await get("/api/display-preferences", alice)).preferences, { search: false, nextUp: true });
     assert.equal((await get("/api/display-preferences", bob)).preferences, null);
     assert.deepEqual((await get("/api/display-preferences", (await signin("alice")).headers.get("set-cookie"))).preferences, { search: false, nextUp: true });
+    const { withWatched } = await import("../src/adapters.js");
+    const oldUrl = process.env.JELLYFIN_URL; process.env.JELLYFIN_URL = `http://127.0.0.1:${service.address().port}`;
+    try {
+      const titles = [{ title: "Film", mediaType: "movie", id: 9001 }, { title: "Series", mediaType: "tv", id: 7 }, { title: "Same title", mediaType: "movie", id: 100001 }];
+      assert.deepEqual((await withWatched({ id: "alice", token: "token-alice" }, titles)).map(t => t.watched), [true, true, null]);
+      assert.deepEqual((await withWatched({ id: "bob", token: "token-bob" }, titles)).map(t => t.watched), [false, false, null]);
+    } finally { if (oldUrl === undefined) delete process.env.JELLYFIN_URL; else process.env.JELLYFIN_URL = oldUrl; }
     const before = calls.filter(c => c.path === "/api/v1/request").length;
     assert.equal((await post("/api/watchlist", alice, { mediaType: "movie", mediaId: 9001, saved: true })).status, 200);
     assert.equal((await get("/api/watchlist", alice)).items[0].title, "Requested Film");
+    assert.equal((await get("/api/watchlist", alice)).items[0].watched, true);
     const order = ["calendar", "search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "popular", "requests"];
     assert.equal((await post("/api/section-order", alice, { order })).status, 200);
     assert.deepEqual((await get("/api/section-order", alice)).order, order);

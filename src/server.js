@@ -8,6 +8,7 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import {
   authenticate,
+  withWatched,
   recentItems,
   personalItems,
   calendar,
@@ -369,8 +370,9 @@ app.post("/api/section-order", requireUser, async (req, res) => {
     res.json({ order });
   } catch { res.status(500).json({ error: "Could not save section order. Check the settings volume is writable." }); }
 });
-app.get("/api/watchlist", requireUser, (req, res) => {
-  res.json({ items: savedSettings.watchlistByUser?.[personalKey(req.user)] || [] });
+app.get("/api/watchlist", requireUser, async (req, res) => {
+  const items = savedSettings.watchlistByUser?.[personalKey(req.user)] || [];
+  res.json({ items: demo ? items : await withWatched(req.user, items) });
 });
 app.post("/api/watchlist", requireUser, async (req, res) => {
   const { mediaType, mediaId, saved } = req.body;
@@ -485,7 +487,8 @@ app.get("/api/seerr/details/:type/:id", requireUser, async (req, res) => {
   try {
     const access = await requestAccess(req.user);
     if (access.error) return res.status(403).json({ error: access.error });
-    res.json(await seerrDetails(type, Number(id), access.id));
+    const detail = await seerrDetails(type, Number(id), access.id);
+    res.json((await withWatched(req.user, [detail]))[0]);
   } catch {
     res
       .status(502)
@@ -506,7 +509,8 @@ app.get("/api/library/:id/facts", requireUser, async (req, res) => {
     const access = await requestAccess(req.user);
     if (access.error) return res.json({ facts: null });
     const detail = await seerrDetails(tmdb.type, tmdb.id, access.id);
-    res.json({ facts: detail.facts, mediaType: tmdb.type, mediaId: tmdb.id });
+    const [marked] = await withWatched(req.user, [detail]);
+    res.json({ facts: detail.facts, mediaType: tmdb.type, mediaId: tmdb.id, watched: marked.watched });
   } catch {
     res.json({ facts: null });
   }
@@ -566,8 +570,10 @@ app.get("/api/seerr/popular", requireUser, async (req, res) => {
   try {
     const access = await requestAccess(req.user);
     if (access.error) return res.status(403).json({ error: access.error });
+    const popular = await seerrPopular(access.id);
+    const marked = await withWatched(req.user, [...popular.movies, ...popular.tv]);
     res.json({
-      ...(await seerrPopular(access.id)),
+      movies: marked.slice(0, popular.movies.length), tv: marked.slice(popular.movies.length),
       requestAccess: publicAccess(access),
     });
   } catch {
@@ -631,7 +637,7 @@ app.get("/api/seerr/search", requireUser, async (req, res) => {
         (b.date || "").localeCompare(a.date || ""),
     );
     res.json({
-      results: results.slice(0, 60),
+      results: await withWatched(req.user, results.slice(0, 60)),
       requestAccess: publicAccess(access),
     });
   } catch (error) {

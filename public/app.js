@@ -437,7 +437,7 @@ function renderRecent(items) {
   $("#recent").innerHTML = items.length
       ? items
           .map((item) => {
-            const art = `<div class="poster-art"><img src="${item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${escape(item.art)}.svg`}" alt="${escape(item.title)} poster" loading="lazy"></div>`;
+            const art = `<div class="poster-art"><img src="${item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${escape(item.art)}.svg`}" alt="${escape(item.title)} poster" loading="lazy">${watchedBadgeHtml(item)}</div>`;
             const time = `<time ${!state.prefs.addedDates ? "hidden" : ""}>${item.added ? escape(new Date(item.added).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })) : "Added date not provided"}</time>`;
             const title = `<h3>${escape(item.title)}</h3>`;
             const head = `<button class="poster-link recent-detail" data-recent-index="${items.indexOf(item)}" aria-label="Details for ${escape(item.title)}">${art}${title}</button>`;
@@ -501,6 +501,7 @@ $("#recent").addEventListener("click", (event) => {
   if (!item) return;
   showDetail({
     title: item.title,
+    watched: item.watched, watchedScope: item.watchedScope,
     subtitle: item.subtitle,
     ...item.detail,
     poster: item.image
@@ -614,6 +615,11 @@ function mediaActionLabel(item) {
   return "";
 }
 const seerrStatusIcons = {"clock": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\" data-slot=\"icon\">\n  <path fill-rule=\"evenodd\" d=\"M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z\" clip-rule=\"evenodd\"/>\n</svg>", "bell": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\" data-slot=\"icon\">\n  <path fill-rule=\"evenodd\" d=\"M5.25 9a6.75 6.75 0 0 1 13.5 0v.75c0 2.123.8 4.057 2.118 5.52a.75.75 0 0 1-.297 1.206c-1.544.57-3.16.99-4.831 1.243a3.75 3.75 0 1 1-7.48 0 24.585 24.585 0 0 1-4.831-1.244.75.75 0 0 1-.298-1.205A8.217 8.217 0 0 0 5.25 9.75V9Zm4.502 8.9a2.25 2.25 0 1 0 4.496 0 25.057 25.057 0 0 1-4.496 0Z\" clip-rule=\"evenodd\"/>\n</svg>", "minus-small": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\" data-slot=\"icon\">\n  <path fill-rule=\"evenodd\" d=\"M5.25 12a.75.75 0 0 1 .75-.75h12a.75.75 0 0 1 0 1.5H6a.75.75 0 0 1-.75-.75Z\" clip-rule=\"evenodd\"/>\n</svg>", "eye-slash": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\" data-slot=\"icon\">\n  <path d=\"M3.53 2.47a.75.75 0 0 0-1.06 1.06l18 18a.75.75 0 1 0 1.06-1.06l-18-18ZM22.676 12.553a11.249 11.249 0 0 1-2.631 4.31l-3.099-3.099a5.25 5.25 0 0 0-6.71-6.71L7.759 4.577a11.217 11.217 0 0 1 4.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113Z\"/>\n  <path d=\"M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A3.75 3.75 0 0 1 15.75 12ZM12.53 15.713l-4.243-4.244a3.75 3.75 0 0 0 4.244 4.243Z\"/>\n  <path d=\"M6.75 12c0-.619.107-1.213.304-1.764l-3.1-3.1a11.25 11.25 0 0 0-2.63 4.31c-.12.362-.12.752 0 1.114 1.489 4.467 5.704 7.69 10.675 7.69 1.5 0 2.933-.294 4.242-.827l-2.477-2.477A5.25 5.25 0 0 1 6.75 12Z\"/>\n</svg>", "trash": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\" data-slot=\"icon\">\n  <path fill-rule=\"evenodd\" d=\"M16.5 4.478v.227a48.816 48.816 0 0 1 3.878.512.75.75 0 1 1-.256 1.478l-.209-.035-1.005 13.07a3 3 0 0 1-2.991 2.77H8.084a3 3 0 0 1-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 0 1-.256-1.478A48.567 48.567 0 0 1 7.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 0 1 3.369 0c1.603.051 2.815 1.387 2.815 2.951Zm-6.136-1.452a51.196 51.196 0 0 1 3.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 0 0-6 0v-.113c0-.794.609-1.428 1.364-1.452Zm-.355 5.945a.75.75 0 1 0-1.5.058l.347 9a.75.75 0 1 0 1.499-.058l-.346-9Zm5.48.058a.75.75 0 1 0-1.498-.058l-.347 9a.75.75 0 0 0 1.5.058l.345-9Z\" clip-rule=\"evenodd\"/>\n</svg>", "check-circle": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 20 20\" fill=\"currentColor\" aria-hidden=\"true\" data-slot=\"icon\">\n  <path fill-rule=\"evenodd\" d=\"M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z\" clip-rule=\"evenodd\"/>\n</svg>"};
+function watchedBadgeHtml(item) {
+  if (item.watched !== true) return "";
+  const label = item.watchedScope === "season" ? "Season watched" : item.watchedScope === "series" ? "Series watched" : item.watchedScope === "episode" ? "Episode watched" : "Watched";
+  return `<span class="watched-badge" role="img" aria-label="${label}" title="${label}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-8" /></svg></span>`;
+}
 function statusBadgeHtml(item) {
   const label = mediaActionLabel(item);
   if (!label) return "";
@@ -684,6 +690,7 @@ async function loadMissingFacts(event) {
     if (request !== factsRequest || !$("#episode-detail").open || currentDetail !== event) return;
     if (["movie", "tv"].includes(data.mediaType) && Number.isSafeInteger(data.mediaId)) { event.mediaType = data.mediaType; event.mediaId = data.mediaId; setDetailSave(event); }
     if (!facts) { factsCache.delete(source); return; }
+    if (event.watched == null && data.watched === true) { event.watched = true; $("#episode-poster-status").innerHTML = statusBadgeHtml(event) + watchedBadgeHtml(event); }
     renderDetailFacts(facts);
     $("#episode-rating").hidden = ratingHidden(event.rating, facts);
   } catch {
@@ -707,7 +714,7 @@ function showDetail(event) {
   $("#episode-subtitle").textContent = event.subtitle;
   const requestButton = $("#episode-request");
   const actionLabel = mediaActionLabel(event);
-  $("#episode-poster-status").innerHTML = statusBadgeHtml(event);
+  $("#episode-poster-status").innerHTML = statusBadgeHtml(event) + watchedBadgeHtml(event);
   requestButton.hidden = !(
     Number.isSafeInteger(event.mediaId) &&
     event.mediaId > 0 &&
@@ -989,7 +996,7 @@ function resultCardHtml(r) {
     : state.requestAccess[r.mediaType]
       ? `<button class="request-btn" data-request data-media-type="${r.mediaType}" data-media-id="${r.id}" data-title="${escape(r.title)}">Request</button>`
       : `<span class="request-unavailable">${escape(state.requestAccess.reason || state.requestAccess[`${r.mediaType}Reason`] || "Requests disabled in Seerr")}</span>`;
-  return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}</div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${availabilityText(r.availability) ? ` · ${availabilityText(r.availability)}` : ""}<span class="row-cert row-cert-pending" aria-hidden="true"></span></p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
+  return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}${watchedBadgeHtml(r)}</div><h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${availabilityText(r.availability) ? ` · ${availabilityText(r.availability)}` : ""}<span class="row-cert row-cert-pending" aria-hidden="true"></span></p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}<div class="result-action">${action}</div></article>`;
 }
 function renderSearch(results) {
   $("#search-results").innerHTML = results.length
@@ -1615,7 +1622,7 @@ async function loadPersonalShelf(key, { quiet = false, seq = personalLoad } = {}
 function renderPersonalShelf(key, items) {
   $(`#${key}-content`).innerHTML = items.length ? items.map((item, index) => {
     const poster = key === "watchlist" ? item.poster : item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`;
-    return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy"></div><h3>${escape(item.title)}</h3></button><p>${escape(item.subtitle || item.year || "")}</p>${key === "continueWatching" ? `<progress max="100" value="${Number(item.progress) || 0}" aria-label="${escape(item.title)} progress"></progress><p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-type="${item.mediaType}" data-remove-id="${item.mediaId}">Remove</button>` : ""}</article>`;
+    return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}</div><h3>${escape(item.title)}</h3></button><p>${escape(item.subtitle || item.year || "")}</p>${key === "continueWatching" ? `<progress max="100" value="${Number(item.progress) || 0}" aria-label="${escape(item.title)} progress"></progress><p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-type="${item.mediaType}" data-remove-id="${item.mediaId}">Remove</button>` : ""}</article>`;
   }).join("") : `<p class="empty">${key === "watchlist" ? "Save a movie or show from its details to watch later. Saving never sends a request." : key === "continueWatching" ? "Nothing in progress. Start watching in Jellyfin and it appears here." : "No next episodes yet. Your Jellyfin viewing history fills this shelf."}</p>`;
   fixBrokenPosters();
 }
@@ -1642,5 +1649,5 @@ $("#dashboard main").addEventListener("click", async event => {
   if (!button) return;
   const key = button.dataset.personal, item = (key === "watchlist" ? state.watchlistItems : state.personalItems[key])[Number(button.dataset.index)];
   if (key === "watchlist") { try { showDetail(await api(`/api/seerr/details/${item.mediaType}/${item.mediaId}`)); } catch (error) { report(error); } }
-  else { showDetail({ ...item.detail, poster: item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`, backdrop: item.backdropId ? `/api/image/${encodeURIComponent(item.backdropId)}?type=Backdrop` : null, playLink: item.link, availability: 5, factsUrl: `/api/library/${encodeURIComponent(item.id)}/facts` }); $("#episode-play").textContent = key === "continueWatching" ? "Resume in Jellyfin ↗" : "Play in Jellyfin ↗"; }
+  else { showDetail({ ...item.detail, watched: item.watched, watchedScope: item.watchedScope, poster: item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`, backdrop: item.backdropId ? `/api/image/${encodeURIComponent(item.backdropId)}?type=Backdrop` : null, playLink: item.link, availability: 5, factsUrl: `/api/library/${encodeURIComponent(item.id)}/facts` }); $("#episode-play").textContent = key === "continueWatching" ? "Resume in Jellyfin ↗" : "Play in Jellyfin ↗"; }
 });

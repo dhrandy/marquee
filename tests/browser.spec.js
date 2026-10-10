@@ -2179,3 +2179,25 @@ test("refresh interval persists and syncs, collapsed shelves remain collapsed af
   await expect(page.locator("#shelf-refresh-minutes")).toHaveValue("2");
   await expect(page.locator("#sync-display")).toBeChecked();
 });
+
+for (const width of [1440, 393]) {
+  test(`watched badge preview is distinct from availability at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 950 });
+    await login(page);
+    const recent = (await (await page.request.get("/api/recent")).json()).items;
+    await page.route("**/api/recent", route => route.fulfill({ json: { items: recent.map((item, i) => ({ ...item, watched: i < 2 ? true : null, watchedScope: i === 1 ? "season" : "movie" })) } }));
+    await page.route("**/api/personal/nextUp", route => route.fulfill({ json: { items: [{ id: "episode", title: "Rewatch example", subtitle: "S2E4 · The Wedding", watched: true, watchedScope: "episode", art: "north", detail: { title: "Rewatch example", subtitle: "S2E4 · The Wedding" } }] } }));
+    await page.locator("#refresh").click();
+    await expect(page.locator("#recent .watched-badge")).toHaveCount(2);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[data-pref="nextUp"]').check();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#nextUp-content .watched-badge")).toHaveAttribute("aria-label", "Episode watched");
+    await page.locator("#recent-section").screenshot({ path: `/downloads/marquee-watched-preview-${width}.png` });
+    await page.locator("#nextUp-section").screenshot({ path: `/downloads/marquee-watched-episode-${width}.png` });
+    await page.locator("#recent .recent-detail").first().click();
+    await expect(page.locator("#episode-poster-status .watched-badge")).toBeVisible();
+    await expect(page.locator('#episode-poster-status [aria-label="In your library"]')).toBeVisible();
+    await page.locator("#episode-detail").screenshot({ path: `/downloads/marquee-watched-popup-${width}.png` });
+  });
+}
