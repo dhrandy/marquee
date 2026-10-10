@@ -65,8 +65,8 @@ function addDays(date, amount) {
   next.setDate(next.getDate() + amount);
   return next;
 }
-function monday(date) {
-  return addDays(midnight(date), -((date.getDay() + 6) % 7));
+function startOfWeek(date) {
+  return addDays(midnight(date), -date.getDay());
 }
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -322,15 +322,15 @@ $("#recent").addEventListener("click", (event) => {
 function period() {
   let start, end;
   if (state.view === "month") {
-    start = monday(
+    start = startOfWeek(
       new Date(state.date.getFullYear(), state.date.getMonth(), 1),
     );
     end = addDays(
-      monday(new Date(state.date.getFullYear(), state.date.getMonth() + 1, 0)),
+      startOfWeek(new Date(state.date.getFullYear(), state.date.getMonth() + 1, 0)),
       7,
     );
   } else if (state.view === "week") {
-    start = monday(state.date);
+    start = startOfWeek(state.date);
     end = addDays(start, 7);
   } else if (state.view === "day") {
     start = midnight(state.date);
@@ -642,7 +642,7 @@ function renderCalendar() {
     innerWidth <= 600 && ["month", "week"].includes(state.view)
   );
   if (["month", "week"].includes(state.view)) {
-    let html = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    let html = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
       .map((name) => `<div class="weekday">${name}</div>`)
       .join("");
     for (let date = start; date < end; date = addDays(date, 1)) {

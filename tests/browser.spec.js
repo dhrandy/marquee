@@ -48,7 +48,7 @@ test("desktop navigation, status filters, settings, weather, and session invalid
     "true",
   );
   await page.getByRole("button", { name: "Month", exact: true }).click();
-  await expect(page.locator(".weekday").first()).toHaveText("Mon");
+  await expect(page.locator(".weekday").first()).toHaveText("Sun");
   const original = await page.locator("#calendar-title").textContent();
   await page.getByRole("button", { name: "Next period" }).click();
   await expect(page.locator("#calendar-title")).not.toHaveText(original);
@@ -1652,3 +1652,58 @@ test("search can be cleared with the X button and with Escape", async ({ page })
   const box = await page.locator("#search-form").boundingBox();
   expect(box.x + box.width).toBeLessThanOrEqual(393);
 });
+
+for (const selected of ["2026-10-04", "2026-10-07", "2026-10-10", "2027-01-01", "2026-11-01"]) {
+  test(`Sunday-first calendar boundaries and navigation on ${selected}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.clock.setFixedTime(new Date(`${selected}T12:00:00-05:00`));
+    await login(page);
+    const range = async (view) => {
+      const response = page.waitForResponse(r => r.url().includes("/api/calendar?"));
+      await page.getByRole("button", { name: view, exact: true }).click();
+      const url = new URL((await response).url());
+      await expect(page.locator("#refresh")).toBeEnabled();
+      return { start: url.searchParams.get("start"), end: url.searchParams.get("end") };
+    };
+    await range("Month");
+    await expect(page.locator(".weekday")).toHaveText(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]);
+    const monthDates = await page.locator(".day-cell").evaluateAll(cells => cells.map(c => c.dataset.date));
+    expect(new Date(`${monthDates[0]}T12:00:00`).getDay()).toBe(0);
+    expect(new Date(`${monthDates.at(-1)}T12:00:00`).getDay()).toBe(6);
+    expect(monthDates.length % 7).toBe(0);
+    expect(monthDates).toContain(selected.slice(0, 8) + "01");
+    const { start, end } = await range("Week");
+    const weekDates = await page.locator(".day-cell").evaluateAll(cells => cells.map(c => c.dataset.date));
+    expect(weekDates).toHaveLength(7);
+    expect(weekDates).toContain(selected);
+    expect(new Date(`${weekDates[0]}T12:00:00`).getDay()).toBe(0);
+    expect(new Date(`${weekDates[6]}T12:00:00`).getDay()).toBe(6);
+    const label = await page.evaluate(({ start, end }) => {
+      const last = new Date(end); last.setDate(last.getDate() - 1);
+      const options = { month: "short", day: "numeric" };
+      return `${new Date(start).toLocaleDateString([], options)} - ${last.toLocaleDateString([], options)}`;
+    }, { start, end });
+    await expect(page.locator("#calendar-title")).toHaveText(label);
+    await page.getByRole("button", { name: "Next period" }).click();
+    await expect(page.locator(".day-cell").first()).not.toHaveAttribute("data-date", weekDates[0]);
+    const next = await page.locator(".day-cell").first().getAttribute("data-date");
+    const nextDate = new Date(`${weekDates[0]}T12:00:00`); nextDate.setDate(nextDate.getDate() + 7);
+    expect(next).toBe(`${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}-${String(nextDate.getDate()).padStart(2, "0")}`);
+    await page.getByRole("button", { name: "Previous period" }).click();
+    await expect(page.locator(".day-cell").first()).toHaveAttribute("data-date", weekDates[0]);
+    if (selected === "2026-10-07") {
+      await page.locator("#calendar-section").screenshot({ path: "/downloads/marquee-sunday-week-desktop.png" });
+      await page.setViewportSize({ width: 393, height: 852 });
+      await page.locator("#calendar-section").screenshot({ path: "/downloads/marquee-sunday-week-mobile.png" });
+    }
+    const todayResponse = page.waitForResponse(r => r.url().includes("/api/calendar?"));
+    await page.getByRole("button", { name: "Today", exact: true }).click();
+    await todayResponse;
+    await expect(page.locator("#refresh")).toBeEnabled();
+    const agenda = await range("Agenda");
+    expect(await page.evaluate(start => {
+      const date = new Date(start);
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    }, agenda.start)).toBe(selected);
+  });
+}
