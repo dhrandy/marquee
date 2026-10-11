@@ -1645,7 +1645,7 @@ main > #search-section .search-bar { max-width: 560px; }
 
 /* One rhythm for discovery rails, including long titles. */
 .popular-row { align-items:flex-start; padding-bottom:10px; }
-.popular-row .result-card h3 { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; min-height:40.5px; max-height:40.5px; }
+.popular-row .result-card h3 { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; height:2.7em; min-height:2.7em; max-height:2.7em; flex-shrink:0; }
 .popular-row .media-rating { margin:4px 0 0; }
 main > section:not([hidden]), .personal-section:not([hidden]) { padding-bottom:14px; margin-bottom:20px; }
 .section-heading { margin-bottom:12px; }

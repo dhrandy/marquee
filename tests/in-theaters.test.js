@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { inTheaters } from "../src/in-theaters.js";
+import { inTheaters, isNewTheaterRelease } from "../src/in-theaters.js";
 
 test("theater feed uses US Now Playing and verifies each movie through the viewer's Seerr account", async () => {
   process.env.TMDB_API_KEY = "mock-tmdb-key";
@@ -9,6 +9,7 @@ test("theater feed uses US Now Playing and verifies each movie through the viewe
   const calls = [];
   const result = await inTheaters(7, {
     read: async (base, route, options) => {
+      if (base.includes("themoviedb") && !route.includes("now_playing")) return {id:Number(new URL(route,base).pathname.split("/").at(-1)),release_date:new Date().toISOString().slice(0,10)};
       calls.push({ base, route, options });
       if (base === "https://api.themoviedb.org")
         return {
@@ -45,7 +46,7 @@ test("theater feed uses US Now Playing and verifies each movie through the viewe
   assert.equal(url.pathname, "/3/movie/now_playing");
   assert.equal(url.searchParams.get("region"), "US");
   assert.equal(url.searchParams.get("api_key"), "mock-tmdb-key");
-  assert.equal(calls[1].options.headers["X-API-User"], "7");
+  assert.equal(calls.find(call => call.base === "http://seerr.test").options.headers["X-API-User"], "7");
   assert.ok(!JSON.stringify(result).includes("mock-tmdb-key"));
 });
 
@@ -59,16 +60,17 @@ test("theater feed fails closed on missing credentials, malformed data or unveri
   );
   await assert.rejects(
     inTheaters(7, {
-      read: async (base) =>
+      read: async (base, route) =>
         base.includes("themoviedb")
-          ? { results: [{ id: 1, title: "One" }] }
+          ? (!route.includes("now_playing") ? {id:1,release_date:new Date().toISOString().slice(0,10)} : { results: [{ id: 1, title: "One" }] })
           : { id: 2 },
     }),
     /different movie/,
   );
   await assert.rejects(
     inTheaters(7, {
-      read: async (base) => {
+      read: async (base, route) => {
+        if (base.includes("themoviedb") && !route.includes("now_playing")) return {id:1,release_date:new Date().toISOString().slice(0,10)};
         if (base.includes("themoviedb"))
           return { results: [{ id: 1, title: "One" }] };
         throw new Error("Seerr unavailable");
@@ -82,6 +84,7 @@ test("theater feed keeps second-page titles up to 25, dedupes, caches and isolat
   process.env.TMDB_API_KEY = "paged-mock";
   const calls = [];
   const read = async (base, route, options) => {
+    if (base.includes("themoviedb") && !route.includes("now_playing")) return {id:Number(new URL(route,base).pathname.split("/").at(-1)),release_date:new Date().toISOString().slice(0,10)};
     calls.push({ base, route, user: options?.headers?.["X-API-User"] });
     if (base.includes("themoviedb")) {
       const page = Number(new URL(route, base).searchParams.get("page"));
@@ -105,19 +108,20 @@ test("theater feed keeps second-page titles up to 25, dedupes, caches and isolat
   assert.equal(result.items.length, 25);
   assert.equal(result.items[24].title, "Movie 2-4");
   assert.equal(result.capped, true);
-  assert.equal(calls.filter((c) => c.base.includes("themoviedb")).length, 2);
+  assert.equal(calls.filter((c) => c.base.includes("themoviedb") && c.route.includes("now_playing")).length, 2);
   const count = calls.length;
   await inTheaters(7, { read });
   assert.equal(calls.length, count);
   const other = await inTheaters(8, { read });
   assert.equal(other.items[0].availability, 1);
   assert.equal(result.items[0].availability, 5);
-  assert.equal(calls.filter((c) => c.base.includes("themoviedb")).length, 2);
+  assert.equal(calls.filter((c) => c.base.includes("themoviedb") && c.route.includes("now_playing")).length, 2);
 });
 
 test("theater pagination stops at its cap and reports partial coverage", async () => {
   const result = await inTheaters(7, {
     read: async (base, route) => {
+      if (base.includes("themoviedb") && !route.includes("now_playing")) return {id:Number(new URL(route,base).pathname.split("/").at(-1)),release_date:new Date().toISOString().slice(0,10)};
       if (base.includes("themoviedb")) {
         const page = Number(new URL(route, base).searchParams.get("page"));
         return {
@@ -138,6 +142,7 @@ test("theater pagination stops at its cap and reports partial coverage", async (
 test("page overlap is deduped and a failed later page cannot be cached as a complete list", async () => {
   let fail = true;
   const read = async (base, route) => {
+    if (base.includes("themoviedb") && !route.includes("now_playing")) return {id:Number(new URL(route,base).pathname.split("/").at(-1)),release_date:new Date().toISOString().slice(0,10)};
     if (base.includes("themoviedb")) {
       const page = Number(new URL(route, base).searchParams.get("page"));
       if (page === 2 && fail) throw new Error("page unavailable");
@@ -169,6 +174,7 @@ test("TMDB theater list stays fresh for 24 hours while viewer availability expir
     details = 0;
   Date.now = () => now;
   const read = async (base, route) => {
+    if (base.includes("themoviedb") && !route.includes("now_playing")) return {id:Number(new URL(route,base).pathname.split("/").at(-1)),release_date:new Date().toISOString().slice(0,10)};
     if (base.includes("themoviedb")) {
       lists++;
       return { results: [{ id: 1, title: "One" }] };
@@ -204,6 +210,7 @@ test("daily theater list is persisted without credentials and reused after resta
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "marquee-theater-list-"));
   let pulls = 0;
   const read = async (base, route) => {
+    if (base.includes("themoviedb") && !route.includes("now_playing")) return {id:Number(new URL(route,base).pathname.split("/").at(-1)),release_date:new Date().toISOString().slice(0,10)};
     if (base.includes("themoviedb")) {
       pulls++;
       return { results: [{ id: 1, title: "Shared movie" }] };
@@ -244,6 +251,7 @@ test("restarting with a 23-hour-old persisted list keeps only its remaining hour
     pulls = 0;
   Date.now = () => now;
   const read = async (base, route) => {
+    if (base.includes("themoviedb") && !route.includes("now_playing")) return {id:Number(new URL(route,base).pathname.split("/").at(-1)),release_date:new Date().toISOString().slice(0,10)};
     if (base.includes("themoviedb")) {
       pulls++;
       return { results: [{ id: 1, title: "One" }] };
@@ -275,6 +283,7 @@ test("legacy 200-title disk caches refresh to 25 and hydrate US certification fr
   let pages = 0, details = 0;
   try {
     const result = await inTheaters(7, {dataDir:dir, read:async(base,route)=>{
+      if (base.includes("themoviedb") && !route.includes("now_playing")) return {id:Number(new URL(route,base).pathname.split("/").at(-1)),release_date:new Date().toISOString().slice(0,10)};
       if(base.includes("themoviedb")) { pages++; return {total_pages:10,results:Array.from({length:20},(_,i)=>({id:(pages-1)*20+i+1,title:"Fresh"}))}; }
       details++; return {id:Number(route.split("/").at(-1)),releases:{results:[{iso_3166_1:"US",release_dates:[{certification:"R"}]}]}};
     }});
@@ -295,4 +304,29 @@ test("shelf certifications cache per viewer and preserve unknown fallback", asyn
     await withShelfCertifications(items,701); assert.equal(calls,2);
     await withShelfCertifications(items,702); assert.equal(calls,4);
   } finally {global.fetch=original;}
+});
+
+test("new theater dates exclude re-releases, missing/future dates and use an inclusive rolling window across years", () => {
+  const now=Date.parse("2026-01-10T12:00:00Z");
+  assert.equal(isNewTheaterRelease("2025-12-20",now),true);
+  assert.equal(isNewTheaterRelease("2025-09-12",now),true);
+  for (const date of ["2025-09-11","2019-04-26","1993-10-09","2026-01-11","2025-02-30",null,""]) assert.equal(isNewTheaterRelease(date,now),false);
+});
+
+test("regional re-release dates do not pass the primary-date filter; old persisted 25-title lists refresh", async () => {
+  const fs=await import("node:fs/promises"),os=await import("node:os"),path=await import("node:path");
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),"marquee-original-date-"));
+  await fs.writeFile(path.join(dir,"theater-list.json"),JSON.stringify({region:"US",capped:false,fetchedAt:Date.now(),titles:[{id:1,mediaType:"movie",title:"Old re-release"}]}));
+  let pages=0;
+  try {
+    const result=await inTheaters(7,{dataDir:dir,read:async(base,route)=>{
+      if(base.includes("themoviedb")) {
+        if(route.includes("now_playing")) {pages++; return {total_pages:2,results:pages===1?[{id:1,title:"Endgame",release_date:"2026-10-01"},{id:2,title:"Nightmare",release_date:"2026-10-01"}]:[{id:3,title:"New film"}]};}
+        const id=Number(new URL(route,base).pathname.split("/").at(-1));return {id,release_date:id===1?"2019-04-26":id===2?"1993-10-09":new Date().toISOString().slice(0,10)};
+      }
+      return {id:Number(route.split("/").at(-1))};
+    }});
+    assert.deepEqual(result.items.map(item=>item.id),[3]);assert.equal(pages,2);
+    const saved=JSON.parse(await fs.readFile(path.join(dir,"theater-list.json"),"utf8"));assert.equal(saved.filterVersion,1);assert.equal(saved.titles.length,1);
+  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });

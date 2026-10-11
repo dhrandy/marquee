@@ -3090,3 +3090,14 @@ for (const width of [1440, 834, 601, 393, 280]) {
     await expect(page.locator("#episode-detail")).not.toBeVisible();
   });
 }
+
+for (const width of [393,1440]) {
+ test(`recommendation metadata aligns for one and two line titles at ${width}px`, async ({page})=>{
+  await page.setViewportSize({width,height:1000});await login(page);
+  await page.getByRole("button",{name:"Settings",exact:true}).click();await page.locator('[data-pref="recommendations"]').check();await page.getByRole("button",{name:"Close settings"}).click();
+  await page.evaluate(()=>{document.querySelector("#recommendations-content").innerHTML=["Law & Order: Special Victims Unit","Reacher","The Office"].map((title,i)=>resultCardHtml({id:800+i,title,mediaType:"tv",year:2026,contentRating:"TV-MA",poster:"north",rating:{value:8.1,source:"TMDB"}})).join("");});
+  const positions=await page.locator('#recommendations-content .result-card').evaluateAll(cards=>cards.map(card=>({title:card.querySelector('h3').getBoundingClientRect().height,meta:card.querySelector('.result-meta').getBoundingClientRect().y,score:card.querySelector('.media-rating').getBoundingClientRect().y})));
+  for(const value of positions){expect(value.title).toBeGreaterThanOrEqual(40);expect(Math.abs(value.meta-positions[0].meta)).toBeLessThan(1);expect(Math.abs(value.score-positions[0].score)).toBeLessThan(1);}
+  await page.locator('#recommendations-content').screenshot({path:`${shots}/marquee-title-alignment-${width}.png`});
+ });
+}

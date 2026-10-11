@@ -5,6 +5,15 @@ import { normalizeSeerrResults, seerrContentRating } from "./model.js";
 
 const MAX_PAGES = 10,
   MAX_TITLES = 25;
+const RELEASE_WINDOW_DAYS = 120, FILTER_VERSION = 1;
+const DAY_MS = 86400000;
+export function isNewTheaterRelease(value, now = Date.now()) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const time = Date.parse(value + "T00:00:00Z");
+  if (!Number.isFinite(time) || new Date(time).toISOString().slice(0, 10) !== value) return false;
+  const today = Math.floor(now / DAY_MS) * DAY_MS;
+  return time <= today && time >= today - RELEASE_WINDOW_DAYS * DAY_MS;
+}
 const feeds = new WeakMap();
 function cached(map, key, ttl, load) {
   const now = Date.now();
@@ -36,6 +45,7 @@ export async function inTheaters(userId, { read = upstream, dataDir } = {}) {
         const saved = JSON.parse(await fs.readFile(file, "utf8"));
         if (
           saved?.region === "US" &&
+          saved.filterVersion === FILTER_VERSION &&
           typeof saved.capped === "boolean" &&
           Number.isFinite(saved.fetchedAt) &&
           saved.fetchedAt <= Date.now() &&
@@ -47,7 +57,8 @@ export async function inTheaters(userId, { read = upstream, dataDir } = {}) {
               Number.isSafeInteger(item?.id) &&
               item.id > 0 &&
               item.mediaType === "movie" &&
-              typeof item.title === "string",
+              typeof item.title === "string" &&
+              isNewTheaterRelease(item.originalReleaseDate),
           )
         )
           return saved;
@@ -72,16 +83,18 @@ export async function inTheaters(userId, { read = upstream, dataDir } = {}) {
       );
       if (!Array.isArray(data.results))
         throw new Error("TMDB did not return a theater list.");
-      for (const item of data.results) {
-        if (
-          !Number.isSafeInteger(item?.id) ||
-          item.id <= 0 ||
-          seen.has(item.id) ||
-          item.adult === true
-        )
-          continue;
-        seen.add(item.id);
-        raw.push(item);
+      const candidates = data.results.filter(item => {
+        if (!Number.isSafeInteger(item?.id) || item.id <= 0 || seen.has(item.id) || item.adult === true) return false;
+        seen.add(item.id); return true;
+      });
+      for (let start = 0; start < candidates.length; start += 8) {
+        const verified = await Promise.all(candidates.slice(start, start + 8).map(async item => {
+          const detailQuery = new URLSearchParams({api_key:key, language:"en-US"});
+          const detail = await read("https://api.themoviedb.org", `/3/movie/${item.id}?${detailQuery}`);
+          if (detail.id !== item.id) throw new Error("TMDB returned a different movie.");
+          return isNewTheaterRelease(detail.release_date) ? {...item, release_date:detail.release_date} : null;
+        }));
+        raw.push(...verified.filter(Boolean));
       }
       const more = data.results.length > 0 && page < (data.total_pages || 1);
       if (raw.length >= MAX_TITLES || page === MAX_PAGES) {
@@ -109,7 +122,8 @@ export async function inTheaters(userId, { read = upstream, dataDir } = {}) {
         }),
       );
     }
-    const result = { titles, capped, region: "US", fetchedAt: Date.now() };
+    titles.forEach((item, index) => { item.originalReleaseDate = raw[index].release_date; });
+    const result = { titles, capped, region: "US", filterVersion: FILTER_VERSION, fetchedAt: Date.now() };
     if (file) {
       await fs.mkdir(dataDir, { recursive: true, mode: 0o700 });
       await fs.writeFile(file + ".tmp", JSON.stringify(result), {
