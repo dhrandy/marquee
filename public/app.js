@@ -713,7 +713,7 @@ function renderDetailFacts(facts) {
     const date = new Date(`${r.date}T12:00:00Z`);
     if (!Number.isFinite(date.getTime())) return "";
     const icon = svgIcon(r.type);
-    return `<span class="detail-release" title="${escape(r.type)}${r.region ? ` (${escape(r.region)})` : ""}"><span class="release-label">${icon}<small>${escape(r.type)}${r.region ? ` · ${escape(r.region)}` : ""}</small></span><span class="release-date">${escape(date.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric",timeZone:"UTC"}))}</span></span>`;
+    return `<span class="detail-release" title="${escape(r.type)}${r.region ? ` (${escape(r.region)})` : ""}"><span class="release-label">${icon}<small>${escape(r.type)}${r.region ? ` · ${escape(r.region)}` : ""}</small></span><span class="release-date">${escape(date.toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric",timeZone:"UTC"}))}</span></span>`;
   }).join(""));
   if (facts.productionCountries?.length) html += row("Production", `<span class="country-flags">${facts.productionCountries.map(c => `<span tabindex="0" title="${escape(c.name)}" aria-label="${escape(c.name)}">${/^[A-Z]{2}$/.test(c.code) ? `<img class="flag" src="/flags/${c.code.toLowerCase()}.svg" alt="" width="28" height="21" loading="lazy" data-code="${c.code}">` : escape(c.name)}</span>`).join(" ")}</span>`);
   if (facts.originalLanguage) {
@@ -791,8 +791,17 @@ function showDetail(event) {
   factsRequest++;
   renderDetailFacts(event.facts);
   $("#episode-title").textContent =
-    `${event.title}${event.year ? ` (${event.year})` : ""}`;
-  $("#episode-subtitle").textContent = event.subtitle;
+    `${event.title}${event.year && !new RegExp(`(?:\\(\\s*${String(event.year).replace(/[^0-9]/g, "")}\\s*\\)|\\b${String(event.year).replace(/[^0-9]/g, "")}\\b)\\s*$`).test(event.title) ? ` (${event.year})` : ""}`;
+  const certification = typeof event.contentRating === "string" ? event.contentRating.trim() : "";
+  const movie = event.mediaType === "movie" || /(?:^| · )Movie(?: · |$)/i.test(event.subtitle || "");
+  const subtitleParts = (event.subtitle || "").split(" · ");
+  let placedRating = false;
+  const detailSubtitle = subtitleParts.map(part => {
+    if (movie && /^movie$/i.test(part.trim())) { placedRating = true; return certification; }
+    return part;
+  }).filter(Boolean);
+  if (certification && !placedRating && !detailSubtitle.includes(certification)) detailSubtitle.push(certification);
+  $("#episode-subtitle").textContent = detailSubtitle.join(" · ");
   const requestButton = $("#episode-request");
   const actionLabel = mediaActionLabel(event);
   $("#episode-poster-status").innerHTML = statusBadgeHtml(event) + watchedBadgeHtml(event);
@@ -815,7 +824,7 @@ function showDetail(event) {
   const contentRating = $("#episode-content-rating");
   contentRating.textContent =
     typeof event.contentRating === "string" ? event.contentRating : "";
-  contentRating.hidden = !contentRating.textContent;
+  contentRating.hidden = true;
   contentRating.title = event.contentRatingRegion
     ? `Content rating (${event.contentRatingRegion})`
     : "Content rating";
@@ -824,13 +833,24 @@ function showDetail(event) {
   const metaParts = [
     event.mediaType === "tv" ? null : event.network,
     event.runtime ? `${event.runtime} min` : null,
-    statusLabel[event.status] || event.subtitle,
+    statusLabel[event.status] || null,
   ].filter(Boolean);
   $("#episode-meta").textContent = metaParts.join(" · ");
   // The subtitle is already printed above on desktop, so don't repeat it in the top line.
   $("#episode-meta-top").textContent = metaParts
-    .filter((part) => part !== event.subtitle)
+    .filter((part) => part !== event.subtitle && !detailSubtitle.includes(part))
     .join(" · ");
+  const airDate = $("#episode-air-date");
+  airDate.hidden = true; airDate.textContent = "";
+  if (typeof event.episodeAirDate === "string" && /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(event.episodeAirDate)) {
+    const day = event.episodeAirDate.slice(0,10), date = new Date(`${day}T12:00:00Z`);
+    if (Number.isFinite(date.getTime()) && date.toISOString().slice(0,10) === day) {
+      airDate.textContent = `Episode air date · ${date.toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric",timeZone:"UTC"})}`;
+      airDate.hidden = false;
+    }
+  }
+  $("#episode-air-date-top").textContent = airDate.textContent;
+  $("#episode-air-date-top").hidden = airDate.hidden;
   const cast = $("#episode-cast");
   const names = Array.isArray(event.cast)
     ? event.cast.filter((n) => typeof n === "string").slice(0, 4)

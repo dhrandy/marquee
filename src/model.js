@@ -30,6 +30,7 @@ export function normalizeEpisodes(rows, now = new Date()) {
       title: row.series?.title || "Untitled series",
       subtitle: `S${String(row.seasonNumber).padStart(2, "0")}E${String(row.episodeNumber).padStart(2, "0")} · ${row.title || "Untitled episode"}`,
       date: row.airDateUtc,
+      episodeAirDate: row.airDateUtc,
       status: episodeStatus(row, now),
       monitored: Boolean(row.monitored && (row.series?.monitored ?? true)),
       premiere: row.episodeNumber === 1 && row.seasonNumber > 0,

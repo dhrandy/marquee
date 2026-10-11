@@ -110,7 +110,7 @@ const service = http.createServer(async (req, res) => {
               LocationType: "Virtual",
             },
             {
-              Id: "physical-episode",
+              Id: "physical-episode", PremiereDate: "2026-10-08T00:00:00Z",
               Type: "Episode",
               SeasonId: "s1",
               SeriesId: "series1",
@@ -1055,6 +1055,7 @@ try {
     assert.match(data.items[0].link, /id=physical-episode$/);
     assert.equal(data.items[0].detail.overview, "Synthetic overview");
     assert.equal(data.items[0].detail.runtime, 42);
+    assert.equal(data.items[0].detail.episodeAirDate, "2026-10-08T00:00:00Z");
     assert.deepEqual(data.items[0].detail.genres, ["Adventure"]);
     assert.equal(data.items[0].detail.network, "Example Network");
     assert.equal(JSON.stringify(data).includes("virtual-future"), false);

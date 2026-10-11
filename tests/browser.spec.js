@@ -778,7 +778,7 @@ for (const width of [1440, 393, 280]) {
     await login(page);
     await page.locator("#popular-movies [data-detail-id]").first().click();
     await expect(page.locator("#episode-detail")).toBeVisible();
-    await expect(page.locator("#episode-subtitle")).toHaveText("Movie");
+    await expect(page.locator("#episode-subtitle")).not.toContainText("Movie");
     await expect(page.locator("#episode-meta")).toContainText("Sample Network");
     await page
       .locator("#episode-detail")
@@ -904,7 +904,7 @@ for (const width of [1440, 393, 280]) {
       .locator('#search-results [data-detail-type="movie"]')
       .first()
       .click();
-    await expect(page.locator("#episode-subtitle")).toHaveText("Movie");
+    await expect(page.locator("#episode-subtitle")).not.toContainText("Movie");
     await page
       .locator("#episode-detail")
       .screenshot({ path: `${shots}/marquee-search-popup-${width}.png` });
@@ -1441,7 +1441,7 @@ for (const width of [1440,393,320,280]) {
     await login(page);
     await page.evaluate(() => showDetail({ title:"Fictional Film", subtitle:"Movie", poster:"/art/north.svg", backdrop:"/art/north.svg", genres:["Adventure"], contentRating:"PG-13", runtime:104, cast:["Alex Sample","Morgan Example"], overview:"A fictional journey begins.", facts:{status:"Released",originalLanguage:"en",productionCountries:[{code:"US",name:"United States"},{code:"GB",name:"United Kingdom"}],scores:{critics:90,audience:97,imdb:8,tmdb:83},releases:[{type:"Theatrical",date:"2026-07-31",region:"US"},{type:"Digital",date:"2026-10-06",region:"US"},{type:"Physical",date:"2026-12-15",region:"US"}]}}));
     await expect(page.locator("#episode-facts")).toContainText("Released");
-    await expect(page.locator("#episode-facts")).toContainText("July 31, 2026");
+    await expect(page.locator("#episode-facts")).toContainText("Jul 31, 2026");
     await expect(page.locator("#episode-facts")).toContainText("English");
     expect(await page.locator(".release-label").first().evaluate(el => {
       const icon=el.firstElementChild.getBoundingClientRect(), label=el.lastElementChild.getBoundingClientRect();
@@ -3008,4 +3008,63 @@ for (const width of [280, 320, 393, 1440]) {
     await expect(page.locator("#notify-show-list")).toContainText("No shows selected");
     expect(await page.locator("#settings").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   });
+}
+
+for (const width of [1440,393,280]) {
+  test(`current popup certification and embedded year at ${width}px`, async ({page}) => {
+    await page.setViewportSize({width,height:1000}); await login(page);
+    for (const [title,year,expected] of [["Brothers (2026)",2026,"Brothers (2026)"],["Brothers 2026",2026,"Brothers 2026"],["Brothers (2026) ",2026,"Brothers (2026) "],["2001: A Space Odyssey",1968,"2001: A Space Odyssey (1968)"],["Class of 1999",1990,"Class of 1999 (1990)"],["Brothers",2026,"Brothers (2026)"]]) {
+      await page.evaluate(({title,year}) => showDetail({title,year,mediaType:"movie",subtitle:"2026 · Movie",contentRating:"PG-13",runtime:104}),{title,year});
+      await expect(page.locator("#episode-title")).toHaveText(expected);
+      await expect(page.locator("#episode-subtitle")).toHaveText("2026 · PG-13");
+      await expect(page.locator("#episode-content-rating")).toBeHidden();
+      await expect(page.locator("#episode-meta")).not.toContainText("Movie");
+      expect(await page.locator("#episode-detail").evaluate(e=>e.scrollWidth<=e.clientWidth)).toBe(true);
+      await page.locator("#episode-close").click();
+    }
+    await page.evaluate(()=>showDetail({title:"A series",mediaType:"tv",subtitle:"TV series",contentRating:"TV-14"}));
+    await expect(page.locator("#episode-subtitle")).toHaveText("TV series · TV-14");
+    await page.locator("#episode-close").click();
+    await page.evaluate(()=>showDetail({title:"Missing certification",mediaType:"movie",subtitle:"Movie"}));
+    await expect(page.locator("#episode-subtitle")).toHaveText("");
+  });
+}
+
+test("episode air date survives async series facts and never substitutes series premiere", async ({page})=>{
+  await login(page);await page.route("**/api/library/air-date/facts",route=>route.fulfill({json:{mediaType:"tv",facts:{releases:[{type:"First aired",date:"2020-04-02",region:null}]}}}));
+  await page.evaluate(()=>showDetail({title:"Example series",mediaType:"tv",subtitle:"S2E4 · Example episode",contentRating:"TV-14",episodeAirDate:"2026-10-09T20:00:00Z",factsUrl:"/api/library/air-date/facts"}));
+  await expect(page.locator("#episode-air-date")).toContainText("Episode air date");
+  await expect(page.locator("#episode-air-date-top")).toContainText("Oct 9, 2026");
+  await expect(page.locator("#episode-facts")).toContainText("Apr 2, 2020");
+  await page.locator("#episode-close").click();
+  await page.evaluate(()=>showDetail({title:"Missing date",mediaType:"tv",subtitle:"S2E5"}));
+  await expect(page.locator("#episode-air-date")).toBeHidden();
+});
+
+for(const width of [1440,393,280]) {
+ test(`episode date placement and invalid-date reset at ${width}px`,async({page})=>{
+  await page.setViewportSize({width,height:1000});await login(page);
+  await page.evaluate(()=>showDetail({title:"Example",mediaType:"tv",subtitle:"S2E4",runtime:42,cast:["Example Actor"],episodeAirDate:"2026-10-08T00:00:00Z"}));
+  if(width>600) {
+   await expect(page.locator("#episode-air-date-top")).toBeVisible();
+   await expect(page.locator("#episode-air-date")).toBeHidden();
+   expect(await page.evaluate(()=>Math.abs(document.querySelector("#episode-meta-top").getBoundingClientRect().top-document.querySelector("#episode-air-date-top").getBoundingClientRect().top))).toBeLessThan(2);
+  } else {
+   await expect(page.locator("#episode-air-date")).toBeVisible();
+   expect(await page.evaluate(()=>{const date=document.querySelector("#episode-air-date").getBoundingClientRect();return date.top>=document.querySelector("#episode-meta").getBoundingClientRect().bottom && date.bottom<=document.querySelector("#episode-cast").getBoundingClientRect().top;})).toBe(true);
+  }
+  await page.locator("#episode-close").click();
+  await page.evaluate(()=>showDetail({title:"Invalid date",mediaType:"tv",subtitle:"S2E5",episodeAirDate:"2026-02-30"}));
+  await expect(page.locator("#episode-air-date")).toBeHidden();await expect(page.locator("#episode-air-date-top")).toBeHidden();
+ });
+}
+
+for(const width of [1440,393]) {
+ test(`episode label appears once, never repeated with runtime at ${width}px`, async({page})=>{
+  await page.setViewportSize({width,height:1000});await login(page);
+  await page.evaluate(()=>showDetail({title:"Example series",mediaType:"tv",subtitle:"Episode 4: The Long Way Home",runtime:104,contentRating:"TV-14"}));
+  await expect(page.locator("#episode-subtitle")).toContainText("Episode 4: The Long Way Home");
+  await expect(page.locator("#episode-meta")).toHaveText("104 min");
+  await expect(page.locator("#episode-meta-top")).toHaveText("104 min");
+ });
 }

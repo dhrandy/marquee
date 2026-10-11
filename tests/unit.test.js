@@ -391,3 +391,9 @@ test("old eleven-shelf order preserves every saved position and adds theaters af
   assert.deepEqual(migrated.filter(key => key !== "inTheaters"), old);
   assert.equal(migrated.indexOf("inTheaters"), migrated.indexOf("popular") + 1);
 });
+
+test("series facts use first air date, not last air date or an invented range", async () => {
+  const {seerrFacts}=await import("../src/model.js");
+  assert.deepEqual(seerrFacts({firstAirDate:"2020-04-02",lastAirDate:"2026-10-10"},"tv").releases,[{type:"First aired",date:"2020-04-02",region:null}]);
+  assert.deepEqual(seerrFacts({firstAirDate:"2026-02-30"},"tv").releases,[]);
+});

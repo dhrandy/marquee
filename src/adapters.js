@@ -148,7 +148,7 @@ export async function recentItems(user) {
       Limit: String(pageSize),
       StartIndex: String(startIndex),
       Fields:
-        "DateCreated,Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People",
+        "DateCreated,PremiereDate,Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People",
       EnableUserData: "true",
       EnableTotalRecordCount: "true",
     });
@@ -261,6 +261,7 @@ export async function recentItems(user) {
         tagline: "",
         rating: normalizedRating(item.CommunityRating, "Jellyfin community"),
         detail: {
+          episodeAirDate: item.Type === "Episode" ? item.PremiereDate || null : null,
           contentRating: normalizedContentRating(item.OfficialRating),
           cast: topCast(item.People, true),
           rating: normalizedRating(item.CommunityRating, "Jellyfin community"),
@@ -808,7 +809,7 @@ export function personalItemSubtitle(item) {
   return [item.ProductionYear, season].filter(Boolean).join(" · ");
 }
 export async function personalItems(user, kind) {
-  const query = new URLSearchParams({ UserId: user.id, Limit: "18", Fields: "Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People,ProviderIds", EnableUserData: "true", EnableImages: "true" });
+  const query = new URLSearchParams({ UserId: user.id, Limit: "18", Fields: "PremiereDate,Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People,ProviderIds", EnableUserData: "true", EnableImages: "true" });
   const endpoint = kind === "continueWatching" ? `/Users/${encodeURIComponent(user.id)}/Items/Resume` : "/Shows/NextUp";
   if (kind === "nextUp") { query.set("EnableResumable", "false"); query.set("EnableRewatching", "false"); }
   const data = await upstream(process.env.JELLYFIN_URL, `${endpoint}?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
@@ -845,7 +846,7 @@ export async function personalItems(user, kind) {
       image: Boolean(item.ImageTags?.Primary || item.SeriesId), art: "placeholder", link: jellyfinLink(item.Id),
       backdropId: item.ParentBackdropItemId || (item.BackdropImageTags?.length ? item.Id : item.SeriesId || null),
       progress, remaining: item.RunTimeTicks > ticks ? Math.ceil((item.RunTimeTicks - ticks) / 600000000) : null,
-      detail: { title: item.SeriesName || item.Name, subtitle: personalItemSubtitle(item), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), mediaType: item.Type === "Movie" ? "movie" : "tv", network: (item.Studios || []).slice(0, 3).map(studio => studio.Name).join(", "), year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
+      detail: { episodeAirDate: item.Type === "Episode" ? item.PremiereDate || null : null, title: item.SeriesName || item.Name, subtitle: personalItemSubtitle(item), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), mediaType: item.Type === "Movie" ? "movie" : "tv", network: (item.Studios || []).slice(0, 3).map(studio => studio.Name).join(", "), year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
     };
   });
 }

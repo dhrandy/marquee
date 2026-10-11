@@ -1610,3 +1610,12 @@ main > #search-section .search-bar { max-width: 560px; }
 .reminder-row .setting { min-height: 44px; padding: 8px 0; margin: 8px 0 0; }
 .reminder-row .setting input[type="checkbox"] { justify-self: center; margin: 0; }
 .reminder-heading .utility-icon { justify-self: center; }
+
+/* Episode date joins runtime on desktop; phones keep it above cast. */
+#episode-air-date-top { display:none; }
+@media(min-width:601px) {
+ #episode-meta-top:not(:empty) { display:inline; }
+ #episode-air-date-top:not([hidden]) { display:inline; font-size:13px; line-height:1.5; color:#c5cad6; }
+ #episode-meta-top:not(:empty) + #episode-air-date-top:not([hidden])::before { content:" · "; }
+ #episode-air-date { display:none; }
+}
