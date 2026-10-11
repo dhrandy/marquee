@@ -2636,3 +2636,13 @@ for (const width of [393,1440]) {
     }
   });
 }
+
+test("Settings ends with Connections below the icon guide", async ({page}) => {
+  await page.setViewportSize({width:393,height:1000}); await login(page);
+  await page.getByRole("button",{name:"Settings",exact:true}).click();
+  expect(await page.locator("#settings").evaluate(el=> {const guide=el.querySelector("#icon-guide"),connections=el.querySelector(".connections");return Boolean(guide.compareDocumentPosition(connections)&Node.DOCUMENT_POSITION_FOLLOWING);})).toBe(true);
+  await page.locator("#settings").evaluate(el=>el.scrollTop=el.scrollHeight);
+  await page.locator("#settings").screenshot({path:`${shots}/marquee-settings-guide-connections-393.png`});
+  await page.setViewportSize({width:1440,height:1000}); await page.locator("#settings").evaluate(el=>el.scrollTop=el.scrollHeight);
+  await page.locator("#settings").screenshot({path:`${shots}/marquee-settings-guide-connections-1440.png`});
+});
