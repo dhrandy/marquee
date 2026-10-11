@@ -3068,3 +3068,28 @@ for(const width of [1440,393]) {
   await expect(page.locator("#episode-meta-top")).toHaveText("104 min");
  });
 }
+
+for (const width of [1440, 834, 601, 393, 280]) {
+  test(`detail icon actions sit beside Close on every size at ${width}px`, async ({page}) => {
+    await page.setViewportSize({width,height:1000});
+    await login(page);
+    await page.evaluate(() => showDetail({title:"Toolbar test",subtitle:"Movie",mediaType:"movie",jellyfinId:"demo-episode",playLink:"https://jellyfin.example.com",runtime:100}));
+    await expect(page.locator("#episode-play")).toBeVisible();
+    await expect(page.locator("#episode-trailer")).toBeVisible();
+    const styles=await page.locator("#episode-save, #episode-play, #episode-trailer, #episode-close").evaluateAll(els=>els.map(el=>{const s=getComputedStyle(el);return [s.width,s.height,s.borderWidth,s.borderStyle,s.borderColor,s.borderRadius,s.backgroundColor];}));
+    expect(styles).toHaveLength(4);
+    for(const style of styles) expect(style).toEqual(styles[0]);
+    const desktop=width>600;
+    expect(await page.locator(".episode-quick-actions").evaluate(el=>el.parentElement.className)).toBe("episode-toolbar");
+    {
+      const play=await page.locator("#episode-play").boundingBox(),close=await page.locator("#episode-close").boundingBox(),title=await page.locator("#episode-title").boundingBox();
+      expect(Math.abs(play.y-close.y)).toBeLessThan(2);
+      expect(play.x+play.width).toBeLessThan(close.x);
+      expect(play.y+play.height).toBeLessThan(title.y);
+    }
+    await page.setViewportSize({width:desktop?393:1440,height:1000});
+    expect(await page.locator(".episode-quick-actions").evaluate(el=>el.parentElement.className)).toBe("episode-toolbar");
+    await page.locator("#episode-close").click();
+    await expect(page.locator("#episode-detail")).not.toBeVisible();
+  });
+}

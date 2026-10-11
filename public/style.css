@@ -1619,3 +1619,26 @@ main > #search-section .search-bar { max-width: 560px; }
  #episode-meta-top:not(:empty) + #episode-air-date-top:not([hidden])::before { content:" · "; }
  #episode-air-date { display:none; }
 }
+
+/* Detail actions share a top-right toolbar with Close on every size. */
+.episode-quick-actions { display:flex; align-items:center; gap:10px; }
+.episode-toolbar { position:absolute; z-index:2; top:14px; right:14px; display:flex; align-items:center; gap:10px; }
+.episode-toolbar #episode-close { position:static; flex:none; }
+.episode-toolbar #episode-play { margin:0; }
+.episode-toolbar #episode-trailer { display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; padding:9px 6px; border-radius:8px; box-sizing:border-box; }
+.episode-hero { padding-top:76px; }
+/* Use one shape throughout the detail toolbar. */
+.episode-toolbar #episode-close { border-radius:8px; }
+.episode-toolbar #episode-save,
+.episode-toolbar #episode-play,
+.episode-toolbar #episode-trailer,
+.episode-toolbar #episode-close {
+ width:42px; height:42px; min-width:42px; min-height:42px;
+ box-sizing:border-box; border:1px solid #b49aff77; border-radius:8px;
+ background:rgba(12,15,24,.45); color:#c9b8ff;
+}
+.episode-toolbar #episode-save:hover,
+.episode-toolbar #episode-play:hover,
+.episode-toolbar #episode-trailer:hover,
+.episode-toolbar #episode-close:hover { background:#1b1730; border-color:#b49aff; }
+.episode-toolbar #episode-save.favorited { color:#eaa3bd; }
