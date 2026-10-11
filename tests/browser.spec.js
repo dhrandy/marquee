@@ -2617,3 +2617,22 @@ test("Jellyfin version has honest demo, unavailable and text-only states", async
   await expect(page.locator("#jellyfin-version")).toContainText("<img src=x onerror=alert(1)>");
   await expect(page.locator("#jellyfin-version img")).toHaveCount(0);
 });
+
+for (const width of [393,1440]) {
+  test(`Settings icon guide in all poster sizes at ${width}px`, async ({page}) => {
+    await page.setViewportSize({width,height:1200}); await login(page);
+    await page.getByRole("button", {name:"Settings",exact:true}).click();
+    for (const size of ["small","standard","large"]) {
+      await page.locator("#poster-size").selectOption(size);
+      await expect(page.locator("#icon-guide li")).toHaveCount(10);
+      await expect(page.locator("#icon-guide button, #icon-guide a")).toHaveCount(0);
+      await page.locator("#icon-guide").scrollIntoViewIfNeeded();
+      const overflow = await page.locator("#settings").evaluate(el=>el.scrollWidth > el.clientWidth+1); expect(overflow).toBe(false);
+      for (let index=0; index<1; index++) {
+        const group = page.locator(".icon-guide-group").nth(index);
+        await group.scrollIntoViewIfNeeded();
+        await group.screenshot({path:`${shots}/marquee-icon-guide-${size}-${width}-group${index}.png`});
+      }
+    }
+  });
+}

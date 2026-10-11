@@ -13,9 +13,7 @@ A self-hosted media dashboard with recent titles, a release calendar, personal J
 
 ## Beta
 
-This is a beta. No application image or public release has been published yet. The compose setup below runs the source using the official Node image, without a Dockerfile. Live-server compatibility and container deployment still need testing before a release.
-
-During beta, updates are manual. The standalone stack below downloads current source when you restart/recreate it. A local-checkout installation uses the source folder you provide. Marquee does not update itself while running. No version bump is required for each beta change.
+Marquee runs from source using the official Node image. There is no published Marquee image yet. The single-container stack below downloads the current beta when you restart or recreate it; a running app does not update itself.
 
 ## Contents
 
@@ -26,80 +24,44 @@ During beta, updates are manual. The standalone stack below downloads current so
 
 ## Features
 
-- Watchlist shows your Jellyfin movie and series favorites. The shared popout heart adds/removes a library favorite; episode popouts favorite the parent series. No Seerr metadata is needed for library items. Non-library titles cannot be favorited. Old private Marquee watchlist data is retained but not automatically imported or displayed.
-- Optional Recommendations (off by default) uses a recently played Jellyfin movie/series and fetches related titles through the configured Seerr/TMDB service. Only the seed TMDB ID is sent, not a history dump. The row can be hidden and reordered.
-- Requests can show Everyone or My requests, using the linked Seerr account ID rather than a display-name match.
-- Continue watching and Next up shelves use the signed-in user's Jellyfin viewing history and library permissions. Continue watching shows progress and minutes remaining; its link opens that exact item's Jellyfin page to resume. Next up excludes resumable/rewatched episodes. Both shelves and Watchlist start hidden; enable them in Settings. Each shelf can collapse independently.
-- Display-settings sync is opt-in on each device. Enabling uses account settings when available, otherwise uploads the current device's section toggles, collapse choices and calendar view. Disabling keeps that device's current choices. Weather/colorblind keep their existing server-side behavior; credentials and device location are never in display sync.
+- Discover and On Jellyfin pages with hideable, collapsible shelves. Reorder shelves separately for each page in Settings.
+- Recently added movies and TV seasons, with added dates, episode details and watched status from your Jellyfin account.
+- Optional Continue watching, Next up and Watchlist shelves. Watchlist uses Jellyfin favorites; the filled heart removes a favorite. Episode favorites apply to the parent series.
+- Optional Recommendations based on up to five latest distinct watched movies/shows, with related titles from Seerr/TMDB.
+- Seerr search, popular movies/shows and requests, using your linked Seerr permissions and quotas. Requests can show Everyone or My requests when your Seerr permissions allow it.
+- Shared Sonarr/Radarr release calendar with month, week, day, agenda and list views. Agenda is the default. Sunday-first layout, release filters, cinema/home releases and a status legend.
+- Detail popouts with available cast, ratings, certifications, TV network and overview. Play/Resume opens Jellyfin; the YouTube button opens a trailer search. Missing metadata stays hidden.
+- Small, Standard or Large posters on each device. Shelf arrows stay on desktop; phones and tablets swipe.
+- Optional weather and three-day forecast, colorblind-friendly status colors, automatic shelf refresh and display-settings sync.
+- Settings shows your Jellyfin server version and service connection tests. Jellyfin administrators can change the shared display name.
+- Installable home-screen app (PWA). Demo mode uses fictional titles and needs no external credentials.
 
-
-- Seerr access matches the signed-in Jellyfin ID to an imported Seerr user. Movie/TV permissions and quotas come from Seerr. No allowlist. Requests use the server API key with the verified user ID override; TV requests include all requestable seasons. Ask a Seerr admin to import your Jellyfin user if no match exists. Names and email addresses are never used for matching.
-
-- Jellyfin username and password login gates all media APIs.
-- Horizontal poster shelf with added date/time, title, and TV season episode counts.
-- Sonarr TV episodes and Radarr movie releases in month, week, day, agenda (next 14 days), or list views. Agenda is the default on desktop and mobile. The app remembers the last view used on each device.
-- Colorblind-friendly status colors are off by default and saved per Jellyfin account on the server. Status words remain visible in every theme, with different calendar border patterns in colorblind mode. The optional theme uses blue, yellow, orange, white and gray instead of red/green status colors.
-- Requests open the shared detail popup using the exact TMDB movie/TV ID, without a Play button. A hideable Jellyfin header shortcut opens the configured public Jellyfin base in a new tab.
-- Popups show up to four cast names from Jellyfin actors or Seerr/TMDB credits when available. No crew list or guessed names.
-- Content-rating badges (PG-13, R, TV-MA and others) appear in popups when supplied by Jellyfin or Sonarr/Radarr metadata. Seerr/TMDB popup certifications use US movie/TV ratings; missing certifications stay hidden.
-- Poster cards show a star and score without a source label or logo. Jellyfin scores in popups also omit the source label; verified TMDB/IMDb metadata retains its source label. Missing or unrated scores stay hidden. Ratings can be turned off in Settings.
-- Recently-added posters open a detail popup with a Play in Jellyfin button that opens the exact movie/episode the card represents. Desktop posters are modestly smaller; mobile sizing is unchanged.
-- Click a TV calendar entry for episode details: a complete poster beside the title with dimmed, softened backdrop artwork when supplied, a softened poster fallback, or a solid background if no artwork is available, show/year, episode title, network, runtime, genres and overview. The trailer button opens a clearly labeled YouTube search, not an unverified video. Upcoming season premieres are yellow, regular upcoming episodes white, available green, missing red; cinemas remain blue.
-- Sunday-first calendar, today highlight, previous/next period, refresh, and type/status filters. An optional hide-unmonitored filter drops unmonitored Sonarr/Radarr entries. Movies can appear twice: cinema and digital/physical releases are separate entries.
-- Green: available file. Red: release has passed but the file is missing. Yellow: season premiere. White: upcoming TV. Gray: unreleased movie.
-- Optional current weather and three-day forecast with condition icons, off by default. Wide screens share equal search/weather columns; smaller screens stack. Location names are kept in Settings, not on the weather display. An optional device-location setting requests browser permission over HTTPS, rounds coordinates to about 1km, and falls back to the saved city if denied/unavailable. Coordinates go through Marquee to Open-Meteo for forecasts and are not stored in account settings or synced. Choose a city and Fahrenheit/Celsius in Settings, saved server-side per Jellyfin account. Refreshes every 15 minutes while visible, catches up when a stale tab becomes visible, and joins the Refresh button. Open-Meteo weather and city search are free for non-commercial use, with no API key or account.
-- Jellyfin administrators can change the shared display name in Settings. It defaults to Marquee and survives container restarts.
-- Top 10 popular movies and TV shows come from Seerr, with request/availability indicators based on its latest library scan. Talk shows are excluded from the TV ranking and later popular results backfill the list. Both poster rows can be collapsed with the inline chevron or hidden entirely in Settings. Desktop hover and keyboard focus highlight posters. Click a search-result or top-10 poster for its details, network/studio, overview and trailer search; the request action stays on its card.
-- A quiet "Requests" section lists recent requests from everyone with requester display names, never emails. Reads retain the linked Seerr user: Seerr users need View Requests or Manage Requests permission to see other users' requests; otherwise Seerr returns only their own. No badges, no counts.
-- Poster and title taps deep-link into Jellyfin's web player through the external URL setting.
-- Settings includes per-service connection tests with real error messages (DNS failure, connection refused, timeout, or HTTP status).
-- Installable as a PWA (manifest and service worker). Only static assets are cached; media API responses are never cached.
-- Settings can hide either main section, weather, the status legend, added dates, and poster navigation arrows. Search is on by default; turn it off in Settings if preferred. Existing saved preferences keep their current search choice (older records without a search field keep it on).
-- Mobile defaults to Agenda. Month/week remain available with horizontal scrolling instead of squeezed columns.
-- A small Watched badge uses the signed-in viewer's Jellyfin played state, separate from library availability. Episode cards reflect the episode; Recently added season cards reflect the whole season; Seerr title cards/watchlist match Jellyfin movie or whole-series state by verified TMDB ID. Unknown/missing state has no badge. This is read-only and never changes viewing history.
-- Recently added, Continue watching and Next up auto-refresh every 5 minutes by default. Settings offers Off or 1/2/5/10/15 minutes, saved on this device and included in opt-in display sync. Only enabled shelves poll while the tab is visible; stale shelves refresh on return. Updates defer during dialogs, focused cards/search and recent interaction, preserve shelf scroll and collapse state, and keep existing cards on background refresh errors.
-- Drag dashboard sections into any top-to-bottom order in Settings, with arrow buttons for keyboard/touch use and a Reset order button. Each Jellyfin account has its own server-saved order, independent of opt-in display sync. Hidden sections keep their position. Search and weather share their two-column row when adjacent in that order; separated sections use full width.
-- Display preferences are stored on the current device. Weather enabled state, city and F/C units are saved server-side per Jellyfin account and follow that user across devices. The display name is shared.
-- Demo mode with fictional titles and original sample poster art. No external credentials required.
+Personal shelves and weather start off. Enable them in Settings. Most display choices stay on the current device unless you enable sync; weather, colorblind mode and shelf order are saved per account. The watched badge is read-only and never changes viewing history.
 
 ## Run with Docker Compose
 
-Requires Docker Engine with the Compose plugin. Put this source folder on your server. You do not need to build a Dockerfile.
+Use Docker Engine with the Compose plugin, or a stack manager such as CasaOS, Dockhand or Synology Container Manager. No image build is needed.
 
-1. Copy `.env.example` to `.env` beside `compose.yaml`.
-2. Fill in your service URLs and keys. Keep `.env` private and out of git.
-3. Set your timezone. Keep `DEMO_MODE=false` for real use.
-4. Start:
-
-```sh
-docker compose up -d
-```
-
-Open the configured port through an HTTPS reverse proxy. `COOKIE_SECURE=true` requires HTTPS. For a local HTTP demo only, set `DEMO_MODE=true` and `COOKIE_SECURE=false`.
-
-Each new sign-in uses a separate Jellyfin device identity, so another browser signing in does not revoke it. Sign-ins are stored in an encrypted cookie, so they survive container restarts and recreates. `SESSION_SECRET` is optional: left empty, Marquee generates a secret once and keeps it in its data volume (`MARQUEE_DATA_DIR`). Set it yourself (32+ random characters) if the data volume is not persistent or you run several instances; changing it signs everyone out. Sessions last 8 hours. Sign out also ends the Jellyfin login the cookie carried.
-
-
-The initial beta copies the mounted source into a temporary writable container directory and installs the locked production dependencies at startup. This needs internet access to the package registry. Encrypted sessions survive restart when the settings volume is kept. The `marquee-settings` volume keeps the administrator-set display name and per-user weather/colorblind preferences across container restarts. Other display preferences remain on the current device. Do not delete the settings volume when upgrading.
+The recommended stack downloads the app for you. Use the [local-checkout option](#local-checkout-compose-requires-source-folder) only if you already keep the source folder on your server.
 
 ### Single-container stack (CasaOS, Dockhand, Synology or plain Docker)
 
 This is the easiest option for a stack manager or plain Docker Compose. You do not need to download the source folder. Settings come from a `.env` file beside your compose file, or your stack manager's Environment settings.
 
-1. Copy the complete example below into your stack editor (or use `compose.casaos.yaml`).
+1. Copy the complete example below into your stack editor, or save `compose.casaos.yaml` as your stack file.
 2. Add the variables from the `.env` example below to a `.env` file beside your compose file, or to the stack's Environment settings. Fill in your own service URLs and API keys. Keep your keys private.
 3. Set your timezone. Leave `DEMO_MODE` off for your real media.
 4. Keep `COOKIE_SECURE` true for HTTPS. Use false only on a trusted plain-HTTP home network.
 5. Set `MARQUEE_PORT` to your host port (usually `8739`). Keep `target: 8739` in the compose.
-6. Start the stack. Open your server at that port, or use your HTTPS reverse proxy.
+6. Start the stack. Open it through your HTTPS reverse proxy. Direct HTTP works only when `COOKIE_SECURE=false` on a trusted home network.
 
 You only need to edit the settings above. The commented startup steps download Marquee, install its runtime packages, and start it automatically. Your server needs internet access to GitHub and npm during startup. If a download fails, startup stops rather than running an incomplete app.
 
-**Updates:** restart or recreate the stack to download the latest beta. A running app does not update itself. Restarting keeps existing sign-ins when the settings volume and session secret are unchanged.
+**Updates:** restart or recreate the stack to download the latest beta. Compose changes require replacing the stack definition and recreating it; restarting alone does not apply a new compose. Keep your settings folder and environment values.
 
 **Container name:** the container is named `marquee`. If you run a second Marquee instance on the same Docker host, give it a different `container_name`, host port and settings folder. The stack/project name is separate.
 
-**Saved settings:** they stay in `/DATA/AppData/marquee/settings`. Keep that folder when updating. The same container briefly prepares its ownership, then runs all downloads, package installation and the app as the non-root `node` user. Only one container is needed.
+**Saved settings:** keep `/DATA/AppData/marquee/settings` when updating. It holds account settings, the display name and the generated session secret. Leaving `SESSION_SECRET` blank uses that saved secret; changing it signs everyone out. Sessions last eight hours and can survive restarts when the folder and secret are unchanged. The container prepares folder ownership, then downloads and runs the app as the non-root `node` user.
 
 **Platform notes:**
 
@@ -109,6 +71,7 @@ You only need to edit the settings above. The commented startup steps download M
 - Plain Docker: save this as `compose.yaml` beside your `.env` and deploy with your Docker Compose interface. The source downloads automatically; no clone or permission commands are needed.
 
 **Already using the two-container stack?** Keep your current settings source, environment values and port. Replace the compose with this complete example and recreate the stack. Remove the old stopped `marquee-init` container in your manager if it remains as an orphan; do not delete the settings folder. The app keeps its saved settings and session secret. If your NAS blocks ownership changes on that folder, startup will stop rather than silently losing saved settings.
+
 ```yaml
 name: marquee
 services:
@@ -210,9 +173,13 @@ services:
       start_period: 60s
 ```
 
-The original `compose.yaml` below is for an existing local/git checkout. Do not use its source mount with an empty CasaOS folder.
-
 ### Local-checkout compose (requires source folder)
+
+1. Put your Marquee source folder on the server. Do not use an empty folder.
+2. Save this compose beside the source and add the `.env` values below.
+3. Start it through your stack manager. Updates use the source you have downloaded, not an automatic GitHub download.
+
+This option mounts the source read-only and uses the `marquee-settings` named volume for saved settings and sign-ins. Keep that volume when updating. Startup needs access to npm.
 
 ```yaml
 services:
@@ -284,9 +251,9 @@ volumes:
   marquee-settings:
 ```
 
-### Filled `.env` example
+### Environment values
 
-These are example values, not working credentials.
+Copy these into `.env` beside your compose, or into the stack manager's Environment settings. Replace service URLs and API keys with your own. Service names such as `jellyfin` work only on a shared Docker network; otherwise use a reachable LAN address. Leave optional Maintainerr values blank if unused. These are examples, not working credentials.
 
 ```dotenv
 # Marquee settings. Copy to .env and fill in your own values. Keep .env private.
@@ -331,11 +298,6 @@ RADARR_API_KEY=replace-with-your-radarr-api-key
 SEERR_URL=http://seerr:5055
 SEERR_API_KEY=replace-with-your-seerr-api-key
 
-# Optional external URLs for the other services, reserved for future deep links (unused today):
-# SONARR_WEB_URL=https://sonarr.example.com
-# RADARR_WEB_URL=https://radarr.example.com
-# SEERR_WEB_URL=https://seerr.example.com
-
 # Weather is set per viewer in Settings: city picker and F/C units.
 # Open-Meteo weather and city search are free for non-commercial use. No API key or account needed.
 # Dashboard display name is set by a Jellyfin administrator in Settings (default Marquee).
@@ -353,36 +315,40 @@ Dockhand users can put these variables in the stack's Environment tab instead of
 
 Set `MAINTAINERR_URL` to its internal container/LAN base URL (include its `BASE_PATH`, if set). `MAINTAINERR_API_KEY` is an optional `X-Api-Key` header, not authentication: Maintainerr does not validate inbound API keys. Do not publish Maintainerr's port publicly assuming a key protects it. Enable Leaving soon in Settings, where a connection test is also available.
 
-The shelf is read-only and shows up to 24 accessible Jellyfin titles from active Maintainerr delete-file collections, earliest eligibility first. `addDate + deleteAfterDays` is eligibility, not a guaranteed deletion date: handler schedules, playback and later rule changes can defer removal. A missing timer is eligible at the next run. Non-delete actions and "delete show if empty" are not shown as departures. Exclusions (including parent shows/seasons), failed rule evaluations and this viewer's Jellyfin access are checked; unverified exclusions stop the shelf rather than inventing dates. Old/Plex-only Maintainerr installs and versions without `/api/collections/overlay-data` are not supported. No Maintainerr settings or secrets are read, no actions are triggered, and no files are deleted by Marquee.
+The read-only shelf shows up to 24 accessible Jellyfin titles from active Maintainerr delete-file collections. Dates indicate eligibility, not guaranteed deletion: schedules, playback and later rule changes can delay it. Marquee checks exclusions and library access; it does not change Maintainerr settings, trigger actions or delete files. Old/Plex-only installs and versions without `/api/collections/overlay-data` are not supported.
 
 ### Reverse proxy
 
-Terminate HTTPS at your preferred reverse proxy and forward to port 8739. Preserve the original Host header for same-origin write checks. Do not cache `/api/` responses. Do not expose the HTTP port directly to the internet. Users should always submit Jellyfin passwords over HTTPS. With `COOKIE_SECURE=true`, all writes require an exact HTTPS Origin; local HTTP origins work only when explicitly false. Set `TRUSTED_PROXIES` to a comma-separated list of the proxy IPs or narrow CIDRs as seen by the container. The default is empty (forwarded headers ignored). Alternatively set `TRUST_PROXY=1` for exactly one proxy hop; no IP lookup is needed. Its default is `0` (off); other hop counts and `true` are rejected. A nonempty `TRUSTED_PROXIES` allowlist takes precedence. Never trust all addresses. Your proxy must overwrite incoming X-Forwarded-For with the real client IP, preserve Host, and be the only path to the backend port. Do not whitelist a shared gateway reachable by untrusted clients. The compose files publish the backend on host interfaces by default; they do not enforce proxy-only access. For one-hop trust, firewall/bind/network rules must prevent ALL direct backend access, including untrusted LAN clients and containers. If a caller can connect directly, they can spoof their client IP and bypass login throttling. Keep trust off or use the strict allowlist until access is restricted. Private deployment addresses belong in your local environment, not the public repo.
+- Use HTTPS for Jellyfin sign-in. Forward to port 8739, preserve the original Host header, and do not cache `/api/` responses. Keep the HTTP backend off the public internet.
+- Keep `COOKIE_SECURE=true` behind HTTPS. Set it false only for a trusted plain-HTTP home network.
+- Leave proxy trust off unless you need forwarded client IPs. Prefer `TRUSTED_PROXIES` with the proxy's specific IPs or narrow CIDRs, as seen by the container. Never trust all addresses or a shared gateway reachable by untrusted clients.
+- `TRUST_PROXY=1` is an alternative only when every direct path to the backend is blocked, including LAN and container callers. The proxy must overwrite forwarded headers. Otherwise a caller can fake its client IP and bypass login throttling. A `TRUSTED_PROXIES` allowlist takes precedence.
+- The compose publishes the backend on host interfaces; it does not enforce proxy-only access. Keep trust off until your firewall, binding or network rules restrict access to the proxy.
 
 ## Connection settings
 
 - `JELLYFIN_URL`: server base URL, including a path prefix if configured. No Jellyfin API key. Each user enters their own username/password on the sign-in screen.
-- `SONARR_URL` and `SONARR_API_KEY`: server base URL and API key. Requests use `/api/v3/calendar` with `includeSeries=true`.
-- `RADARR_URL` and `RADARR_API_KEY`: server base URL and API key. Requests use `/api/v3/calendar`.
-- `SEERR_URL` and `SEERR_API_KEY`: Jellyseerr or Overseerr base URL and API key. Search uses `/api/v1/search`; requests use `/api/v1/request`.
-- Internal/external URL split: `JELLYFIN_URL`, `SONARR_URL`, `RADARR_URL`, and `SEERR_URL` are how the container reaches each service (Docker network or LAN). `JELLYFIN_WEB_URL` is the public address browsers open when someone taps a poster; it defaults to `JELLYFIN_URL`. Set both when containers use an internal address phones cannot open. `SONARR_WEB_URL`, `RADARR_WEB_URL`, and `SEERR_WEB_URL` are reserved for future deep links and unused today.
+- `SONARR_URL` and `SONARR_API_KEY`: server base URL and API key.
+- `RADARR_URL` and `RADARR_API_KEY`: server base URL and API key.
+- `SEERR_URL` and `SEERR_API_KEY`: Jellyseerr or Overseerr base URL and API key.
+- Internal/external URL split: `JELLYFIN_URL`, `SONARR_URL`, `RADARR_URL`, and `SEERR_URL` are how the container reaches each service (Docker network or LAN). `JELLYFIN_WEB_URL` is the public address browsers open when someone taps a poster; it defaults to `JELLYFIN_URL`. Set both when containers use an internal address phones cannot open.
 - Weather: use Settings to find and pick a city, choose F/C units, and enable the widget. These choices are saved on the server for that viewer, not in `.env`.
 - Display name: Jellyfin administrators see a name field in Settings. The default is Marquee; the shared value is stored in the settings volume. This changes the dashboard header and browser tab. Installed PWA icons/name remain Marquee.
 - `TZ`: server timezone. Calendar air times and poster dates use the viewer's browser timezone.
 
 The app server must be able to reach all configured services. Browser CORS settings are not needed because requests go through the server. Service URLs may include a configured URL-base path; trailing slashes are optional. A missing scheme defaults to HTTP. HTTPS certificates must be trusted, and API redirects are not followed. Connection tests and calendar warnings distinguish HTTP errors, redirects, timeouts and invalid API responses.
 
-Movie dates prefer digital release, then physical release, then cinema release. Cinema and digital/home releases appear separately. Cinema entries have their own blue status and are not marked missing. A file always makes an entry Available. TV season counts include the episodes visible to that Jellyfin user in that season, not only the newly added batch. Virtual/missing/placeholder Jellyfin records are excluded so shelf links target the actual local or remote media item, not future metadata-only episodes. The shelf shows up to 18 recently added movie/TV-season cards, fetching more episodes as needed so a large season import does not crowd out other titles. Different seasons of a show may appear separately. Season-zero specials and podcasts are excluded from the shelf so they do not replace regular season cards. Each TV card identifies the latest-added regular episode number and title; missing season metadata is resolved from Jellyfin rather than assumed to be season zero.
-
 ## Privacy and permissions
 
-The recent Jellyfin shelf and Seerr request list are per-user. **The Sonarr/Radarr calendar is shared among all signed-in viewers.** Seerr search runs as the linked user and the request list shows only that user's requests. They may include titles a viewer cannot access in Jellyfin. Do not deploy for untrusted users without a calendar permission layer. Seerr requesting follows the linked user's own movie/TV permissions and quotas; the Seerr API key never reaches the browser. Request-list titles are resolved through Seerr's movie/TV metadata API using the linked user. If metadata is temporarily unavailable, the request status remains visible with its TMDB id.
+Jellyfin shelves follow the signed-in viewer's library permissions. **The Sonarr/Radarr calendar is shared among all signed-in viewers** and may show titles they cannot access in Jellyfin. Deploy only for viewers you trust with that calendar.
+
+Seerr search and requests use the imported account matched by Jellyfin user ID, never by name or email. Ask a Seerr admin to import your user if no match exists. Requests use that account's permissions and quotas. Everyone requests require View Requests or Manage Requests permission; otherwise Seerr returns only your own. Server API keys never reach the browser.
 
 Passwords are sent to Jellyfin and are not stored or logged. Jellyfin access tokens are encrypted inside the HttpOnly session cookie, never exposed to page scripts. Cookies are HttpOnly, SameSite Strict, secure by default, and expire after eight hours. Sign-out removes the local session. Sign-out also ends the Jellyfin token upstream; normal server restarts keep encrypted sign-ins valid.
 
-Media APIs and image proxies require a session. Images are limited to item IDs returned for that viewer. API keys never go to the browser. Service URLs are administrator configuration, not user-editable request destinations. Login is rate-limited per client IP. Forwarded client IPs are used through the strict `TRUSTED_PROXIES` allowlist or opt-in `TRUST_PROXY=1` for isolated single-proxy deployments. Both default off; otherwise only the direct socket IP is trusted. Authenticated API traffic is capped at 240 calls per user per minute (weather/city search at 30). Image downloads are bounded while streaming; remote calendar art permits only fixed HTTPS TVDB/TMDB hosts without credentials, ports or redirects. The app rejects cross-origin writes, escapes media titles, sends security headers, and blocks indexing with a robots rule and headers. These do not replace authentication.
+Media APIs and artwork require sign-in. The app limits image access to titles returned for that viewer, rate-limits login and API traffic, rejects cross-origin writes, and blocks search-engine indexing. These protections do not replace HTTPS or restricting backend access. Configure forwarded client IPs only as described in [Reverse proxy](#reverse-proxy).
 
-Demo mode must not be enabled for private live deployments: it allows anyone to open the sample dashboard without Jellyfin credentials. Demo adapters are separate from the live adapters and cannot expose live data.
+Demo mode must not be enabled for private live deployments: it allows anyone to open the sample dashboard without Jellyfin credentials.
 
 City searches share the typed city name with Open-Meteo when you press Find city. Forecast requests share the selected city coordinates only when the widget is enabled. Results are cached for 15 minutes. Attribution stays visible with the widget. Weather and geocoding need no key or account and are free for non-commercial use. See [geocoding documentation](https://open-meteo.com/en/docs/geocoding-api) and [Open-Meteo documentation](https://open-meteo.com/en/docs) for service terms and use limits.
 
@@ -390,7 +356,7 @@ City searches share the typed city name with Open-Meteo when you press Find city
 
 The Jellyfin shortcut uses the unmodified [official Jellyfin icon](https://raw.githubusercontent.com/jellyfin/jellyfin-ux/master/logos/SVG/jellyfin-icon--color-on-dark.svg) by the Jellyfin contributors, licensed under [CC BY-SA 4.0](public/licenses/jellyfin-CC-BY-SA-4.0.txt). It identifies the Jellyfin link, not Marquee. Marquee is an independent project.
 
-Country flags are served from the [flag-icons](https://github.com/lipis/flag-icons) package (MIT, [notice](public/licenses/flag-icons-MIT.txt)), installed with `npm ci`. Rating and release-type icons are drawn as inline SVG, so none of the UI depends on emoji fonts.
+Country flags use the [flag-icons](https://github.com/lipis/flag-icons) package (MIT, [notice](public/licenses/flag-icons-MIT.txt)).
 
 ## Rights
 

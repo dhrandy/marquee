@@ -1343,7 +1343,7 @@ async function loadJellyfinVersion() {
     if (request === jellyfinVersionRequest) target.textContent = "Jellyfin server version: unavailable";
   }
 }
-$("#settings-button").addEventListener("click", () => { buildSectionOrder(); $("#settings").showModal(); loadJellyfinVersion(); });
+$("#settings-button").addEventListener("click", () => { buildSectionOrder(); buildIconGuide(); $("#settings").showModal(); loadJellyfinVersion(); });
 $("#default-view").addEventListener("change", (event) => {
   state.prefs.defaultView = event.target.value;
   delete state.prefs.lastView;
@@ -1761,3 +1761,26 @@ $("#dashboard main").addEventListener("click", async event => {
   const key = button.dataset.personal, item = (key === "watchlist" ? state.watchlistItems : state.personalItems[key])[Number(button.dataset.index)];
   { showDetail({ title: item.title, subtitle: item.subtitle, mediaType: item.detail?.mediaType || (item.watchedScope === "movie" ? "movie" : "tv"), ...item.detail, favoriteId: item.favoriteId, favorite: item.favorite, watched: item.watched, watchedScope: item.watchedScope, poster: item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`, backdrop: item.backdropId ? `/api/image/${encodeURIComponent(item.backdropId)}?type=Backdrop` : null, playLink: item.link, availability: 5, factsUrl: `/api/library/${encodeURIComponent(item.id)}/facts` }); setDetailPlay(key === "continueWatching"); }
 });
+
+function buildIconGuide() {
+  const target = $("#icon-guide-content");
+  if (target.childElementCount) return;
+  const outline = path => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="${path}"/></svg>`;
+  const item = (icon, label, detail, cls = "") => `<li><span class="icon-guide-symbol ${cls}" aria-hidden="true">${icon}</span><span><strong>${label}</strong><small>${detail}</small></span></li>`;
+  const group = (label, items) => `<div class="icon-guide-group"><h4>${label}</h4><ul>${items.join("")}</ul></div>`;
+  const status = (icon, cls, label, detail) => item(`<span class="poster-status ${cls}">${seerrStatusIcons[icon]}</span>`, label, detail);
+  target.innerHTML = [
+    group("Posters and actions", [
+      item(outline("M12 5v14M5 12h14"), "Request", "Ask Seerr for this title.", "request"),
+      item(heartIcon, "Add favorite", "Outline heart: add to Jellyfin favorites.", "heart"),
+      item(heartIcon, "Remove favorite", "Filled heart: already a favorite; tap to remove.", "heart filled"),
+      item(watchedBadgeHtml({watched:true}), "Watched", "Already played. Season/series checks mean the whole season/show."),
+      status("bell", "pending", "Pending", "Request is waiting for approval."),
+      status("clock", "processing", "Processing", "Approved/requested; not fully available yet."),
+      status("minus-small", "partial", "Partially available", "Some episodes or seasons are available."),
+      status("check-circle", "available", "Available", "In the library; not a watched indicator."),
+      status("eye-slash", "blocked", "Blocklisted", "Seerr marks this title as blocklisted."),
+      status("trash", "deleted", "Deleted", "Media was removed, according to Seerr.")
+    ])
+  ].join("");
+}

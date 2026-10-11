@@ -1538,3 +1538,21 @@ main > #search-section .search-bar { max-width: 560px; }
 #watchlist-content .watchlist-remove svg { width: 26px; height: 26px; padding: 4px; fill: currentColor; stroke: currentColor; stroke-width: 1.5; background: #1b1730eb; border: 1px solid #b49aff; border-radius: 50%; box-shadow: 0 2px 6px #0007; }
 #watchlist-content .watchlist-remove:focus-visible { outline: 2px solid var(--purple); outline-offset: 1px; }
 #watchlist-content .watchlist-remove { margin: 0; }
+
+/* Static examples use the same SVGs as the live controls. */
+#icon-guide { margin-top: 24px; }
+.icon-guide-group h4 { margin: 20px 0 10px; color: var(--purple); }
+.icon-guide-group ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.icon-guide-group li { display: grid; grid-template-columns: 42px minmax(0,1fr); gap: 12px; align-items: center; }
+.icon-guide-group strong { display: block; font-size: 14px; font-weight: 600; }
+.icon-guide-group small { display: block; line-height: 1.45; margin-top: 3px; }
+.icon-guide-symbol { width: 42px; min-height: 38px; display: flex; align-items: center; justify-content: center; color: var(--purple); font-size: 23px; }
+.icon-guide-symbol > svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.icon-guide-symbol > img { max-width: 28px; max-height: 24px; }
+.icon-guide-symbol .poster-status, .icon-guide-symbol .watched-badge { position: static; flex-shrink: 0; }
+.icon-guide-symbol.heart.filled > svg, .icon-guide-symbol.play > svg, .icon-guide-symbol.solid > svg { fill: currentColor; }
+.icon-guide-symbol.solid > svg { stroke: none; }
+.icon-guide-symbol .mini-icon { fill: none; stroke: none; }
+.icon-guide-symbol .forecast-icon { fill: none; }
+.icon-guide-symbol.pair > svg { width: 20px; }
+.icon-guide-symbol.wordmark { font-size: 11px; font-weight: 700; }
