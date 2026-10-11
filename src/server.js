@@ -575,7 +575,7 @@ app.get("/api/in-theaters", requireUser, async (req, res) => {
   try {
     const access = await requestAccess(req.user);
     if (access.error) return res.status(403).json({ error: access.error });
-    const data = await inTheaters(access.id);
+    const data = await inTheaters(access.id, { dataDir: path.dirname(settingsPath) });
     res.json({ ...data, items: await withWatched(req.user, data.items), requestAccess: publicAccess(access) });
   } catch { res.status(502).json({ error: "In theaters is temporarily unavailable. Check TMDB and Seerr connections." }); }
 });

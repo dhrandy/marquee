@@ -1202,7 +1202,7 @@ async function loadInTheaters() {
   try {
     const data = await api("/api/in-theaters");
     $("#inTheaters-content").innerHTML = data.items.length ? data.items.map(item => resultCardHtml(item)).join("") : '<p class="empty">No theater titles returned for the US.</p>';
-    $("#inTheaters-status").textContent = "";
+    $("#inTheaters-status").textContent = data.capped ? `Showing the first ${data.items.length} US theater titles from TMDB.` : "";
     fixBrokenPosters();
   } catch (error) { $("#inTheaters-content").replaceChildren(); $("#inTheaters-status").textContent = error.message; }
 }
@@ -1857,7 +1857,7 @@ function renderNotifications() {
   $("#notify-test").disabled = !notificationEnabled;
   $("#notify-show-list").innerHTML = notificationPrefs.shows.length ? notificationPrefs.shows.map(show => {
     const title = notificationShows.find(item => item.id === show.id)?.title || "Selected show (temporarily unavailable)";
-    return `<article class="reminder-row"><div class="reminder-heading"><strong>${escape(title)}</strong><button data-reminder-remove="${escape(show.id)}" aria-label="Remove ${escape(title)} reminder">Remove</button></div><label class="setting">Airs today<input type="checkbox" data-reminder-id="${escape(show.id)}" data-reminder-type="airs" ${show.airs ? "checked" : ""}></label><label class="setting">New episode available<input type="checkbox" data-reminder-id="${escape(show.id)}" data-reminder-type="available" ${show.available ? "checked" : ""}></label></article>`;
+    return `<article class="reminder-row"><div class="reminder-heading"><strong>${escape(title)}</strong><button class="utility-icon" data-reminder-remove="${escape(show.id)}" aria-label="Remove ${escape(title)} reminder" title="Remove reminder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/></svg></button></div><label class="setting">Airs today<input type="checkbox" data-reminder-id="${escape(show.id)}" data-reminder-type="airs" ${show.airs ? "checked" : ""}></label><label class="setting">New episode available<input type="checkbox" data-reminder-id="${escape(show.id)}" data-reminder-type="available" ${show.available ? "checked" : ""}></label></article>`;
   }).join("") : '<p class="empty">No shows selected. Find a show to add it.</p>';
 }
 async function loadNotifications() {

@@ -77,3 +77,193 @@ test("theater feed fails closed on missing credentials, malformed data or unveri
     /Seerr unavailable/,
   );
 });
+
+test("theater feed keeps later-page titles past 20 and 40, dedupes, caches and isolates viewers", async () => {
+  process.env.TMDB_API_KEY = "paged-mock";
+  const calls = [];
+  const read = async (base, route, options) => {
+    calls.push({ base, route, user: options?.headers?.["X-API-User"] });
+    if (base.includes("themoviedb")) {
+      const page = Number(new URL(route, base).searchParams.get("page"));
+      return {
+        total_pages: 3,
+        results: Array.from({ length: 20 }, (_, i) => ({
+          id: (page - 1) * 20 + i + 1,
+          title:
+            page === 3 && i === 5
+              ? "The Social Reckoning"
+              : `Movie ${page}-${i}`,
+        })),
+      };
+    }
+    return {
+      id: Number(route.split("/").at(-1)),
+      mediaInfo: { status: options.headers["X-API-User"] === "7" ? 5 : 1 },
+    };
+  };
+  const result = await inTheaters(7, { read });
+  assert.equal(result.items.length, 60);
+  assert.equal(result.items[45].title, "The Social Reckoning");
+  assert.equal(result.capped, false);
+  assert.equal(calls.filter((c) => c.base.includes("themoviedb")).length, 3);
+  const count = calls.length;
+  await inTheaters(7, { read });
+  assert.equal(calls.length, count);
+  const other = await inTheaters(8, { read });
+  assert.equal(other.items[0].availability, 1);
+  assert.equal(result.items[0].availability, 5);
+  assert.equal(calls.filter((c) => c.base.includes("themoviedb")).length, 3);
+});
+
+test("theater pagination stops at its cap and reports partial coverage", async () => {
+  const result = await inTheaters(7, {
+    read: async (base, route) => {
+      if (base.includes("themoviedb")) {
+        const page = Number(new URL(route, base).searchParams.get("page"));
+        return {
+          total_pages: 20,
+          results: Array.from({ length: 20 }, (_, i) => ({
+            id: (page - 1) * 20 + i + 1,
+            title: "Movie",
+          })),
+        };
+      }
+      return { id: Number(route.split("/").at(-1)) };
+    },
+  });
+  assert.equal(result.items.length, 200);
+  assert.equal(result.capped, true);
+});
+
+test("page overlap is deduped and a failed later page cannot be cached as a complete list", async () => {
+  let fail = true;
+  const read = async (base, route) => {
+    if (base.includes("themoviedb")) {
+      const page = Number(new URL(route, base).searchParams.get("page"));
+      if (page === 2 && fail) throw new Error("page unavailable");
+      return {
+        total_pages: 2,
+        results:
+          page === 1
+            ? [{ id: 1, title: "One" }]
+            : [
+                { id: 1, title: "One duplicate" },
+                { id: 2, title: "Two" },
+              ],
+      };
+    }
+    return { id: Number(route.split("/").at(-1)) };
+  };
+  await assert.rejects(inTheaters(7, { read }), /page unavailable/);
+  fail = false;
+  assert.deepEqual(
+    (await inTheaters(7, { read })).items.map((item) => item.id),
+    [1, 2],
+  );
+});
+
+test("TMDB theater list stays fresh for 24 hours while viewer availability expires in one minute", async () => {
+  const realNow = Date.now;
+  let now = realNow(),
+    lists = 0,
+    details = 0;
+  Date.now = () => now;
+  const read = async (base, route) => {
+    if (base.includes("themoviedb")) {
+      lists++;
+      return { results: [{ id: 1, title: "One" }] };
+    }
+    details++;
+    return { id: Number(route.split("/").at(-1)) };
+  };
+  try {
+    await inTheaters(7, { read });
+    now += 59000;
+    await inTheaters(7, { read });
+    assert.equal(lists, 1);
+    assert.equal(details, 1);
+    now += 2000;
+    await inTheaters(7, { read });
+    assert.equal(lists, 1);
+    assert.equal(details, 2);
+    now += 23 * 60 * 60000;
+    await inTheaters(7, { read });
+    assert.equal(lists, 1);
+    now += 60 * 60000;
+    await inTheaters(7, { read });
+    assert.equal(lists, 2);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test("daily theater list is persisted without credentials and reused after restart for other viewers", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "marquee-theater-list-"));
+  let pulls = 0;
+  const read = async (base, route) => {
+    if (base.includes("themoviedb")) {
+      pulls++;
+      return { results: [{ id: 1, title: "Shared movie" }] };
+    }
+    return { id: Number(route.split("/").at(-1)) };
+  };
+  try {
+    await inTheaters(7, { read, dataDir: dir });
+    const saved = await fs.readFile(
+      path.join(dir, "theater-list.json"),
+      "utf8",
+    );
+    assert.ok(!saved.includes(process.env.TMDB_API_KEY));
+    assert.ok(!saved.includes("X-API-User"));
+    const restartedRead = (...args) => read(...args);
+    await inTheaters(8, { read: restartedRead, dataDir: dir });
+    assert.equal(pulls, 1);
+    const data = JSON.parse(saved);
+    data.fetchedAt -= 25 * 60 * 60000;
+    await fs.writeFile(
+      path.join(dir, "theater-list.json"),
+      JSON.stringify(data),
+    );
+    await inTheaters(9, { read: (...args) => read(...args), dataDir: dir });
+    assert.equal(pulls, 2);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("restarting with a 23-hour-old persisted list keeps only its remaining hour", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "marquee-theater-age-"));
+  const realNow = Date.now;
+  let now = realNow(),
+    pulls = 0;
+  Date.now = () => now;
+  const read = async (base, route) => {
+    if (base.includes("themoviedb")) {
+      pulls++;
+      return { results: [{ id: 1, title: "One" }] };
+    }
+    return { id: Number(route.split("/").at(-1)) };
+  };
+  try {
+    await inTheaters(7, { read, dataDir: dir });
+    now += 23 * 60 * 60000;
+    const restartedRead = (...args) => read(...args);
+    await inTheaters(8, { read: restartedRead, dataDir: dir });
+    assert.equal(pulls, 1);
+    now += 59 * 60000;
+    await inTheaters(8, { read: restartedRead, dataDir: dir });
+    assert.equal(pulls, 1);
+    now += 60001;
+    await inTheaters(8, { read: restartedRead, dataDir: dir });
+    assert.equal(pulls, 2);
+  } finally {
+    Date.now = realNow;
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

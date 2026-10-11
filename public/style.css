@@ -1597,3 +1597,16 @@ main > #search-section .search-bar { max-width: 560px; }
 .settings-tabs button[aria-selected="true"] { background: #ab91ed; border-color: #ab91ed; color: #15101e; }
 [role="tabpanel"][hidden] { display: none; }
 #settings-notifications-panel .settings-group { margin-top: 0; }
+
+/* Icon-only search keeps a full touch target and the app's rounded line icon style. */
+.search-btn, #dashboard[data-page="discover"] .search-btn { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 48px; width: 48px; min-height: 48px; padding: 0; }
+.search-btn svg { display: block; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+.utility-icon, .settings-input-row .utility-icon, .reminder-heading .utility-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; box-sizing: border-box; width: 44px; min-width: 44px; min-height: 44px; padding: 0; }
+.utility-icon svg { display: block; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Reminder titles, trash buttons and checks share one two-column grid. */
+.reminder-heading, .reminder-row .setting { display: grid; grid-template-columns: minmax(0, 1fr) 44px; column-gap: 8px; align-items: center; }
+.reminder-row .setting { min-height: 44px; padding: 8px 0; margin: 8px 0 0; }
+.reminder-row .setting input[type="checkbox"] { justify-self: center; margin: 0; }
+.reminder-heading .utility-icon { justify-self: center; }

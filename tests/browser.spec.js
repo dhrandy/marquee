@@ -2933,3 +2933,79 @@ test("missing theater key stays a friendly shelf message and keeps Discover usab
   await expect(page.locator("#popular-movies .result-card")).toHaveCount(10);
   expect(errors).toEqual([]);
 });
+
+test("theater coverage renders later-page titles and shows a cap notice without changing order", async ({ page }) => {
+  const items = Array.from({ length: 60 }, (_, i) => ({ id: 9800 + i, mediaType: "movie", title: i === 45 ? "The Social Reckoning" : `Theater movie ${i + 1}`, poster: "signal", year: "2026", availability: null, requested: false }));
+  await page.route("**/api/in-theaters", route => route.fulfill({ json: { items, region: "US", capped: true } }));
+  await login(page);
+  await expect(page.locator("#inTheaters-content .result-card")).toHaveCount(60);
+  await expect(page.locator("#inTheaters-content .result-card").nth(45)).toContainText("The Social Reckoning");
+  await expect(page.locator("#inTheaters-content .result-card").first()).toContainText("Theater movie 1");
+  await expect(page.locator("#inTheaters-status")).toHaveText("Showing the first 60 US theater titles from TMDB.");
+});
+
+for (const width of [280, 393, 1440]) {
+  test(`search magnifier is accessible and submits at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await login(page);
+    const search = page.getByRole("button", { name: "Search", exact: true });
+    await expect(search).toBeVisible();
+    await expect(search).toHaveText("");
+    await expect(search.locator("svg")).toHaveAttribute("aria-hidden", "true");
+    const box = await search.boundingBox();
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    await page.locator("#search-section").screenshot({ path: `${shots}/marquee-search-icon-${width}.png` });
+    await page.getByPlaceholder("Search movies and shows").fill("Signal");
+    await search.click();
+    await expect(page.locator("#search-results .result-card").first()).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
+
+for (const width of [280, 320, 393, 1440]) {
+  test(`utility icon buttons keep labels and actions at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1050 });
+    await login(page);
+    await view(page, "discover");
+    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    await expect(refresh).toHaveText("");
+    await refresh.click();
+    await expect(refresh).toBeEnabled();
+    await page.locator(".calendar-toolbar").screenshot({ path: `${shots}/marquee-refresh-icon-${width}.png` });
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    const city = page.getByRole("button", { name: "Find city", exact: true });
+    await expect(city).toHaveText("");
+    await page.getByPlaceholder("City name").fill("Sample");
+    await city.click();
+    await expect(page.getByRole("button", { name: "Sample City, Example Region", exact: true })).toBeVisible();
+    await page.locator("#weather-city-query").locator("..").screenshot({ path: `${shots}/marquee-city-icon-${width}.png` });
+    await page.getByRole("tab", { name: "Notifications", exact: true }).click();
+    const find = page.getByRole("button", { name: "Find shows", exact: true });
+    await expect(find).toHaveText("");
+    await page.getByRole("textbox", { name: "Search shows", exact: true }).fill("north");
+    await find.click();
+    await page.getByRole("button", { name: "Add North of Nowhere", exact: true }).click();
+    await expect(page.locator("#notify-save-status")).toHaveText("Saved to your account.");
+    const remove = page.getByRole("button", { name: "Remove North of Nowhere reminder", exact: true });
+    await expect(remove).toHaveText("");
+    for (const button of [find, remove]) {
+      await expect(button.locator("svg")).toHaveAttribute("aria-hidden", "true");
+      const box = await button.boundingBox(); expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+    await page.locator("#notify-show-list").scrollIntoViewIfNeeded();
+    const alignment = await page.locator(".reminder-row").evaluate(el => {
+      const trash = el.querySelector("[data-reminder-remove]").getBoundingClientRect();
+      const checks = [...el.querySelectorAll('input[type="checkbox"]')].map(input => input.getBoundingClientRect());
+      const text = el.querySelector("strong").getBoundingClientRect();
+      const labels = [...el.querySelectorAll(".setting")].map(label => label.getBoundingClientRect());
+      return { center: trash.x + trash.width / 2, checks: checks.map(box => box.x + box.width / 2), left: text.x, labels: labels.map(box => box.x) };
+    });
+    for (const center of alignment.checks) expect(Math.abs(center - alignment.center)).toBeLessThanOrEqual(1);
+    for (const left of alignment.labels) expect(Math.abs(left - alignment.left)).toBeLessThanOrEqual(1);
+    await page.locator("#settings").screenshot({ path: `${shots}/marquee-reminder-icons-${width}.png` });
+    await remove.click();
+    await expect(page.locator("#notify-show-list")).toContainText("No shows selected");
+    expect(await page.locator("#settings").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  });
+}

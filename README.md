@@ -377,10 +377,10 @@ Keep the settings folder: it now also holds generated Web Push keys and encrypte
 
 ### In theaters
 
-Discover includes an In theaters shelf from TMDB Now Playing for the US, with up to 20 movies in TMDB order. Setup:
+Discover includes an In theaters shelf from TMDB Now Playing for the US, with up to 200 movies across 10 pages in TMDB order. Setup:
 
 1. Get your own TMDB developer API key.
 2. Add `TMDB_API_KEY` to your `.env` file or stack manager Environment settings. Compose keeps the placeholder `${TMDB_API_KEY}`; never paste your key into the compose file or repository.
 3. Recreate the stack so the new environment setting applies.
 
-Without a key, the shelf shows a short setup message and the rest of Discover still works. The key stays on the server. Seerr supplies availability and request state; requests use the same viewer permissions and approval rules as Top 10. A theater listing or request does not mean the movie is ready to watch on Jellyfin. Hide the shelf in General Settings or move it within Discover. Existing saved shelf order is preserved, with In theaters inserted after Popular right now.
+Without a key, the shelf shows a short setup message and the rest of Discover still works. The TMDB list is stored in `theater-list.json` in the saved settings folder and shared across viewers. It survives restarts and refreshes on the first load after 24 hours. Seerr availability/request state is cached separately for one minute per viewer. A cap notice appears if the list is longer. The key stays on the server. Seerr supplies availability and request state; requests use the same viewer permissions and approval rules as Top 10. A theater listing or request does not mean the movie is ready to watch on Jellyfin. Hide the shelf in General Settings or move it within Discover. Existing saved shelf order is preserved, with In theaters inserted after Popular right now.

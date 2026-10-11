@@ -63,7 +63,7 @@
           <form id="search-form" class="search-bar">
             <input name="query" maxlength="120" placeholder="Search movies and shows" autocomplete="off" required />
             <button type="button" id="search-clear" class="search-clear" aria-label="Clear search" title="Clear search (Esc)" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" /></svg></button>
-            <button type="submit" class="search-btn">Search</button>
+            <button type="submit" class="search-btn" aria-label="Search" title="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="7"/><path d="m16 16 5 5"/></svg></button>
           </form>
           <p id="search-status" role="status"></p>
           <div id="search-results" class="search-results"></div>
@@ -105,7 +105,7 @@
                 <button id="today">Today</button>
               </div>
               <div class="view-tools">
-                <button id="refresh">↻ Refresh</button>
+                <button id="refresh" class="utility-icon" aria-label="Refresh" title="Refresh"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2.1 5.4"/></svg></button>
                 <button id="filter-button" aria-expanded="false">Filter</button>
                 <div class="view-tabs" aria-label="Calendar views">
                   <button data-view="month">Month</button>
@@ -198,7 +198,7 @@
         <h3>Weather</h3>
         <p>Free weather and city search from Open-Meteo. No key or account needed.</p>
         <label for="weather-city-query">Find your city</label>
-        <div class="settings-input-row"><input id="weather-city-query" maxlength="100" placeholder="City name" autocomplete="off" /><button id="weather-city-search">Find city</button></div>
+        <div class="settings-input-row"><input id="weather-city-query" maxlength="100" placeholder="City name" autocomplete="off" /><button id="weather-city-search" class="utility-icon" aria-label="Find city" title="Find city"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="7"/><path d="m16 16 5 5"/></svg></button></div>
         <div id="weather-city-results" class="city-results"></div>
         <p id="weather-city-selected">No city selected</p>
         <label class="setting">Use this device's location (off by default)<input type="checkbox" id="weather-location" /></label>
@@ -244,7 +244,7 @@
         <label class="setting">Reminder timezone<input id="notify-timezone" maxlength="80" aria-label="Reminder timezone"></label>
         <small>Airs-today reminders arrive as one summary around 9am in this timezone. Delivery is best-effort.</small>
         <h4>Show reminders</h4><p>Pick your shows. Nothing is added automatically.</p>
-        <div class="settings-input-row"><input id="notify-show-query" placeholder="Search shows" maxlength="100" aria-label="Search shows"><button id="notify-find-shows">Find shows</button></div>
+        <div class="settings-input-row"><input id="notify-show-query" placeholder="Search shows" maxlength="100" aria-label="Search shows"><button id="notify-find-shows" class="utility-icon" aria-label="Find shows" title="Find shows"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="7"/><path d="m16 16 5 5"/></svg></button></div>
         <small>Results update as you type. Punctuation does not need to match.</small>
         <p id="notify-search-status" role="status"></p>
         <div id="notify-show-results"></div><div id="notify-show-list" class="reminder-list"></div>
