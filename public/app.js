@@ -143,7 +143,7 @@ function saveWeather() {
   return weatherWrites;
 }
 const sectionLabels = { search: "Search and request", weather: "Weather", watchlist: "Watchlist", continueWatching: "Continue watching", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", leavingSoon: "Leaving soon", recommendations: "Recommendations", popular: "Popular right now", requests: "Request status" };
-const defaultSectionOrder = Object.keys(sectionLabels);
+const defaultSectionOrder = ["search", "weather", "recent", "calendar", "popular", "recommendations", "nextUp", "continueWatching", "watchlist", "leavingSoon", "requests"];
 let sectionOrder = [...defaultSectionOrder], orderWrites = Promise.resolve();
 const sectionElement = key => $(key === "weather" ? "#weather" : key === "popular" ? "#popular-wrap" : `#${key}-section`);
 function applySectionOrder() {
@@ -415,6 +415,7 @@ async function enter(name) {
   $("#hide-unmonitored").checked = Boolean(state.prefs.hideUnmonitored);
   $("#login").hidden = true;
   $("#dashboard").hidden = false;
+  loadJellyfinVersion();
   buildSettings();
   applyPrefs();
   const me = await api("/api/me");
@@ -1255,6 +1256,12 @@ $("#demo-login").addEventListener("click", async () => {
 $("#logout").addEventListener("click", async () => {
   try {
     await api("/api/logout", { method: "POST", body: "{}" });
+    // Server removal is authoritative; browser cleanup is best effort.
+    try {
+      const registration = await navigator.serviceWorker?.getRegistration();
+      const subscription = await registration?.pushManager?.getSubscription();
+      await subscription?.unsubscribe();
+    } catch {}
     location.reload();
   } catch (error) {
     report(error);
@@ -1331,18 +1338,36 @@ $("#weather-units").addEventListener("change", (event) => {
   saveWeather();
 });
 let jellyfinVersionRequest = 0;
+function setJellyfinStatus(status) {
+  const labels = { online: "Jellyfin online", offline: "Jellyfin offline", unknown: "Jellyfin status unknown", demo: "Demo mode: no Jellyfin connected" };
+  for (const target of all(".jellyfin-status")) {
+    target.dataset.status = status;
+    target.title = labels[status];
+    target.setAttribute("aria-label", labels[status]);
+  }
+  $("#jellyfin-state-label").textContent = status === "demo" ? "Demo" : status[0].toUpperCase() + status.slice(1);
+}
 async function loadJellyfinVersion() {
   const request = ++jellyfinVersionRequest;
   const target = $("#jellyfin-version");
-  target.textContent = "Jellyfin server version: checking…";
   try {
     const result = await api("/api/jellyfin-version");
     if (request !== jellyfinVersionRequest) return;
     target.textContent = result.demo ? "Jellyfin server version: demo mode (no server connected)" : `Jellyfin server version: ${result.version || "unavailable"}`;
+    setJellyfinStatus(result.demo ? "demo" : result.online === true ? "online" : result.online === false ? "offline" : "unknown");
   } catch {
-    if (request === jellyfinVersionRequest) target.textContent = "Jellyfin server version: unavailable";
+    if (request !== jellyfinVersionRequest) return;
+    target.textContent = "Jellyfin server version: unavailable";
+    // A browser/network failure is not proof that Jellyfin is down.
+    setJellyfinStatus("unknown");
   }
 }
+setInterval(() => {
+  if (!document.hidden && !$("#dashboard").hidden) loadJellyfinVersion();
+}, 60000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && !$("#dashboard").hidden) loadJellyfinVersion();
+});
 $("#settings-button").addEventListener("click", () => { buildSectionOrder(); buildIconGuide(); $("#settings").showModal(); loadJellyfinVersion(); });
 $("#default-view").addEventListener("change", (event) => {
   state.prefs.defaultView = event.target.value;
@@ -1735,7 +1760,7 @@ function leavingLabel(item) {
 function renderPersonalShelf(key, items) {
   $(`#${key}-content`).innerHTML = items.length ? items.map((item, index) => {
     const poster = item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`;
-    return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}</div><h3>${escape(item.title)}</h3></button><p>${escape(item.subtitle || item.year || "")}</p>${key === "leavingSoon" ? `<p class="leaving-date">${escape(leavingLabel(item))}</p>` : ""}${key === "continueWatching" ? `<progress max="100" value="${Number(item.progress) || 0}" aria-label="${escape(item.title)} progress"></progress><p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-id="${escape(item.favoriteId)}" aria-label="Remove ${escape(item.title)} from Jellyfin favorites" title="Remove from Jellyfin favorites" aria-pressed="true">${heartIcon}</button>` : ""}</article>`;
+    return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}${key === "continueWatching" ? `<progress class="poster-progress" max="100" value="${Math.min(100, Math.max(0, Number(item.progress) || 0))}" aria-label="${escape(item.title)} watch progress"></progress>` : ""}</div><h3>${escape(item.title)}</h3></button><p>${escape(item.subtitle || item.year || "")}</p>${key === "leavingSoon" ? `<p class="leaving-date">${escape(leavingLabel(item))}</p>` : ""}${key === "continueWatching" ? `<p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-id="${escape(item.favoriteId)}" aria-label="Remove ${escape(item.title)} from Jellyfin favorites" title="Remove from Jellyfin favorites" aria-pressed="true">${heartIcon}</button>` : ""}</article>`;
   }).join("") : `<p class="empty">${key === "leavingSoon" ? "No eligible scheduled departures in your Jellyfin library." : key === "watchlist" ? "Your Jellyfin movie and series favorites appear here. Use the heart in a title's popout to add one." : key === "continueWatching" ? "Nothing in progress. Start watching in Jellyfin and it appears here." : "No next episodes yet. Your Jellyfin viewing history fills this shelf."}</p>`;
   fixBrokenPosters();
 }
@@ -1784,3 +1809,93 @@ function buildIconGuide() {
     ])
   ].join("");
 }
+
+let notificationPrefs = { requests: false, shows: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York" };
+let notificationShows = [], notificationEnabled = false, notificationWrites = Promise.resolve();
+function renderNotifications() {
+  $("#notify-requests").checked = notificationPrefs.requests;
+  $("#notify-timezone").value = notificationPrefs.timezone;
+  $("#notify-enable").textContent = notificationEnabled ? "Disable on this device" : "Enable on this device";
+  $("#notify-test").disabled = !notificationEnabled;
+  $("#notify-show-list").innerHTML = notificationPrefs.shows.length ? notificationPrefs.shows.map(show => {
+    const title = notificationShows.find(item => item.id === show.id)?.title || "Selected show (temporarily unavailable)";
+    return `<article class="reminder-row"><div class="reminder-heading"><strong>${escape(title)}</strong><button data-reminder-remove="${escape(show.id)}" aria-label="Remove ${escape(title)} reminder">Remove</button></div><label class="setting">Airs today<input type="checkbox" data-reminder-id="${escape(show.id)}" data-reminder-type="airs" ${show.airs ? "checked" : ""}></label><label class="setting">New episode available<input type="checkbox" data-reminder-id="${escape(show.id)}" data-reminder-type="available" ${show.available ? "checked" : ""}></label></article>`;
+  }).join("") : '<p class="empty">No shows selected. Find a show to add it.</p>';
+}
+async function loadNotifications() {
+  try {
+    const result = await api("/api/notifications");
+    notificationPrefs = result.preferences;
+    notificationEnabled = result.enabled;
+    const library = await api("/api/notification-shows"); notificationShows = library.shows;
+    $("#notify-device-status").textContent = notificationEnabled ? "Enabled on this device." : "Not enabled on this device.";
+    renderNotifications();
+  } catch (error) { $("#notify-save-status").textContent = error.message; }
+}
+function saveNotifications() {
+  const preferences = structuredClone(notificationPrefs);
+  $("#notify-save-status").textContent = "Saving…";
+  notificationWrites = notificationWrites.catch(() => {}).then(() => api("/api/notifications", { method: "POST", body: JSON.stringify(preferences) })).then(() => { $("#notify-save-status").textContent = "Saved to your account."; }).catch(error => { $("#notify-save-status").textContent = error.message; });
+}
+$("#settings-button").addEventListener("click", loadNotifications);
+
+$("#notify-requests").addEventListener("change", event => { notificationPrefs.requests = event.target.checked; saveNotifications(); });
+$("#notify-timezone").addEventListener("change", event => {
+  try { new Intl.DateTimeFormat("en", { timeZone: event.target.value.trim() }); }
+  catch { $("#notify-save-status").textContent = "Use a timezone such as America/New_York."; return; }
+  notificationPrefs.timezone = event.target.value.trim(); saveNotifications();
+});
+$("#notify-find-shows").addEventListener("click", async () => {
+  try {
+    const result = await api(`/api/notification-shows?query=${encodeURIComponent($("#notify-show-query").value.trim())}`);
+    for (const show of result.shows) if (!notificationShows.some(item => item.id === show.id)) notificationShows.push(show);
+    $("#notify-show-results").innerHTML = result.shows.length ? result.shows.map(show => `<button data-reminder-add="${escape(show.id)}" ${notificationPrefs.shows.some(item => item.id === show.id) ? "disabled" : ""}>Add ${escape(show.title)}</button>`).join("") : '<p class="empty">No matching shows in your Jellyfin library.</p>';
+  } catch (error) { $("#notify-save-status").textContent = error.message; }
+});
+$("#notify-show-results").addEventListener("click", event => {
+  const button = event.target.closest("[data-reminder-add]");
+  if (!button || notificationPrefs.shows.length >= 50 || notificationPrefs.shows.some(show => show.id === button.dataset.reminderAdd)) return;
+  notificationPrefs.shows.push({ id: button.dataset.reminderAdd, airs: false, available: false });
+  button.disabled = true; renderNotifications(); saveNotifications();
+});
+$("#notify-show-list").addEventListener("change", event => {
+  const target = event.target, show = notificationPrefs.shows.find(show => show.id === target.dataset.reminderId);
+  if (!show || !["airs", "available"].includes(target.dataset.reminderType)) return;
+  show[target.dataset.reminderType] = target.checked; saveNotifications();
+});
+$("#notify-show-list").addEventListener("click", event => {
+  const button = event.target.closest("[data-reminder-remove]"); if (!button) return;
+  notificationPrefs.shows = notificationPrefs.shows.filter(show => show.id !== button.dataset.reminderRemove);
+  renderNotifications(); $("#notify-show-results").replaceChildren(); saveNotifications();
+});
+function pushKeyBytes(key) {
+  const bytes = atob(key.replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(bytes, character => character.charCodeAt(0));
+}
+$("#notify-enable").addEventListener("click", async () => {
+  const button = $("#notify-enable"); button.disabled = true;
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window) || !isSecureContext) throw new Error("Push is not supported here. On iPhone or iPad, add Marquee to your Home Screen and open it there.");
+    // Start the permission prompt immediately inside the click gesture.
+    const permission = notificationEnabled ? null : Notification.requestPermission();
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if (notificationEnabled) {
+      await api("/api/notifications/unsubscribe", { method: "POST", body: "{}" });
+      await subscription?.unsubscribe(); notificationEnabled = false;
+    } else {
+      if (await permission !== "granted") throw new Error("Notifications are blocked. Change this site's permission in your browser settings.");
+      const status = await api("/api/notifications");
+      subscription ||= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKeyBytes(status.publicKey) });
+      try { await api("/api/notifications/subscribe", { method: "POST", body: JSON.stringify(subscription.toJSON()) }); }
+      catch (error) { await subscription.unsubscribe(); throw error; }
+      notificationEnabled = true;
+    }
+    renderNotifications(); $("#notify-device-status").textContent = notificationEnabled ? "Enabled on this device." : "Disabled on this device.";
+  } catch (error) { $("#notify-device-status").textContent = error.message; }
+  finally { button.disabled = false; }
+});
+$("#notify-test").addEventListener("click", async () => {
+  try { await api("/api/notifications/test", { method: "POST", body: "{}" }); $("#notify-device-status").textContent = "Test sent. Check your notifications."; }
+  catch (error) { $("#notify-device-status").textContent = error.message; }
+});

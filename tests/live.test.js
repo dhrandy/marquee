@@ -919,7 +919,7 @@ try {
     const response = await signin("alice");
     const cookie = response.headers.get("set-cookie").split(";")[0];
     const result = await fetch(`${base}/api/jellyfin-version`, { headers: { Cookie: cookie } });
-    assert.deepEqual(await result.json(), { version: "10.10.0" });
+    assert.deepEqual(await result.json(), { version: "10.10.0", online: true });
   });
   await test("Sonarr status and calendar use the normalized API URL and key", async () => {
     const login = await signin("alice");

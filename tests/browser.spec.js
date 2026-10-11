@@ -2081,7 +2081,7 @@ for (const width of [1440, 393, 280]) {
   await view(page, "home");
     await page.locator("#nextUp-section .section-heading").screenshot({ path: `${shots}/marquee-arrow-header-${width}.png` });
     await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.getByRole("button", { name: "Move Next up up", exact: true }).click();
+    await page.getByRole("button", { name: "Move Next up down", exact: true }).click();
     await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#nextUp-section h2")).toBeVisible();
   await view(page, "home");
@@ -2408,7 +2408,7 @@ for (const width of [1440, 393, 280]) {
     const changedDiscover = await keys("discover"); expect(changedDiscover).not.toEqual(discover);
     await page.getByRole("button", { name: "Reset On Jellyfin order", exact: true }).click();
     expect(await keys("home")).toEqual(home); expect(await keys("discover")).toEqual(changedDiscover);
-    await expect(page.locator('[data-order-page="home"] [data-order-key="watchlist"] [data-order-move="-1"]')).toBeDisabled();
+    await expect(page.locator('[data-order-page="home"] [data-order-key="nextUp"] [data-order-move="-1"]')).toBeDisabled();
     await expect(page.locator('[data-order-page="discover"] [data-order-key="search"] [data-order-move="-1"]')).toBeDisabled();
     await page.locator('[data-order-page="discover"]').screenshot({ path: `${shots}/marquee-order-discover-${width}.png` });
     await page.locator('[data-order-page="home"]').screenshot({ path: `${shots}/marquee-order-jellyfin-${width}.png` });
@@ -2597,7 +2597,7 @@ test("watchlist heart removes a favorite without opening popout or requesting me
 for (const width of [1440,393]) {
   test(`Jellyfin version Settings preview at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height:900 }); await login(page);
-    await page.route("**/api/jellyfin-version", route => route.fulfill({ json: {version:"10.11.2"} }));
+    await page.route("**/api/jellyfin-version", route => route.fulfill({ json: {version:"10.11.2", online: true} }));
     await page.getByRole("button", {name:"Settings",exact:true}).click();
     await expect(page.locator("#jellyfin-version")).toHaveText("Jellyfin server version: 10.11.2");
     await page.locator("#jellyfin-version").scrollIntoViewIfNeeded();
@@ -2645,4 +2645,135 @@ test("Settings ends with Connections below the icon guide", async ({page}) => {
   await page.locator("#settings").screenshot({path:`${shots}/marquee-settings-guide-connections-393.png`});
   await page.setViewportSize({width:1440,height:1000}); await page.locator("#settings").evaluate(el=>el.scrollTop=el.scrollHeight);
   await page.locator("#settings").screenshot({path:`${shots}/marquee-settings-guide-connections-1440.png`});
+});
+
+for (const width of [393, 1440]) {
+  test(`held status and defaults preview at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 950 });
+    let status = { version: "10.11.2", online: true };
+    await page.route("**/api/jellyfin-version", route => route.fulfill({ json: status }));
+
+    await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.locator(".jellyfin-version-line .jellyfin-status")).toHaveAttribute("data-status", "online");
+    await page.locator(".jellyfin-version-line").scrollIntoViewIfNeeded();
+    await page.locator("#settings").screenshot({ path: `${shots}/marquee-held-status-settings-online-${width}.png` });
+    status = { version: null, online: false };
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.locator(".jellyfin-version-line .jellyfin-status")).toHaveAttribute("data-status", "offline");
+    await page.locator(".jellyfin-version-line").scrollIntoViewIfNeeded();
+    await page.locator("#settings").screenshot({ path: `${shots}/marquee-held-status-settings-offline-${width}.png` });
+    await page.getByRole("button", { name: "Close settings" }).click();
+    status = { version: "10.11.2", online: true };
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    // Reset this test account only. Each page must leave the other page alone.
+    for (const label of ["Discover", "On Jellyfin"]) {
+      await page.getByRole("button", { name: `Reset ${label} order`, exact: true }).click();
+      await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
+    }
+    const keys = page.locator("#section-order-list li");
+    expect(await keys.evaluateAll(rows => rows.map(row => row.dataset.orderKey))).toEqual(["search", "weather", "recent", "calendar", "popular", "recommendations", "nextUp", "continueWatching", "watchlist", "leavingSoon", "requests"]);
+    await page.getByRole("button", { name: "Move Next up down", exact: true }).click();
+    await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
+    const beforeHome = await page.locator('[data-order-page="home"] li').evaluateAll(rows => rows.map(row => row.dataset.orderKey));
+    await page.getByRole("button", { name: "Reset Discover order", exact: true }).click();
+    await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
+    expect(await page.locator('[data-order-page="home"] li').evaluateAll(rows => rows.map(row => row.dataset.orderKey))).toEqual(beforeHome);
+    await page.getByRole("button", { name: "Reset On Jellyfin order", exact: true }).click();
+    await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
+    await page.locator("#section-order-settings").screenshot({ path: `${shots}/marquee-held-default-orders-${width}.png` });
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#jellyfin-header-status")).toBeVisible();
+    await expect(page.locator("#jellyfin-header-status")).toHaveAttribute("data-status", "online");
+    await page.locator(".masthead").screenshot({ path: `${shots}/marquee-held-status-header-${width}.png` });
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.route("**/api/jellyfin-version", route => route.abort());
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.locator(".jellyfin-version-line .jellyfin-status")).toHaveAttribute("data-status", "unknown");
+  });
+}
+
+test("header status stays on the right and uses colorblind colors", async ({ page }) => {
+  await page.setViewportSize({ width: 280, height: 900 });
+  await page.route("**/api/jellyfin-version", route => route.fulfill({ json: { online: true, version: "10.11.2" } }));
+  await login(page);
+  const dot = page.locator(".account #jellyfin-header-status");
+  await expect(dot).toBeVisible();
+  await expect(dot).toHaveAttribute("aria-label", "Jellyfin online");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator('[data-pref="colorblind"]').check();
+  await expect(dot).toHaveCSS("background-color", "rgb(36, 168, 255)");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await page.route("**/api/jellyfin-version", route => route.fulfill({ json: { online: false, version: null } }));
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(dot).toHaveAttribute("aria-label", "Jellyfin offline");
+  await expect(dot).toHaveCSS("background-color", "rgb(255, 180, 91)");
+});
+
+for (const width of [393, 1440, 280]) {
+  test(`notification choices persist, start off and stay readable at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.locator("#notify-requests")).not.toBeChecked();
+    await expect(page.locator("#notify-show-list")).toContainText("No shows selected");
+    await page.locator("#notify-find-shows").click();
+    await page.getByRole("button", { name: "Add North of Nowhere", exact: true }).click();
+    await expect(page.locator("#notify-save-status")).toHaveText("Saved to your account.");
+    await expect(page.locator("[data-reminder-type=airs]")).not.toBeChecked();
+    await expect(page.locator("[data-reminder-type=available]")).not.toBeChecked();
+    await page.locator("[data-reminder-type=airs]").check();
+    await page.locator("[data-reminder-type=available]").check();
+    await page.locator("#notify-requests").check();
+    await expect(page.locator("#notify-save-status")).toHaveText("Saved to your account.");
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.reload(); await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.locator("#notify-requests")).toBeChecked();
+    await expect(page.locator("[data-reminder-type=airs]")).toBeChecked();
+    await expect(page.locator("[data-reminder-type=available]")).toBeChecked();
+    await expect(page.locator("#notify-device-status")).toHaveText("Not enabled on this device.");
+    expect(await page.locator("#settings").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    // Full component capture, not a clipped viewport. CSS change is capture-only.
+    await page.addStyleTag({ url: "/style.css" });
+    await page.locator("#notification-settings").screenshot({ path: `${shots}/marquee-notifications-built-${width}.png` });
+    await page.getByRole("button", { name: "Remove North of Nowhere reminder", exact: true }).click();
+    await expect(page.locator("#notify-save-status")).toHaveText("Saved to your account.");
+    await expect(page.locator("#notify-show-list")).toContainText("No shows selected");
+  });
+}
+
+for (const width of [393, 1440]) {
+  test(`on-poster progress is clamped and fits every size at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 950 });
+    await page.route("**/api/personal/continueWatching", route => route.fulfill({ json: { items: Array.from({ length: 12 }, (_, i) => ({ id: `progress-${i}`, title: ["North of Nowhere", "Wild Coast", "The Last Signal"][i % 3], subtitle: `S2E${i + 1} · Episode title`, art: ["north", "coast", "signal"][i % 3], progress: [42, 74, -5, 150][i % 4], remaining: 23, detail: {} })) } }));
+    await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[data-pref="continueWatching"]').check(); await page.getByRole("button", { name: "Close settings" }).click(); await view(page, "home");
+    for (const size of ["small", "standard", "large"]) {
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await page.locator("#poster-size").selectOption(size); await page.getByRole("button", { name: "Close settings" }).click();
+      const bars = page.locator("#continueWatching-content .poster-art progress"); await expect(bars).toHaveCount(12);
+      await expect(bars.nth(2)).toHaveAttribute("value", "0"); await expect(bars.nth(3)).toHaveAttribute("value", "100");
+      const geometry = await page.locator("#continueWatching-content .poster-art").first().evaluate(art => {
+        const a = art.getBoundingClientRect(), p = art.querySelector("progress").getBoundingClientRect(); return { bottom: Math.abs(a.bottom - p.bottom), height: p.height };
+      });
+      expect(geometry.bottom).toBeLessThanOrEqual(2); expect(geometry.height).toBe(5);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.locator("#continueWatching-section").screenshot({ path: `${shots}/marquee-progress-built-${size}-${width}.png` });
+    }
+  });
+}
+
+test("notification APIs enforce auth, origin, input limits and demo push safety", async ({ page, request }) => {
+  expect((await request.get("/api/notifications")).status()).toBe(401);
+  expect((await request.get("/api/notification-shows")).status()).toBe(401);
+  await login(page);
+  const status = await (await page.request.get("/api/notifications")).json();
+  expect(status.enabled).toBe(false); expect(status.preferences.requests).toBe(false);
+  expect((await page.request.post("/api/notifications", { headers: { Origin: "https://evil.invalid" }, data: { requests: true, shows: [], timezone: "America/New_York" } })).status()).toBe(403);
+  expect((await page.request.post("/api/notifications", { headers: { Origin: "http://127.0.0.1:8739" }, data: { requests: true, shows: [], timezone: "invalid" } })).status()).toBe(400);
+  expect((await page.request.post("/api/notifications/subscribe", { headers: { Origin: "http://127.0.0.1:8739" }, data: { endpoint: "https://127.0.0.1/private" } })).status()).toBe(400);
+  expect((await page.request.post("/api/notifications/test", { headers: { Origin: "http://127.0.0.1:8739" }, data: {} })).status()).toBe(400);
 });

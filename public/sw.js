@@ -1,4 +1,4 @@
-const VERSION = "marquee-v5";
+const VERSION = "marquee-v6";
 const SHELL = [
   "/",
   "/style.css",
@@ -68,4 +68,23 @@ self.addEventListener("fetch", (event) => {
       })
       .catch(() => caches.match(request)),
   );
+});
+
+self.addEventListener("push", event => {
+  let data;
+  try { data = event.data?.json(); } catch { return; }
+  if (!data || typeof data.title !== "string" || typeof data.body !== "string") return;
+  event.waitUntil(self.registration.showNotification(data.title.slice(0, 120), {
+    body: data.body.slice(0, 600), icon: "/icons/icon-192.png", badge: "/icons/icon-192.png",
+    tag: typeof data.tag === "string" ? data.tag.slice(0, 120) : "marquee",
+    data: { url: "/" },
+  }));
+});
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(windows => {
+    const existing = windows.find(window => new URL(window.url).origin === location.origin);
+    if (existing) return existing.focus();
+    return clients.openWindow("/");
+  }));
 });

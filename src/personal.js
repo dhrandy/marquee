@@ -29,7 +29,7 @@ export function cleanDisplayPreferences(value) {
   return clean;
 }
 
-export const sectionOrderDefaults = ["search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "calendar", "leavingSoon", "recommendations", "popular", "requests"];
+export const sectionOrderDefaults = ["search", "weather", "recent", "calendar", "popular", "recommendations", "nextUp", "continueWatching", "watchlist", "leavingSoon", "requests"];
 export function cleanSectionOrder(value) {
   if (Array.isArray(value) && [9, 10].includes(value.length) && new Set(value).size === value.length && value.every(key => sectionOrderDefaults.includes(key)) && sectionOrderDefaults.filter(key => !["recommendations", "leavingSoon"].includes(key)).every(key => value.includes(key))) {
     value = [...value];

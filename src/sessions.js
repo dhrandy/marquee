@@ -54,15 +54,15 @@ export function createSessions({ dataDir, ttl }) {
   // calendar last showed, so losing them on restart is harmless.
   const state = new Map();
 
-  function seal(user, sid = crypto.randomBytes(16).toString("hex")) {
-    const payload = JSON.stringify({ sid, exp: Date.now() + ttl, user });
+  function seal(user, sid = crypto.randomBytes(16).toString("hex"), expires = Date.now() + ttl) {
+    const payload = JSON.stringify({ sid, exp: expires, user });
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
     const body = Buffer.concat([cipher.update(payload, "utf8"), cipher.final()]);
     return Buffer.concat([iv, cipher.getAuthTag(), body]).toString("base64url");
   }
-  function open(value) {
-    if (typeof value !== "string" || !/^[A-Za-z0-9_-]{40,4096}$/.test(value))
+  function open(value, internal = false) {
+    if (typeof value !== "string" || value.length > (internal ? 1000000 : 4096) || !/^[A-Za-z0-9_-]{40,}$/.test(value))
       return null;
     try {
       const raw = Buffer.from(value, "base64url");
@@ -76,9 +76,9 @@ export function createSessions({ dataDir, ttl }) {
       return null;
     }
   }
-  function fromRequest(req) {
+  function fromRequest(req, internal = false) {
     const value = /(?:^|; )marquee_session=([^;]+)/.exec(req.headers.cookie || "")?.[1];
-    const data = open(value);
+    const data = open(value, internal);
     if (!data) return null;
     let extra = state.get(data.sid);
     if (!extra) {

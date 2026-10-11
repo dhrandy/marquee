@@ -61,7 +61,7 @@ You only need to edit the settings above. The commented startup steps download M
 
 **Container name:** the container is named `marquee`. If you run a second Marquee instance on the same Docker host, give it a different `container_name`, host port and settings folder. The stack/project name is separate.
 
-**Saved settings:** keep `/DATA/AppData/marquee/settings` when updating. It holds account settings, the display name and the generated session secret. Leaving `SESSION_SECRET` blank uses that saved secret; changing it signs everyone out. Sessions last eight hours and can survive restarts when the folder and secret are unchanged. The container prepares folder ownership, then downloads and runs the app as the non-root `node` user.
+**Saved settings:** keep `/DATA/AppData/marquee/settings` when updating. It holds account settings, the display name and the generated session secret. Leaving `SESSION_SECRET` blank uses that saved secret; changing it signs everyone out. Sessions last 90 days from sign-in and can survive restarts when the folder and secret are unchanged. The container prepares folder ownership, then downloads and runs the app as the non-root `node` user.
 
 **Platform notes:**
 
@@ -344,7 +344,7 @@ Jellyfin shelves follow the signed-in viewer's library permissions. **The Sonarr
 
 Seerr search and requests use the imported account matched by Jellyfin user ID, never by name or email. Ask a Seerr admin to import your user if no match exists. Requests use that account's permissions and quotas. Everyone requests require View Requests or Manage Requests permission; otherwise Seerr returns only your own. Server API keys never reach the browser.
 
-Passwords are sent to Jellyfin and are not stored or logged. Jellyfin access tokens are encrypted inside the HttpOnly session cookie, never exposed to page scripts. Cookies are HttpOnly, SameSite Strict, secure by default, and expire after eight hours. Sign-out removes the local session. Sign-out also ends the Jellyfin token upstream; normal server restarts keep encrypted sign-ins valid.
+Passwords are sent to Jellyfin and are not stored or logged. Jellyfin access tokens are encrypted inside the HttpOnly session cookie, never exposed to page scripts. Cookies are HttpOnly, SameSite Strict, secure by default, and expire 90 days after sign-in. Sign-out removes the local session. Sign-out also ends the Jellyfin token upstream; normal server restarts keep encrypted sign-ins valid.
 
 Media APIs and artwork require sign-in. The app limits image access to titles returned for that viewer, rate-limits login and API traffic, rejects cross-origin writes, and blocks search-engine indexing. These protections do not replace HTTPS or restricting backend access. Configure forwarded client IPs only as described in [Reverse proxy](#reverse-proxy).
 
@@ -361,3 +361,11 @@ Country flags use the [flag-icons](https://github.com/lipis/flag-icons) package 
 ## Rights
 
 Copyright (c) 2026 dhrandy. All rights reserved. Marquee is proprietary; no open-source license is granted. Third-party asset notices apply only to those assets.
+
+### Optional push notifications
+
+In Settings, choose your own-request alert and add the shows you want to follow. Each show has separate **Airs today** and **New episode available** switches, both off until you select them. Click **Enable on this device** and grant browser permission. Enable each browser or installed app separately; **Send test** checks delivery. On iPhone/iPad, use iOS 16.4 or later and add Marquee to the Home Screen first. HTTPS and a browser with Web Push are required.
+
+Air reminders are one summary around 9am in the selected timezone, using Sonarr air dates matched to your accessible Jellyfin series by provider ID. Episode alerts wait for a physical media source playable by your account. Your-request alerts are limited to your verified Seerr account and fully available requests that also resolve in Jellyfin. The worker checks every five minutes. First enrollment establishes a baseline, so it does not announce old arrivals. Delivery is best-effort, not an alarm; an unavailable service postpones checking, and a failed dispatch is not replayed. Sign-out removes that device's server subscription. Expired browser endpoints and invalid Jellyfin credentials stop delivery. Sessions and device credentials expire together.
+
+Keep the settings folder: it now also holds generated Web Push keys and encrypted device subscriptions. Do not delete those keys while devices are enrolled. The server needs outbound HTTPS to its browser push service (Google, Mozilla or Apple). No separate container or paid notification account is required. The optional `PUSH_CONTACT` environment setting supplies the VAPID contact URL or mailto address for your deployment. Alerts are encrypted in transit, but show titles can appear on your lock screen.

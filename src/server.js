@@ -32,6 +32,8 @@ import { demoEvents, demoRequests, demoSearch, titles, demoFacts } from "./demo.
 import { validateRange } from "./model.js";
 import { compress } from "./compress.js";
 import { createSessions } from "./sessions.js";
+import { createNotifications, cleanNotifications } from "./notifications.js";
+import { notificationSnapshot, reminderShows } from "./notification-sources.js";
 import { upstream } from "./adapters.js";
 
 const settingsPath = path.join(
@@ -101,11 +103,17 @@ const demo = process.env.DEMO_MODE === "true";
 const secure = process.env.COOKIE_SECURE !== "false";
 const attempts = new Map();
 const apiAttempts = new Map();
-const ttl = 8 * 60 * 60 * 1000;
+// Personal dashboards stay signed in for 90 days. Sign-out still revokes the session.
+const ttl = 90 * 24 * 60 * 60 * 1000;
 const port = Number(process.env.PORT || 8739);
 const sessions = createSessions({
   dataDir: path.dirname(settingsPath),
   ttl,
+});
+
+const notifications = await createNotifications({
+  dataDir: path.dirname(settingsPath), sessions,
+  snapshot: demo ? async () => ({ episodes: [], requests: [], airings: [] }) : notificationSnapshot,
 });
 
 app.set("trust proxy", proxyTrust(process.env.TRUSTED_PROXIES, process.env.TRUST_PROXY));
@@ -132,6 +140,7 @@ app.use((req, res, next) => {
   }
   next();
 });
+app.use("/api/notifications", express.json({ limit: "16kb" }));
 app.use(express.json({ limit: "4kb" }));
 
 function session(req) {
@@ -177,6 +186,49 @@ function cookie(res, value, maxAge) {
     path: "/",
   });
 }
+
+const notificationUser = user => demo ? { ...user, id: user.sid } : user;
+app.get("/api/notifications", requireUser, (req, res) => res.json(notifications.status(notificationUser(req.user))));
+app.post("/api/notifications", requireUser, async (req, res) => {
+  const preferences = cleanNotifications(req.body);
+  if (!preferences) return res.status(400).json({ error: "Invalid notification settings." });
+  try {
+    // Each selected ID must resolve to a series this viewer may access.
+    if (!demo) for (const show of preferences.shows) {
+      const item = await upstream(process.env.JELLYFIN_URL, `/Users/${encodeURIComponent(req.user.id)}/Items/${encodeURIComponent(show.id)}`, { headers: jellyfinHeaders(req.user.token, req.user.deviceId) });
+      if (item.Type !== "Series") return res.status(400).json({ error: "Choose a show in your Jellyfin library." });
+    }
+    await notifications.configure(notificationUser(req.user), preferences);
+    res.json({ ok: true });
+  } catch { res.status(502).json({ error: "Could not save reminders. Check Jellyfin and the settings folder." }); }
+});
+app.get("/api/notification-shows", requireUser, async (req, res) => {
+  const query = String(req.query.query || "").trim();
+  if (query.length > 100) return res.status(400).json({ error: "Show search is too long." });
+  try {
+    const shows = demo ? [{ id: "north", title: "North of Nowhere" }, { id: "signal", title: "The Last Signal" }] : await reminderShows(req.user, query);
+    res.json({ shows });
+  } catch { res.status(502).json({ error: "Could not load your Jellyfin shows." }); }
+});
+app.post("/api/notifications/subscribe", requireUser, async (req, res) => {
+  if (demo) return res.status(400).json({ error: "Push is disabled in demo mode." });
+  try { await notifications.subscribe(notificationUser(req.user), req.body); res.json({ ok: true }); }
+  catch (error) { res.status(400).json({ error: error.message }); }
+});
+app.post("/api/notifications/unsubscribe", requireUser, async (req, res) => {
+  await notifications.remove(notificationUser(req.user)); res.json({ ok: true });
+});
+const pushTests = new Map();
+app.post("/api/notifications/test", requireUser, async (req, res) => {
+  if (demo) return res.status(400).json({ error: "Push is disabled in demo mode." });
+  if (Date.now() - (pushTests.get(req.user.id) || 0) < 60000) return res.status(429).json({ error: "Wait a minute before another test." });
+  pushTests.set(req.user.id, Date.now());
+  try { await notifications.test(notificationUser(req.user)); res.json({ ok: true }); }
+  catch { res.status(502).json({ error: "Test could not be delivered. Check this device's notification permission." }); }
+});
+setInterval(() => notifications.tick().catch(() => {}), 5 * 60000).unref();
+// Baselines resume after restarts without sending old arrivals again.
+notifications.tick().catch(() => {});
 
 app.get("/api/config", (req, res) => res.json({ demo, name: displayName }));
 app.post("/api/login", async (req, res) => {
@@ -226,6 +278,7 @@ app.post("/api/login", async (req, res) => {
   }
 });
 app.post("/api/logout", requireUser, async (req, res) => {
+  await notifications.remove(notificationUser(req.user));
   sessions.revoke(req.user.sid, req.user.expires);
   if (!demo && req.user.token) {
     // Also end the Jellyfin login this cookie carried, best effort.
@@ -645,9 +698,9 @@ app.get("/api/seerr/search", requireUser, async (req, res) => {
   }
 });
 app.get("/api/jellyfin-version", requireUser, async (req, res) => {
-  if (demo) return res.json({ version: null, demo: true });
+  if (demo) return res.json({ version: null, demo: true, online: null });
   const result = await testService("jellyfin", { includeVersion: true });
-  res.json({ version: result.ok ? result.version : null });
+  res.json({ version: result.ok ? result.version : null, online: result.ok });
 });
 app.post("/api/test-connection", requireUser, async (req, res) => {
   const { service } = req.body || {};

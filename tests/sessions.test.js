@@ -42,7 +42,9 @@ const login = async () => {
     body: "{}",
   });
   assert.equal(res.status, 200);
-  return res.headers.get("set-cookie").split(";")[0];
+  const header = res.headers.get("set-cookie");
+  assert.match(header, /Max-Age=7776000;/);
+  return header.split(";")[0];
 };
 const me = (cookie) => fetch(`${base}/api/me`, { headers: { Cookie: cookie } });
 
@@ -98,4 +100,22 @@ test("expired cookies are rejected", async () => {
   const req = (value) => ({ headers: { cookie: `marquee_session=${value}` } });
   assert.ok(make(60000).fromRequest(req(make(60000).seal({ id: "u" }))));
   assert.equal(make(-1).fromRequest(req(make(-1).seal({ id: "u" }))), null);
+});
+
+test("90-day sessions remain valid at 89 days and expire at 90 days", async () => {
+  const { createSessions } = await import("../src/sessions.js");
+  const realNow = Date.now;
+  const start = realNow();
+  try {
+    Date.now = () => start;
+    const sessions = createSessions({ dataDir: dir, ttl: 90 * 86400000 });
+    const cookie = sessions.seal({ id: "long-lived" });
+    const req = { headers: { cookie: `marquee_session=${cookie}` } };
+    Date.now = () => start + 89 * 86400000;
+    assert.equal(sessions.fromRequest(req).id, "long-lived");
+    Date.now = () => start + 90 * 86400000;
+    assert.equal(sessions.fromRequest(req), null);
+  } finally {
+    Date.now = realNow;
+  }
 });
