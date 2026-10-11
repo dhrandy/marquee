@@ -28,7 +28,7 @@ const defaults = {
   search: true,
   hideUnmonitored: false,
   requests: true,
-  popular: true,
+  popular: true, inTheaters: true,
   ratings: true,
   colorblind: false,
   jellyfinLink: true,
@@ -142,8 +142,8 @@ function saveWeather() {
     });
   return weatherWrites;
 }
-const sectionLabels = { search: "Search and request", weather: "Weather", watchlist: "Watchlist", continueWatching: "Continue watching", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", leavingSoon: "Leaving soon", recommendations: "Recommendations", popular: "Popular right now", requests: "Request status" };
-const defaultSectionOrder = ["search", "weather", "recent", "calendar", "popular", "recommendations", "nextUp", "continueWatching", "watchlist", "leavingSoon", "requests"];
+const sectionLabels = { search: "Search and request", weather: "Weather", watchlist: "Watchlist", continueWatching: "Continue watching", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", leavingSoon: "Leaving soon", recommendations: "Recommendations", popular: "Popular right now", inTheaters: "In theaters", requests: "Request status" };
+const defaultSectionOrder = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchlist", "leavingSoon", "requests"];
 let sectionOrder = [...defaultSectionOrder], orderWrites = Promise.resolve();
 const sectionElement = key => $(key === "weather" ? "#weather" : key === "popular" ? "#popular-wrap" : `#${key}-section`);
 function applySectionOrder() {
@@ -168,7 +168,7 @@ function applySectionOrder() {
   applyDashboardPage();
 }
 let dashboardPage = "discover";
-const pageSections = { home: ["watchlist", "continueWatching", "nextUp", "leavingSoon", "requests"], discover: ["weather", "search", "recent", "popular", "calendar", "recommendations"] };
+const pageSections = { home: ["watchlist", "continueWatching", "nextUp", "leavingSoon", "requests"], discover: ["weather", "search", "recent", "popular", "inTheaters", "calendar", "recommendations"] };
 let pageInitialized = false;
 function applyDashboardPage() {
   if (!pageInitialized) { dashboardPage = state.prefs.firstTab === "home" ? "home" : "discover"; pageInitialized = true; }
@@ -290,6 +290,7 @@ function applyPrefs() {
     "aria-expanded",
     String(!state.prefs.popularCollapsed),
   );
+  $("#inTheaters-section").hidden = !state.prefs.inTheaters;
   $("#recommendations-section").hidden = !state.prefs.recommendations;
   $("#requests-filter").value = state.prefs.myRequests ? "mine" : "all";
   $("#requests-section").hidden = !state.prefs.requests;
@@ -333,6 +334,7 @@ function buildSettings() {
     search: "Search and requests",
     requests: "Request status list",
     popular: "Top 10 movies and TV",
+    inTheaters: "In theaters (US)",
     ratings: "Show ratings",
     colorblind: "Colorblind-friendly status colors",
     jellyfinLink: "Jellyfin shortcut",
@@ -360,6 +362,7 @@ function buildSettings() {
       if (el.dataset.pref === "recommendations" && el.checked) loadRecommendations();
       if (el.dataset.pref === "recent" && el.checked) loadRecent();
       if (el.dataset.pref === "popular" && el.checked) loadPopular();
+      if (el.dataset.pref === "inTheaters" && el.checked) loadInTheaters();
       if (el.dataset.pref === "requests" && el.checked) loadRequests();
       if (["watchlist", "continueWatching", "nextUp", "leavingSoon"].includes(el.dataset.pref)) loadPersonalShelves();
     }),
@@ -399,6 +402,7 @@ async function enter(name) {
   try {
     let { order } = await api("/api/section-order");
     if (Array.isArray(order) && [9, 10].includes(order.length)) { order = [...order]; for (const key of ["leavingSoon", "recommendations"]) if (!order.includes(key)) order.splice(order.indexOf("popular"), 0, key); }
+    if (Array.isArray(order) && order.length === 11 && !order.includes("inTheaters")) { order = [...order]; order.splice(order.indexOf("popular") + 1, 0, "inTheaters"); }
     if (Array.isArray(order) && order.length === defaultSectionOrder.length && new Set(order).size === order.length && order.every(key => defaultSectionOrder.includes(key))) sectionOrder = order;
   } catch (error) { $("#section-order-status").textContent = error.message; }
   const [weatherSettings, accessibilitySettings] = await Promise.all([
@@ -449,6 +453,7 @@ async function enter(name) {
     loadRequests(),
     loadRecommendations(),
     loadPopular(),
+    loadInTheaters(),
     loadPersonalShelves(),
   ]);
 }
@@ -1152,6 +1157,7 @@ async function openMediaDetail(card, status) {
 }
 for (const [container, status] of [
   ["#popular-section", "#popular-status"],
+  ["#inTheaters-section", "#inTheaters-status"],
   ["#recommendations-section", "#recommendations-status"],
   ["#search-results", "#search-status"],
   ["#requests", "#global-error"],
@@ -1190,6 +1196,15 @@ async function loadPopular() {
   } catch (error) {
     $("#popular-status").textContent = error.message;
   }
+}
+async function loadInTheaters() {
+  if (!state.prefs.inTheaters) return;
+  try {
+    const data = await api("/api/in-theaters");
+    $("#inTheaters-content").innerHTML = data.items.length ? data.items.map(item => resultCardHtml(item)).join("") : '<p class="empty">No theater titles returned for the US.</p>';
+    $("#inTheaters-status").textContent = "";
+    fixBrokenPosters();
+  } catch (error) { $("#inTheaters-content").replaceChildren(); $("#inTheaters-status").textContent = error.message; }
 }
 async function loadRecommendations() {
   if (!state.prefs.recommendations) return;
@@ -1691,7 +1706,7 @@ async function requestFromButton(event) {
     const status =
       button.id === "episode-request"
         ? $("#episode-request-status")
-        : button.closest("#recommendations-section") ? $("#recommendations-status") : button.closest("#popular-section") ? $("#popular-status") : $("#search-status");
+        : button.closest("#inTheaters-section") ? $("#inTheaters-status") : button.closest("#recommendations-section") ? $("#recommendations-status") : button.closest("#popular-section") ? $("#popular-status") : $("#search-status");
     status.textContent = error.message;
     status.hidden = false;
   }
@@ -1699,6 +1714,7 @@ async function requestFromButton(event) {
 $("#search-section").addEventListener("click", requestFromButton);
 $("#episode-detail").addEventListener("click", requestFromButton);
 $("#popular-section").addEventListener("click", requestFromButton);
+$("#inTheaters-section").addEventListener("click", requestFromButton);
 $("#recommendations-section").addEventListener("click", requestFromButton);
 (async () => {
   const config = await api("/api/config");

@@ -1494,7 +1494,7 @@ main > #search-section .search-bar { max-width: 560px; }
 
 /* One responsive poster size across every horizontal shelf. */
 .poster-row, .popular-row { --shelf-card-width: calc((100% - 90px) / 6); --shelf-card-min: 150px; }
-.poster-row > .poster-card, .popular-row > .ranked-poster, #recommendations-content > .result-card { flex: 0 0 var(--shelf-card-width); min-width: var(--shelf-card-min); }
+.poster-row > .poster-card, .popular-row > .ranked-poster, #recommendations-content > .result-card, #inTheaters-content > .result-card { flex: 0 0 var(--shelf-card-width); min-width: var(--shelf-card-min); }
 @media (max-width: 1100px) { .poster-row, .popular-row { --shelf-card-width: calc((100% - 54px) / 4); } }
 @media (max-width: 600px) { .poster-row, .popular-row { --shelf-card-width: 44%; --shelf-card-min: 126px; gap: 13px; } }
 @media (max-width: 340px) { .poster-row, .popular-row { --shelf-card-width: 65%; } }

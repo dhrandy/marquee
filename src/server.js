@@ -1,3 +1,4 @@
+import { inTheaters } from "./in-theaters.js";
 import { leavingSoon } from "./maintainerr.js";
 import express from "express";
 import { cleanDisplayPreferences, cleanSectionOrder, sectionOrderDefaults } from "./personal.js";
@@ -568,6 +569,17 @@ app.get("/api/library/:id/facts", requireUser, async (req, res) => {
     res.json({ facts: null });
   }
 });
+app.get("/api/in-theaters", requireUser, async (req, res) => {
+  if (demo) return res.json({ region: "US", items: demoSearch("").filter(item => item.mediaType === "movie").map((item, i) => ({ ...item, id: 9000 + i, availability: i === 0 ? 5 : i === 1 ? 2 : null, requested: i === 1 })) });
+  if (!process.env.TMDB_API_KEY?.trim()) return res.status(503).json({ error: "In theaters needs a TMDB API key in the server settings." });
+  try {
+    const access = await requestAccess(req.user);
+    if (access.error) return res.status(403).json({ error: access.error });
+    const data = await inTheaters(access.id);
+    res.json({ ...data, items: await withWatched(req.user, data.items), requestAccess: publicAccess(access) });
+  } catch { res.status(502).json({ error: "In theaters is temporarily unavailable. Check TMDB and Seerr connections." }); }
+});
+
 app.get("/api/seerr/popular", requireUser, async (req, res) => {
   if (demo) {
     const sample = demoSearch("");

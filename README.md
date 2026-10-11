@@ -135,6 +135,7 @@ services:
       RADARR_API_KEY: ${RADARR_API_KEY}
       SEERR_URL: ${SEERR_URL}
       SEERR_API_KEY: ${SEERR_API_KEY}
+      TMDB_API_KEY: ${TMDB_API_KEY}
       MAINTAINERR_URL: ${MAINTAINERR_URL:-}
       MAINTAINERR_API_KEY: ${MAINTAINERR_API_KEY:-}
       # Browser-facing Jellyfin URL; blank falls back to JELLYFIN_URL.
@@ -220,6 +221,7 @@ services:
       RADARR_API_KEY: ${RADARR_API_KEY}
       SEERR_URL: ${SEERR_URL}
       SEERR_API_KEY: ${SEERR_API_KEY}
+      TMDB_API_KEY: ${TMDB_API_KEY}
       MAINTAINERR_URL: ${MAINTAINERR_URL:-}
       MAINTAINERR_API_KEY: ${MAINTAINERR_API_KEY:-}
       JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
@@ -298,6 +300,9 @@ RADARR_API_KEY=replace-with-your-radarr-api-key
 SEERR_URL=http://seerr:5055
 SEERR_API_KEY=replace-with-your-seerr-api-key
 
+# Optional In theaters shelf: your own TMDB API key (server-side only).
+TMDB_API_KEY=
+
 # Weather is set per viewer in Settings: city picker and F/C units.
 # Open-Meteo weather and city search are free for non-commercial use. No API key or account needed.
 # Dashboard display name is set by a Jellyfin administrator in Settings (default Marquee).
@@ -369,3 +374,13 @@ In Settings, choose your own-request alert and add the shows you want to follow.
 Air reminders are one summary around 9am in the selected timezone, using Sonarr air dates matched to your accessible Jellyfin series by provider ID. Episode alerts wait for a physical media source playable by your account. Your-request alerts are limited to your verified Seerr account and fully available requests that also resolve in Jellyfin. The worker checks every five minutes. First enrollment establishes a baseline, so it does not announce old arrivals. Delivery is best-effort, not an alarm; an unavailable service postpones checking, and a failed dispatch is not replayed. Sign-out removes that device's server subscription. Expired browser endpoints and invalid Jellyfin credentials stop delivery. Sessions and device credentials expire together.
 
 Keep the settings folder: it now also holds generated Web Push keys and encrypted device subscriptions. Do not delete those keys while devices are enrolled. The server needs outbound HTTPS to its browser push service (Google, Mozilla or Apple). No separate container or paid notification account is required. The optional `PUSH_CONTACT` environment setting supplies the VAPID contact URL or mailto address for your deployment. Alerts are encrypted in transit, but show titles can appear on your lock screen.
+
+### In theaters
+
+Discover includes an In theaters shelf from TMDB Now Playing for the US, with up to 20 movies in TMDB order. Setup:
+
+1. Get your own TMDB developer API key.
+2. Add `TMDB_API_KEY` to your `.env` file or stack manager Environment settings. Compose keeps the placeholder `${TMDB_API_KEY}`; never paste your key into the compose file or repository.
+3. Recreate the stack so the new environment setting applies.
+
+Without a key, the shelf shows a short setup message and the rest of Discover still works. The key stays on the server. Seerr supplies availability and request state; requests use the same viewer permissions and approval rules as Top 10. A theater listing or request does not mean the movie is ready to watch on Jellyfin. Hide the shelf in General Settings or move it within Discover. Existing saved shelf order is preserved, with In theaters inserted after Popular right now.

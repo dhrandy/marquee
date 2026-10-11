@@ -60,6 +60,7 @@ services:
       RADARR_API_KEY: ${RADARR_API_KEY}
       SEERR_URL: ${SEERR_URL}
       SEERR_API_KEY: ${SEERR_API_KEY}
+      TMDB_API_KEY: ${TMDB_API_KEY}
       MAINTAINERR_URL: ${MAINTAINERR_URL:-}
       MAINTAINERR_API_KEY: ${MAINTAINERR_API_KEY:-}
       # Browser-facing Jellyfin URL; blank falls back to JELLYFIN_URL.

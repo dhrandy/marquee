@@ -377,9 +377,17 @@ test("section order adds Leaving soon while preserving approved ten-section orde
 
  test("default shelf orders match the two pages without changing saved orders", async () => {
   const { cleanSectionOrder, sectionOrderDefaults } = await import("../src/personal.js");
-  const discover = ["search", "weather", "recent", "calendar", "popular", "recommendations"];
+  const discover = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations"];
   const home = ["nextUp", "continueWatching", "watchlist", "leavingSoon", "requests"];
   assert.deepEqual(sectionOrderDefaults, [...discover, ...home]);
   const saved = [...home].reverse().concat([...discover].reverse());
   assert.deepEqual(cleanSectionOrder(saved), saved);
+});
+
+test("old eleven-shelf order preserves every saved position and adds theaters after popular", async () => {
+  const { cleanSectionOrder, sectionOrderDefaults } = await import("../src/personal.js");
+  const old = sectionOrderDefaults.filter(key => key !== "inTheaters").reverse();
+  const migrated = cleanSectionOrder(old);
+  assert.deepEqual(migrated.filter(key => key !== "inTheaters"), old);
+  assert.equal(migrated.indexOf("inTheaters"), migrated.indexOf("popular") + 1);
 });

@@ -1195,6 +1195,13 @@ try {
     assert.equal(new Set(authDeviceIds.slice(start)).size, 2);
     assert.ok(authDeviceIds.slice(start).every(id => id.startsWith("marquee-")));
   });
+  await test("missing TMDB key returns a clean setup response only to signed-in users", async () => {
+    assert.equal((await fetch(`${base}/api/in-theaters`)).status, 401);
+    const cookie = (await signin("alice")).headers.get("set-cookie");
+    const response = await fetch(`${base}/api/in-theaters`, { headers: { Cookie: cookie } });
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: "In theaters needs a TMDB API key in the server settings." });
+  });
   await test("personal shelves, watchlist and synced display preferences stay account scoped", async () => {
     const alice = (await signin("alice")).headers.get("set-cookie");
     const bob = (await signin("bob")).headers.get("set-cookie");
@@ -1242,7 +1249,7 @@ try {
     assert.equal((await post("/api/watchlist", alice, { itemId: "great-series", saved: true })).status, 200);
     assert.equal((await get("/api/watchlist", alice)).items[0].title, "Favorite title");
     assert.equal((await get("/api/watchlist", alice)).items[0].watched, true);
-    const order = ["calendar", "search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "leavingSoon", "recommendations", "popular", "requests"];
+    const order = ["calendar", "search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "leavingSoon", "recommendations", "popular", "inTheaters", "requests"];
     assert.equal((await post("/api/section-order", alice, { order })).status, 200);
     assert.deepEqual((await get("/api/section-order", alice)).order, order);
     assert.notDeepEqual((await get("/api/section-order", bob)).order, order);

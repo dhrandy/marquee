@@ -28,6 +28,7 @@ test("private APIs require login, writes reject cross-origin, and headers preven
     "/api/weather",
     "/api/me",
     "/api/seerr/popular",
+    "/api/in-theaters",
     "/api/calendar-image/anything",
   ]) {
     expect((await request.get(path)).status()).toBe(401);
@@ -1960,7 +1961,7 @@ for (const width of [1440, 393]) {
     await page.setViewportSize({ width, height: 950 });
     await login(page);
     await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await expect(page.locator("#section-order-list li")).toHaveCount(11);
+    await expect(page.locator("#section-order-list li")).toHaveCount(12);
     const handle = page.getByRole("button", { name: "Drag Release calendar", exact: true });
     const target = page.locator('#section-order-list li[data-order-key="search"]');
     await handle.scrollIntoViewIfNeeded();
@@ -2400,7 +2401,7 @@ for (const width of [1440, 393, 280]) {
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     const keys = pageName => page.locator(`[data-order-page="${pageName}"] li`).evaluateAll(rows => rows.map(row => row.dataset.orderKey));
     const discover = await keys("discover"), home = await keys("home");
-    expect(discover).toHaveLength(6); expect(home).toHaveLength(5);
+    expect(discover).toHaveLength(7); expect(home).toHaveLength(5);
     await page.getByRole("button", { name: "Move Continue watching up", exact: true }).click();
     expect(await keys("discover")).toEqual(discover);
     expect((await keys("home"))[0]).toBe("continueWatching");
@@ -2673,7 +2674,7 @@ for (const width of [393, 1440]) {
       await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
     }
     const keys = page.locator("#section-order-list li");
-    expect(await keys.evaluateAll(rows => rows.map(row => row.dataset.orderKey))).toEqual(["search", "weather", "recent", "calendar", "popular", "recommendations", "nextUp", "continueWatching", "watchlist", "leavingSoon", "requests"]);
+    expect(await keys.evaluateAll(rows => rows.map(row => row.dataset.orderKey))).toEqual(["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchlist", "leavingSoon", "requests"]);
     await page.getByRole("button", { name: "Move Next up down", exact: true }).click();
     await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
     const beforeHome = await page.locator('[data-order-page="home"] li').evaluateAll(rows => rows.map(row => row.dataset.orderKey));
@@ -2875,4 +2876,60 @@ test("show search ignores an older response after a new query", async ({ page })
   await expect(page.getByRole("button", { name: "Add North of Nowhere", exact: true })).toBeVisible();
   release();
   await expect(page.getByRole("button", { name: "Add Old response", exact: true })).toHaveCount(0);
+});
+
+for (const width of [393, 1440]) {
+  test(`In theaters works in every poster size at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1100 });
+    const items = Array.from({ length: 12 }, (_, i) => ({ id: 9500 + i, mediaType: "movie", title: ["The Last Signal", "Orbit Nine", "Paper Moons"][i % 3], year: "2026", poster: ["signal", "orbit", "moons"][i % 3], availability: i === 0 ? 5 : i === 1 ? 2 : null, requested: i === 1 }));
+    await page.route("**/api/in-theaters", route => route.fulfill({ json: { region: "US", items } }));
+    await page.route("**/api/me", route => route.fulfill({ json: { name: "Demo", isAdmin: false, canRequest: true, requestAccess: { movie: true, tv: true, advanced: false } } }));
+    await login(page);
+    await expect(page.locator("#inTheaters-content .result-card")).toHaveCount(12);
+    await expect(page.locator("#inTheaters-content .result-card").nth(0).locator(".request-btn")).toHaveCount(0);
+    await expect(page.locator("#inTheaters-content .result-card").nth(1).locator(".request-btn")).toHaveCount(0);
+    await expect(page.locator("#inTheaters-content .result-card").nth(2).locator(".request-btn")).toHaveCount(1);
+    for (const size of ["small", "standard", "large"]) {
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await page.locator("#poster-size").selectOption(size);
+      await page.getByRole("button", { name: "Close settings" }).click();
+      await page.locator("#inTheaters-section").scrollIntoViewIfNeeded();
+      const cardWidth = await page.locator("#inTheaters-content .result-card").first().evaluate(el => el.getBoundingClientRect().width);
+      expect(cardWidth).toBeGreaterThan(90);
+      const reference = await page.locator("#popular-movies .ranked-poster").first().evaluate(el => el.getBoundingClientRect().width);
+      expect(Math.abs(cardWidth - reference)).toBeLessThanOrEqual(1);
+      await page.locator("#inTheaters-section").screenshot({ path: `${shots}/marquee-theaters-${size}-${width}.png` });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[data-pref="inTheaters"]').uncheck();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page.locator("#inTheaters-section")).toBeHidden();
+    await page.reload(); await expect(page.locator("#inTheaters-section")).toBeHidden();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('[data-pref="inTheaters"]').check();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.getByRole("button", { name: "On Jellyfin", exact: true }).click();
+    await expect(page.locator("#inTheaters-section")).toBeHidden();
+    await page.getByRole("button", { name: "Discover", exact: true }).click();
+    await expect(page.locator("#inTheaters-section")).toBeVisible();
+    let sent;
+    await page.route("**/api/seerr/request", async route => { sent = route.request().postDataJSON(); await route.fulfill({ json: { ok: true, status: 1 } }); });
+    page.once("dialog", dialog => dialog.accept());
+    await page.locator("#inTheaters-content .result-card").nth(2).locator(".request-btn").click();
+    await expect.poll(() => sent?.mediaId).toBe(9502);
+    expect(sent.mediaType).toBe("movie");
+    await expect(page.locator("#inTheaters-content .result-card").nth(2).locator(".request-btn")).toHaveCount(0);
+  });
+}
+
+test("missing theater key stays a friendly shelf message and keeps Discover usable", async ({ page }) => {
+  await page.route("**/api/in-theaters", route => route.fulfill({ status: 503, json: { error: "In theaters needs a TMDB API key in the server settings." } }));
+  const errors = []; page.on("pageerror", error => errors.push(error.message));
+  await login(page);
+  await expect(page.locator("#inTheaters-status")).toHaveText("In theaters needs a TMDB API key in the server settings.");
+  await expect(page.locator("#inTheaters-content .result-card")).toHaveCount(0);
+  await expect(page.locator("#recent .poster-card")).toHaveCount(6);
+  await expect(page.locator("#popular-movies .result-card")).toHaveCount(10);
+  expect(errors).toEqual([]);
 });
