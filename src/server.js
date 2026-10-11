@@ -33,7 +33,7 @@ import { validateRange } from "./model.js";
 import { compress } from "./compress.js";
 import { createSessions } from "./sessions.js";
 import { createNotifications, cleanNotifications } from "./notifications.js";
-import { notificationSnapshot, reminderShows } from "./notification-sources.js";
+import { notificationSnapshot, reminderShows, matchReminderShows } from "./notification-sources.js";
 import { upstream } from "./adapters.js";
 
 const settingsPath = path.join(
@@ -206,7 +206,7 @@ app.get("/api/notification-shows", requireUser, async (req, res) => {
   const query = String(req.query.query || "").trim();
   if (query.length > 100) return res.status(400).json({ error: "Show search is too long." });
   try {
-    const shows = demo ? [{ id: "north", title: "North of Nowhere" }, { id: "signal", title: "The Last Signal" }] : await reminderShows(req.user, query);
+    const shows = demo ? matchReminderShows([{ Id: "north", Name: "North of Nowhere" }, { Id: "signal", Name: "The Last Signal" }, { Id: "decker", Name: "R.J. Decker" }], query) : await reminderShows(req.user, query);
     res.json({ shows });
   } catch { res.status(502).json({ error: "Could not load your Jellyfin shows." }); }
 });

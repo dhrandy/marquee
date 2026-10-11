@@ -35,12 +35,51 @@ async function libraryItems(user, filters) {
   throw new Error("Library result is too large to verify notifications.");
 }
 
-export async function reminderShows(user, query = "") {
-  const items = await libraryItems(user, {
-    IncludeItemTypes: "Series",
-    ...(query ? { SearchTerm: query } : {}),
-  });
+const showLibraries = new Map();
+const normalizeShow = (value) =>
+  String(value)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+function nearWord(word, query) {
+  if (word.includes(query)) return true;
+  if (query.length < 4 || Math.abs(word.length - query.length) > 1)
+    return false;
+  // One missing, extra or mistyped letter is enough for short search typos.
+  let a = 0,
+    b = 0,
+    edits = 0;
+  while (a < word.length && b < query.length) {
+    if (word[a] === query[b]) {
+      a++;
+      b++;
+      continue;
+    }
+    if (++edits > 1) return false;
+    if (word.length >= query.length) a++;
+    if (query.length >= word.length) b++;
+  }
+  return edits + word.length - a + query.length - b <= 1;
+}
+export function matchReminderShows(items, query = "") {
+  const text = normalizeShow(query),
+    compact = text.replaceAll(" ", "");
   return items
+    .filter((item) => {
+      const title = normalizeShow(item.Name);
+      if (!text || title.replaceAll(" ", "").includes(compact)) return true;
+      const words = title.split(" ");
+      return text
+        .split(" ")
+        .every(
+          (part) =>
+            nearWord(title.replaceAll(" ", ""), part) ||
+            words.some((word) => nearWord(word, part)),
+        );
+    })
+    .sort((a, b) => a.Name.localeCompare(b.Name))
     .slice(0, 100)
     .map((item) => ({
       id: item.Id,
@@ -48,6 +87,27 @@ export async function reminderShows(user, query = "") {
       tmdbId: Number(item.ProviderIds?.Tmdb) || null,
       tvdbId: Number(item.ProviderIds?.Tvdb) || null,
     }));
+}
+export async function reminderShows(user, query = "") {
+  // Scope the brief cache to the exact authenticated viewer and token.
+  const key = JSON.stringify([user.id, user.token, user.deviceId]);
+  const now = Date.now();
+  for (const [id, entry] of showLibraries)
+    if (entry.expires <= now) showLibraries.delete(id);
+  let entry = showLibraries.get(key);
+  if (!entry) {
+    if (showLibraries.size >= 100)
+      showLibraries.delete(showLibraries.keys().next().value);
+    entry = {
+      expires: now + 60000,
+      items: libraryItems(user, { IncludeItemTypes: "Series" }),
+    };
+    showLibraries.set(key, entry);
+    entry.items.catch(() => {
+      if (showLibraries.get(key) === entry) showLibraries.delete(key);
+    });
+  }
+  return matchReminderShows(await entry.items, query);
 }
 
 async function playable(user, item) {

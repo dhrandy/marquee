@@ -2695,7 +2695,7 @@ for (const width of [393, 1440]) {
   });
 }
 
-test("header status stays on the right and uses colorblind colors", async ({ page }) => {
+test("header status sits left of Jellyfin and uses colorblind colors", async ({ page }) => {
   await page.setViewportSize({ width: 280, height: 900 });
   await page.route("**/api/jellyfin-version", route => route.fulfill({ json: { online: true, version: "10.11.2" } }));
   await login(page);
@@ -2718,6 +2718,7 @@ for (const width of [393, 1440, 280]) {
     await page.setViewportSize({ width, height: 1000 });
     await login(page);
     await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("tab", { name: "Notifications", exact: true }).click();
     await expect(page.locator("#notify-requests")).not.toBeChecked();
     await expect(page.locator("#notify-show-list")).toContainText("No shows selected");
     await page.locator("#notify-find-shows").click();
@@ -2731,6 +2732,7 @@ for (const width of [393, 1440, 280]) {
     await expect(page.locator("#notify-save-status")).toHaveText("Saved to your account.");
     await page.getByRole("button", { name: "Close settings" }).click();
     await page.reload(); await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("tab", { name: "Notifications", exact: true }).click();
     await expect(page.locator("#notify-requests")).toBeChecked();
     await expect(page.locator("[data-reminder-type=airs]")).toBeChecked();
     await expect(page.locator("[data-reminder-type=available]")).toBeChecked();
@@ -2776,4 +2778,101 @@ test("notification APIs enforce auth, origin, input limits and demo push safety"
   expect((await page.request.post("/api/notifications", { headers: { Origin: "http://127.0.0.1:8739" }, data: { requests: true, shows: [], timezone: "invalid" } })).status()).toBe(400);
   expect((await page.request.post("/api/notifications/subscribe", { headers: { Origin: "http://127.0.0.1:8739" }, data: { endpoint: "https://127.0.0.1/private" } })).status()).toBe(400);
   expect((await page.request.post("/api/notifications/test", { headers: { Origin: "http://127.0.0.1:8739" }, data: {} })).status()).toBe(400);
+});
+
+for (const width of [393, 1440, 280]) {
+  test(`status left of Jellyfin header preview at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.route("**/api/jellyfin-version", route => route.fulfill({ json: { online: true, version: "10.11.2" } }));
+    await page.route("**/api/me", route => route.fulfill({ json: { name: "Demo", isAdmin: true, canRequest: true, requestAccess: { movie: true, tv: true }, jellyfinWebUrl: "https://media.example.test/" } }));
+    await login(page);
+    await expect(page.locator("#jellyfin-home")).toBeVisible();
+    await page.locator("#demo-badge").evaluate(el => { el.hidden = true; });
+    const dot = page.locator("#jellyfin-header-status");
+    await expect(dot).toHaveAttribute("data-status", "online");
+    const position = await page.evaluate(() => {
+      const dot = document.querySelector("#jellyfin-header-status").getBoundingClientRect();
+      const logo = document.querySelector("#jellyfin-home").getBoundingClientRect();
+      const settings = document.querySelector("#settings-button").getBoundingClientRect();
+      return { dotEnd: dot.right, logoStart: logo.left, logoEnd: logo.right, settingsStart: settings.left, centerDiff: Math.abs(dot.y + dot.height / 2 - logo.y - logo.height / 2) };
+    });
+    expect(position.dotEnd).toBeLessThan(position.logoStart);
+    expect(position.logoEnd).toBeLessThan(position.settingsStart);
+    expect(position.centerDiff).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.locator(".masthead").screenshot({ path: `${shots}/marquee-status-left-jellyfin-${width}.png` });
+    await page.screenshot({ path: `${shots}/marquee-status-left-jellyfin-full-${width}.png` });
+  });
+}
+
+for (const width of [393, 1440, 280]) {
+  test(`dedicated Notifications settings tab at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1050 });
+    await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    const general = page.getByRole("tab", { name: "General", exact: true });
+    const notifications = page.getByRole("tab", { name: "Notifications", exact: true });
+    await expect(general).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#notification-settings")).toBeHidden();
+    await page.locator("#settings").screenshot({ path: `${shots}/marquee-settings-general-tab-${width}.png` });
+    await general.focus(); await page.keyboard.press("ArrowRight");
+    await expect(notifications).toBeFocused();
+    await expect(notifications).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#settings-general-panel")).toBeHidden();
+    for (const id of ["notify-requests", "notify-enable", "notify-test", "notify-timezone", "notify-show-query", "notify-find-shows"]) await expect(page.locator(`#${id}`)).toBeVisible();
+    await page.locator("#settings").screenshot({ path: `${shots}/marquee-settings-notifications-tab-${width}.png` });
+    expect(await page.locator("#settings").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.keyboard.press("Home"); await expect(general).toBeFocused();
+    await expect(page.locator("#notification-settings")).toBeHidden();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(general).toHaveAttribute("aria-selected", "true");
+  });
+}
+
+for (const width of [393, 1440, 280]) {
+  test(`show reminders search as typed without punctuation at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1050 });
+    await login(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("tab", { name: "Notifications", exact: true }).click();
+    const search = page.getByRole("textbox", { name: "Search shows", exact: true });
+    await search.fill("rj decker");
+    await expect(page.getByRole("button", { name: "Add R.J. Decker", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add North of Nowhere", exact: true })).toHaveCount(0);
+    await page.locator("#notify-show-results").scrollIntoViewIfNeeded();
+    await page.locator("#settings").screenshot({ path: `${shots}/marquee-reminder-rj-search-${width}.png` });
+    await search.fill("rj deckr");
+    await page.getByRole("button", { name: "Add R.J. Decker", exact: true }).click();
+    await expect(page.locator("#notify-save-status")).toHaveText("Saved to your account.");
+    await expect(page.locator("#notify-show-list")).toContainText("R.J. Decker");
+    await search.fill("north");
+    await expect(page.getByRole("button", { name: "Add North of Nowhere", exact: true })).toBeVisible();
+    await page.locator("#notify-show-query").scrollIntoViewIfNeeded();
+    await page.locator("#settings").screenshot({ path: `${shots}/marquee-notifications-live-search-${width}.png` });
+    expect(await page.locator("#settings").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await search.fill("no such show");
+    await expect(page.locator("#notify-search-status")).toHaveText("No matching shows in your Jellyfin library.");
+    await search.fill("");
+    await expect(page.getByRole("button", { name: "Add North of Nowhere", exact: true })).toBeVisible();
+  });
+}
+
+test("show search ignores an older response after a new query", async ({ page }) => {
+  await login(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("tab", { name: "Notifications", exact: true }).click();
+  let release;
+  let reached;
+  const started = new Promise(resolve => { reached = resolve; });
+  await page.route("**/api/notification-shows?query=old", async route => {
+    reached(); await new Promise(resolve => { release = resolve; });
+    await route.fulfill({ json: { shows: [{ id: "old", title: "Old response" }] } });
+  });
+  await page.getByRole("textbox", { name: "Search shows", exact: true }).fill("old");
+  await started;
+  await page.getByRole("textbox", { name: "Search shows", exact: true }).fill("north");
+  await expect(page.getByRole("button", { name: "Add North of Nowhere", exact: true })).toBeVisible();
+  release();
+  await expect(page.getByRole("button", { name: "Add Old response", exact: true })).toHaveCount(0);
 });

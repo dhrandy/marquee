@@ -1368,7 +1368,29 @@ setInterval(() => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && !$("#dashboard").hidden) loadJellyfinVersion();
 });
-$("#settings-button").addEventListener("click", () => { buildSectionOrder(); buildIconGuide(); $("#settings").showModal(); loadJellyfinVersion(); });
+function selectSettingsTab(name, focus = false) {
+  for (const tab of Array.from(document.querySelectorAll("[data-settings-tab]"))) {
+    const selected = tab.dataset.settingsTab === name;
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    $("#" + tab.getAttribute("aria-controls")).hidden = !selected;
+    if (selected && focus) tab.focus();
+  }
+  $("#settings").scrollTop = 0;
+}
+$("#settings-tabs").addEventListener("click", event => {
+  const tab = event.target.closest("[data-settings-tab]");
+  if (tab) selectSettingsTab(tab.dataset.settingsTab);
+});
+$("#settings-tabs").addEventListener("keydown", event => {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  const tabs = Array.from(document.querySelectorAll("[data-settings-tab]"));
+  const index = tabs.indexOf(document.activeElement);
+  const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+  selectSettingsTab(tabs[next].dataset.settingsTab, true);
+});
+$("#settings-button").addEventListener("click", () => { selectSettingsTab("general"); buildSectionOrder(); buildIconGuide(); $("#settings").showModal(); loadJellyfinVersion(); });
 $("#default-view").addEventListener("change", (event) => {
   state.prefs.defaultView = event.target.value;
   delete state.prefs.lastView;
@@ -1845,13 +1867,32 @@ $("#notify-timezone").addEventListener("change", event => {
   catch { $("#notify-save-status").textContent = "Use a timezone such as America/New_York."; return; }
   notificationPrefs.timezone = event.target.value.trim(); saveNotifications();
 });
-$("#notify-find-shows").addEventListener("click", async () => {
+let reminderSearchTimer, reminderSearchVersion = 0;
+async function findReminderShows() {
+  clearTimeout(reminderSearchTimer);
+  const version = ++reminderSearchVersion;
+  const query = $("#notify-show-query").value.trim();
+  $("#notify-search-status").textContent = "Searching...";
   try {
-    const result = await api(`/api/notification-shows?query=${encodeURIComponent($("#notify-show-query").value.trim())}`);
+    const result = await api(`/api/notification-shows?query=${encodeURIComponent(query)}`);
+    if (version !== reminderSearchVersion) return;
     for (const show of result.shows) if (!notificationShows.some(item => item.id === show.id)) notificationShows.push(show);
-    $("#notify-show-results").innerHTML = result.shows.length ? result.shows.map(show => `<button data-reminder-add="${escape(show.id)}" ${notificationPrefs.shows.some(item => item.id === show.id) ? "disabled" : ""}>Add ${escape(show.title)}</button>`).join("") : '<p class="empty">No matching shows in your Jellyfin library.</p>';
-  } catch (error) { $("#notify-save-status").textContent = error.message; }
+    $("#notify-show-results").innerHTML = result.shows.map(show => `<button data-reminder-add="${escape(show.id)}" ${notificationPrefs.shows.some(item => item.id === show.id) ? "disabled" : ""}>Add ${escape(show.title)}</button>`).join("");
+    $("#notify-search-status").textContent = result.shows.length ? `${result.shows.length} ${result.shows.length === 1 ? "show" : "shows"} found.` : "No matching shows in your Jellyfin library.";
+  } catch (error) { if (version === reminderSearchVersion) $("#notify-search-status").textContent = error.message; }
+}
+$("#notify-show-query").addEventListener("input", () => {
+  ++reminderSearchVersion;
+  clearTimeout(reminderSearchTimer);
+  $("#notify-show-results").replaceChildren();
+  $("#notify-search-status").textContent = "Searching...";
+  reminderSearchTimer = setTimeout(findReminderShows, 300);
 });
+$("#notify-show-query").addEventListener("keydown", event => {
+  if (event.key === "Enter") { event.preventDefault(); findReminderShows(); }
+});
+$("#notify-find-shows").addEventListener("click", findReminderShows);
+
 $("#notify-show-results").addEventListener("click", event => {
   const button = event.target.closest("[data-reminder-add]");
   if (!button || notificationPrefs.shows.length >= 50 || notificationPrefs.shows.some(show => show.id === button.dataset.reminderAdd)) return;

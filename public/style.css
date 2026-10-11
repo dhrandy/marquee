@@ -1591,3 +1591,9 @@ main > #search-section .search-bar { max-width: 560px; }
 #notify-show-results button { text-align: left; }
 
 #notify-timezone { background: var(--bg); color: var(--text); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+
+.settings-tabs { display: flex; gap: 8px; margin: 18px 0; border-bottom: 1px solid #ffffff18; padding-bottom: 10px; }
+.settings-tabs button { flex: 1; min-width: 0; padding: 10px 8px; }
+.settings-tabs button[aria-selected="true"] { background: #ab91ed; border-color: #ab91ed; color: #15101e; }
+[role="tabpanel"][hidden] { display: none; }
+#settings-notifications-panel .settings-group { margin-top: 0; }

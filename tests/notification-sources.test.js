@@ -4,6 +4,7 @@ import http from "node:http";
 import {
   notificationSnapshot,
   reminderShows,
+  matchReminderShows,
 } from "../src/notification-sources.js";
 let playable = true,
   viewerAllowed = true,
@@ -138,6 +139,18 @@ const prefs = {
   timezone: "America/New_York",
   shows: [{ id: "show", airs: true, available: true }],
 };
+test("show search ignores punctuation, accents and word order, and accepts a one-letter typo", () => {
+  const items = [
+    { Id: "decker", Name: "R.J. Decker" },
+    { Id: "wives", Name: "The Hunting Wives" },
+    { Id: "accent", Name: "Café Stories" },
+  ];
+  for (const query of ["rj decker", "r.j. decker", "decker rj", "rj deckr"])
+    assert.equal(matchReminderShows(items, query)[0].id, "decker");
+  assert.equal(matchReminderShows(items, "hunting wi")[0].id, "wives");
+  assert.equal(matchReminderShows(items, "cafe")[0].id, "accent");
+  assert.equal(matchReminderShows(items, "unrelated").length, 0);
+});
 test("notification adapters verify viewer access, media sources, request ownership and provider IDs", async () => {
   try {
     const shows = await reminderShows(user, "Example");
