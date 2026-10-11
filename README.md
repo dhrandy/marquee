@@ -343,6 +343,24 @@ The read-only shelf shows up to 24 accessible Jellyfin titles from active Mainta
 
 The app server must be able to reach all configured services. Browser CORS settings are not needed because requests go through the server. Service URLs may include a configured URL-base path; trailing slashes are optional. A missing scheme defaults to HTTP. HTTPS certificates must be trusted, and API redirects are not followed. Connection tests and calendar warnings distinguish HTTP errors, redirects, timeouts and invalid API responses.
 
+### Optional push notifications
+
+In Settings, choose your own-request alert and add the shows you want to follow. Each show has separate **Airs today** and **New episode available** switches, both off until you select them. Click **Enable on this device** and grant browser permission. Enable each browser or installed app separately; **Send test** checks delivery. On iPhone/iPad, use iOS 16.4 or later and add Marquee to the Home Screen first. HTTPS and a browser with Web Push are required.
+
+Air reminders are one summary around 9am in the selected timezone, using Sonarr air dates matched to your accessible Jellyfin series by provider ID. Episode alerts wait for a physical media source playable by your account. Your-request alerts are limited to your verified Seerr account and fully available requests that also resolve in Jellyfin. The worker checks every five minutes. First enrollment establishes a baseline, so it does not announce old arrivals. Delivery is best-effort, not an alarm; an unavailable service postpones checking, and a failed dispatch is not replayed. Sign-out removes that device's server subscription. Expired browser endpoints and invalid Jellyfin credentials stop delivery. Sessions and device credentials expire together.
+
+Keep the settings folder: it now also holds generated Web Push keys and encrypted device subscriptions. Do not delete those keys while devices are enrolled. The server needs outbound HTTPS to its browser push service (Google, Mozilla or Apple). No separate container or paid notification account is required. The optional `PUSH_CONTACT` environment setting supplies the VAPID contact URL or mailto address for your deployment. Alerts are encrypted in transit, but show titles can appear on your lock screen.
+
+### In theaters
+
+Discover includes an In theaters shelf from TMDB Now Playing for the US, with up to 200 movies across 10 pages in TMDB order. Setup:
+
+1. Get your own TMDB developer API key.
+2. Add `TMDB_API_KEY` to your `.env` file or stack manager Environment settings. Compose keeps the placeholder `${TMDB_API_KEY}`; never paste your key into the compose file or repository.
+3. Recreate the stack so the new environment setting applies.
+
+Without a key, the shelf shows a short setup message and the rest of Discover still works. The TMDB list is stored in `theater-list.json` in the saved settings folder and shared across viewers. It survives restarts and refreshes on the first load after 24 hours. Seerr availability/request state is cached separately for one minute per viewer. A cap notice appears if the list is longer. The key stays on the server. Seerr supplies availability and request state; requests use the same viewer permissions and approval rules as Top 10. A theater listing or request does not mean the movie is ready to watch on Jellyfin. Hide the shelf in General Settings or move it within Discover. Existing saved shelf order is preserved, with In theaters inserted after Popular right now.
+
 ## Privacy and permissions
 
 Jellyfin shelves follow the signed-in viewer's library permissions. **The Sonarr/Radarr calendar is shared among all signed-in viewers** and may show titles they cannot access in Jellyfin. Deploy only for viewers you trust with that calendar.
@@ -366,21 +384,3 @@ Country flags use the [flag-icons](https://github.com/lipis/flag-icons) package 
 ## Rights
 
 Copyright (c) 2026 dhrandy. All rights reserved. Marquee is proprietary; no open-source license is granted. Third-party asset notices apply only to those assets.
-
-### Optional push notifications
-
-In Settings, choose your own-request alert and add the shows you want to follow. Each show has separate **Airs today** and **New episode available** switches, both off until you select them. Click **Enable on this device** and grant browser permission. Enable each browser or installed app separately; **Send test** checks delivery. On iPhone/iPad, use iOS 16.4 or later and add Marquee to the Home Screen first. HTTPS and a browser with Web Push are required.
-
-Air reminders are one summary around 9am in the selected timezone, using Sonarr air dates matched to your accessible Jellyfin series by provider ID. Episode alerts wait for a physical media source playable by your account. Your-request alerts are limited to your verified Seerr account and fully available requests that also resolve in Jellyfin. The worker checks every five minutes. First enrollment establishes a baseline, so it does not announce old arrivals. Delivery is best-effort, not an alarm; an unavailable service postpones checking, and a failed dispatch is not replayed. Sign-out removes that device's server subscription. Expired browser endpoints and invalid Jellyfin credentials stop delivery. Sessions and device credentials expire together.
-
-Keep the settings folder: it now also holds generated Web Push keys and encrypted device subscriptions. Do not delete those keys while devices are enrolled. The server needs outbound HTTPS to its browser push service (Google, Mozilla or Apple). No separate container or paid notification account is required. The optional `PUSH_CONTACT` environment setting supplies the VAPID contact URL or mailto address for your deployment. Alerts are encrypted in transit, but show titles can appear on your lock screen.
-
-### In theaters
-
-Discover includes an In theaters shelf from TMDB Now Playing for the US, with up to 200 movies across 10 pages in TMDB order. Setup:
-
-1. Get your own TMDB developer API key.
-2. Add `TMDB_API_KEY` to your `.env` file or stack manager Environment settings. Compose keeps the placeholder `${TMDB_API_KEY}`; never paste your key into the compose file or repository.
-3. Recreate the stack so the new environment setting applies.
-
-Without a key, the shelf shows a short setup message and the rest of Discover still works. The TMDB list is stored in `theater-list.json` in the saved settings folder and shared across viewers. It survives restarts and refreshes on the first load after 24 hours. Seerr availability/request state is cached separately for one minute per viewer. A cap notice appears if the list is longer. The key stays on the server. Seerr supplies availability and request state; requests use the same viewer permissions and approval rules as Top 10. A theater listing or request does not mean the movie is ready to watch on Jellyfin. Hide the shelf in General Settings or move it within Discover. Existing saved shelf order is preserved, with In theaters inserted after Popular right now.
