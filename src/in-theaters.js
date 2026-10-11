@@ -1,11 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { upstream } from "./adapters.js";
-import { normalizeSeerrResults, seerrContentRating } from "./model.js";
+import { normalizeSeerrResults, seerrContentRating, streamerCredit } from "./model.js";
 
 const MAX_PAGES = 10,
   MAX_TITLES = 25;
-const RELEASE_WINDOW_DAYS = 120, FILTER_VERSION = 1;
+const RELEASE_WINDOW_DAYS = 120, FILTER_VERSION = 2;
 const DAY_MS = 86400000;
 export function isNewTheaterRelease(value, now = Date.now()) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -92,7 +92,7 @@ export async function inTheaters(userId, { read = upstream, dataDir } = {}) {
           const detailQuery = new URLSearchParams({api_key:key, language:"en-US"});
           const detail = await read("https://api.themoviedb.org", `/3/movie/${item.id}?${detailQuery}`);
           if (detail.id !== item.id) throw new Error("TMDB returned a different movie.");
-          return isNewTheaterRelease(detail.release_date) ? {...item, release_date:detail.release_date} : null;
+          return isNewTheaterRelease(detail.release_date) ? {...item, release_date:detail.release_date, streamer:streamerCredit(detail,"movie")} : null;
         }));
         raw.push(...verified.filter(Boolean));
       }
@@ -122,7 +122,7 @@ export async function inTheaters(userId, { read = upstream, dataDir } = {}) {
         }),
       );
     }
-    titles.forEach((item, index) => { item.originalReleaseDate = raw[index].release_date; });
+    titles.forEach((item, index) => { item.originalReleaseDate = raw[index].release_date; item.streamer = raw[index].streamer; });
     const result = { titles, capped, region: "US", filterVersion: FILTER_VERSION, fetchedAt: Date.now() };
     if (file) {
       await fs.mkdir(dataDir, { recursive: true, mode: 0o700 });

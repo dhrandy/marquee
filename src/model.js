@@ -268,3 +268,17 @@ export function seerrFacts(data, type, ratings = {}) {
     },
   };
 }
+
+// Explicit credits only. Provider availability and parent studios are not originals.
+export function streamerCredit(data, type) {
+  const aliases = new Map([
+    ["netflix", "Netflix"], ["netflix animation", "Netflix"], ["netflix international pictures", "Netflix"],
+    ["apple studios", "Apple"], ["apple original films", "Apple"], ["apple tv+", "Apple"],
+    ["amazon studios", "Amazon"], ["amazon prime video", "Amazon"], ["prime video", "Amazon"],
+    ["hulu", "Hulu"], ["hbo max", "Max"], ["max", "Max"],
+    ["disney+", "Disney+"], ["paramount+", "Paramount+"], ["peacock", "Peacock"],
+  ]);
+  const credits = type === "tv" ? data?.networks : data?.productionCompanies || data?.production_companies;
+  const brands = new Set((Array.isArray(credits) ? credits : []).map(item => aliases.get(String(item?.name || "").trim().toLowerCase())).filter(Boolean));
+  return brands.size === 1 ? [...brands][0] : null;
+}

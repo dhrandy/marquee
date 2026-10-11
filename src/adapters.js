@@ -6,6 +6,7 @@ import {
   normalizedContentRating,
   topCast,
   seerrContentRating,
+  streamerCredit,
   seerrFacts,
   normalizeSeerrResults,
   normalizeSeerrRequests,
@@ -557,10 +558,10 @@ export async function withShelfCertifications(items, userId) {
       let entry = shelfCertificationCache.get(key);
       if (!entry || entry.expires <= Date.now()) {
         if (shelfCertificationCache.size >= 1000) shelfCertificationCache.delete(shelfCertificationCache.keys().next().value);
-        entry = { expires: Date.now() + 86400000, value: upstream(process.env.SEERR_URL, `/api/v1/${item.mediaType}/${item.id}`, { headers: { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) } }).then(detail => detail.id === item.id ? seerrContentRating(detail, item.mediaType) : null).catch(() => { entry.expires = Date.now() + 60000; return null; }) };
+        entry = { expires: Date.now() + 86400000, value: upstream(process.env.SEERR_URL, `/api/v1/${item.mediaType}/${item.id}`, { headers: { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) } }).then(detail => detail.id === item.id ? {contentRating:seerrContentRating(detail, item.mediaType), streamer:streamerCredit(detail, item.mediaType)} : {contentRating:null,streamer:null}).catch(() => { entry.expires = Date.now() + 60000; return {contentRating:null,streamer:null}; }) };
         shelfCertificationCache.set(key, entry);
       }
-      return { ...item, contentRating: await entry.value };
+      return { ...item, ...await entry.value };
     })));
   }
   return output;

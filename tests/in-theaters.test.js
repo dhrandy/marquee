@@ -327,6 +327,6 @@ test("regional re-release dates do not pass the primary-date filter; old persist
       return {id:Number(route.split("/").at(-1))};
     }});
     assert.deepEqual(result.items.map(item=>item.id),[3]);assert.equal(pages,2);
-    const saved=JSON.parse(await fs.readFile(path.join(dir,"theater-list.json"),"utf8"));assert.equal(saved.filterVersion,1);assert.equal(saved.titles.length,1);
+    const saved=JSON.parse(await fs.readFile(path.join(dir,"theater-list.json"),"utf8"));assert.equal(saved.filterVersion,2);assert.equal(saved.titles.length,1);
   }finally{await fs.rm(dir,{recursive:true,force:true});}
 });

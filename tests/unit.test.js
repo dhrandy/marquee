@@ -397,3 +397,14 @@ test("series facts use first air date, not last air date or an invented range", 
   assert.deepEqual(seerrFacts({firstAirDate:"2020-04-02",lastAirDate:"2026-10-10"},"tv").releases,[{type:"First aired",date:"2020-04-02",region:null}]);
   assert.deepEqual(seerrFacts({firstAirDate:"2026-02-30"},"tv").releases,[]);
 });
+
+test("streamer labels use exactly one explicit credited brand, never providers or parent studios", async () => {
+ const {streamerCredit}=await import("../src/model.js");
+ assert.equal(streamerCredit({productionCompanies:[{name:"Netflix"},{name:"Netflix Animation"},{name:"Other studio"}]},"movie"),"Netflix");
+ assert.equal(streamerCredit({production_companies:[{name:"Apple Studios"}]},"movie"),"Apple");
+ assert.equal(streamerCredit({networks:[{name:"Amazon Prime Video"}]},"tv"),"Amazon");
+ assert.equal(streamerCredit({productionCompanies:[{name:"Netflix"},{name:"Apple Studios"}]},"movie"),null);
+ assert.equal(streamerCredit({productionCompanies:[{name:"Walt Disney Pictures"},{name:"Amazon MGM Studios"}],watchProviders:[{name:"Netflix"}]},"movie"),null);
+ assert.equal(streamerCredit({networks:[{name:"HBO"}]},"tv"),null);
+ assert.equal(streamerCredit({},"movie"),null);
+});

@@ -3101,3 +3101,16 @@ for (const width of [393,1440]) {
   await page.locator('#recommendations-content').screenshot({path:`${shots}/marquee-title-alignment-${width}.png`});
  });
 }
+
+for (const width of [393,1440]) {
+ test(`credited streamers replace shelf type only, search keeps Movie at ${width}px`,async({page})=>{
+  await page.setViewportSize({width,height:1000});await login(page);
+  await page.evaluate(()=>{
+    const items=[{id:901,title:"Netflix credit",streamer:"Netflix"},{id:902,title:"Apple credit",streamer:"Apple"},{id:903,title:"Studio credit",streamer:null}].map(item=>({...item,mediaType:"movie",year:2026,contentRating:"R",poster:"north"}));
+    document.querySelector("#popular-movies").innerHTML=items.map(result=>`<div class="ranked-poster">${resultCardHtml(result)}</div>`).join("");
+    renderSearch(items);
+  });
+  await expect(page.locator('#popular-movies .result-meta')).toHaveText(["Netflix · 2026 · R","Apple · 2026 · R","Movie · 2026 · R"]);
+  for(const row of await page.locator('#search-results .result-meta').all()) await expect(row).toContainText("Movie · 2026");
+ });
+}
