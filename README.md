@@ -353,7 +353,7 @@ Keep the settings folder: it now also holds generated Web Push keys and encrypte
 
 ### In theaters
 
-Discover includes an In theaters shelf from TMDB Now Playing for the US, with up to 200 movies across 10 pages in TMDB order. Setup:
+Discover includes an In theaters shelf from TMDB Now Playing for the US, with up to 25 movies in TMDB order. Setup:
 
 1. Get your own TMDB developer API key.
 2. Add `TMDB_API_KEY` to your `.env` file or stack manager Environment settings. Compose keeps the placeholder `${TMDB_API_KEY}`; never paste your key into the compose file or repository.

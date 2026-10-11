@@ -1,10 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { upstream } from "./adapters.js";
-import { normalizeSeerrResults } from "./model.js";
+import { normalizeSeerrResults, seerrContentRating } from "./model.js";
 
 const MAX_PAGES = 10,
-  MAX_TITLES = 200;
+  MAX_TITLES = 25;
 const feeds = new WeakMap();
 function cached(map, key, ttl, load) {
   const now = Date.now();
@@ -150,6 +150,7 @@ export async function inTheaters(userId, { read = upstream, dataDir } = {}) {
             throw new Error("Seerr returned a different movie.");
           return {
             ...item,
+            contentRating: seerrContentRating(detail, "movie"),
             availability: Number.isInteger(detail.mediaInfo?.status)
               ? detail.mediaInfo.status
               : null,

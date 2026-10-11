@@ -1303,10 +1303,10 @@ button[aria-label="Close settings"]:hover { background: #b9a3f7; }
   .search-results .result-card .poster-art { width: 48px; }
   .search-results .result-card h3 { font-size: 15px; }
 }
-/* In rows the status badge sits at the bottom right of the row, clear of the poster. */
+/* In rows the status badge sits at the top right of the row, clear of the poster. */
 .search-results .result-card { position: relative; }
 .search-results .result-card .poster-art { position: static; }
-.search-results .result-card .poster-status { top: auto; right: 12px; bottom: 10px; }
+.search-results .result-card .poster-status { top: 10px; right: 12px; bottom: auto; }
 .row-cert-pending { visibility: hidden; min-width: 30px; color: transparent; background: #ffffff14; border-color: transparent; }
 .row-cert { display: inline-block; font-size: 11px; font-weight: 600; line-height: 1.4; padding: 0 6px; margin-left: 6px; border: 1px solid #c5cad6; border-radius: 4px; color: #edf0f7; vertical-align: 1px; }
 /* Cap the search block so rows don't stretch across wide screens. */
@@ -1642,3 +1642,36 @@ main > #search-section .search-bar { max-width: 560px; }
 .episode-toolbar #episode-trailer:hover,
 .episode-toolbar #episode-close:hover { background:#1b1730; border-color:#b49aff; }
 .episode-toolbar #episode-save.favorited { color:#eaa3bd; }
+
+/* One rhythm for discovery rails, including long titles. */
+.popular-row { align-items:flex-start; padding-bottom:10px; }
+.popular-row .result-card h3 { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; min-height:40.5px; max-height:40.5px; }
+.popular-row .media-rating { margin:4px 0 0; }
+main > section:not([hidden]), .personal-section:not([hidden]) { padding-bottom:14px; margin-bottom:20px; }
+.section-heading { margin-bottom:12px; }
+#inTheaters-status:empty { display:none; }
+@media(max-width:600px) {
+ #dashboard .poster-row, #dashboard .popular-row { --shelf-card-width:36%; --shelf-card-min:0px; }
+ #dashboard[data-poster-size="small"] .poster-row, #dashboard[data-poster-size="small"] .popular-row { --shelf-card-width:30%; --shelf-card-min:0px; }
+ #dashboard[data-poster-size="large"] .poster-row, #dashboard[data-poster-size="large"] .popular-row { --shelf-card-width:52%; --shelf-card-min:0px; }
+}
+.poster-row, .popular-row { scrollbar-width:auto; scrollbar-color:var(--purple) var(--panel); }
+.poster-row::-webkit-scrollbar, .popular-row::-webkit-scrollbar { height:12px; }
+.poster-row::-webkit-scrollbar-thumb, .popular-row::-webkit-scrollbar-thumb { background:var(--purple); border-radius:8px; min-width:44px; }
+@media(min-width:601px) {
+ .episode-hero { min-height:0; padding-bottom:12px; }
+ #episode-cast { margin-top:0; }
+}
+/* A block image removes the inline baseline gap under the poster badges. */
+#episode-poster { display:block; }
+
+/* Compact notification cards keep both independent options visible. */
+.reminder-list { gap:5px; margin:12px 0; }
+.reminder-row { display:grid; grid-template-columns:minmax(0,1fr) 36px; gap:3px 8px; align-items:center; padding:6px 8px; }
+.reminder-title { min-width:0; overflow-wrap:anywhere; font-size:14px; }
+.reminder-options { display:flex; flex-wrap:wrap; gap:6px; grid-column:1 / -1; grid-row:2; }
+.reminder-row > .utility-icon { grid-column:2; grid-row:1; width:36px; min-width:36px; min-height:36px; }
+.reminder-option { display:inline-flex; align-items:center; gap:5px; min-height:32px; box-sizing:border-box; padding:4px 6px; border:1px solid var(--line); border-radius:7px; font-size:11px; cursor:pointer; color:var(--muted); }
+.reminder-option:has(input:checked) { color:var(--ink); border-color:#a78bfa80; background:#a78bfa14; }
+.reminder-option input { margin:0; accent-color:var(--purple); }
+.reminder-option:focus-within { outline:2px solid var(--purple); outline-offset:2px; }

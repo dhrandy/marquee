@@ -494,6 +494,12 @@ function replaceShelfContent(row, render) {
   render(); row.scrollLeft = left;
   if (window.scrollY !== top) window.scrollTo({ top, behavior: "instant" });
 }
+function libraryShelfMetadata(item) {
+  const detail = item.detail || {};
+  const movie = item.type === "movie" || detail.mediaType === "movie" || item.watchedScope === "movie";
+  if (!movie) return item.subtitle || item.year || ""; // Keep season/episode context on television library shelves.
+  return ["Movie", detail.year || item.year, detail.contentRating || item.contentRating].filter(Boolean).join(" · ");
+}
 function renderRecent(items) {
   $("#recent").innerHTML = items.length
       ? items
@@ -502,7 +508,7 @@ function renderRecent(items) {
             const time = `<time ${!state.prefs.addedDates ? "hidden" : ""}>${item.added ? escape(new Date(item.added).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })) : "Added date not provided"}</time>`;
             const title = `<h3>${escape(item.title)}</h3>`;
             const head = `<button class="poster-link recent-detail" data-recent-index="${items.indexOf(item)}" aria-label="Details for ${escape(item.title)}">${art}${title}</button>`;
-            return `<article class="poster-card">${head}${time}<p>${escape(item.subtitle)}</p>${ratingHtml(item.rating)}</article>`;
+            return `<article class="poster-card">${head}${time}<p>${escape(libraryShelfMetadata(item))}</p>${ratingHtml(item.rating)}</article>`;
           })
           .join("")
       : '<p class="empty">No recent titles in your Jellyfin library.</p>';
@@ -1100,7 +1106,7 @@ function resultCardHtml(r, includeContentRating = false) {
     : state.requestAccess[r.mediaType]
       ? `<button class="request-btn${shelf ? " poster-request" : ""}"${shelf ? ` aria-label="Request ${escape(r.title)}" title="Request ${escape(r.title)}"` : ""} data-request data-media-type="${r.mediaType}" data-media-id="${r.id}" data-title="${escape(r.title)}">${shelf ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>' : "Request"}</button>`
       : `<span class="request-unavailable">${escape(state.requestAccess.reason || state.requestAccess[`${r.mediaType}Reason`] || "Requests disabled in Seerr")}</span>`;
-  return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}${watchedBadgeHtml(r)}</div>${shelf && action.startsWith("<button") ? action : ""}<h3>${escape(r.title)}</h3><p class="result-meta">${r.mediaType === "movie" ? "Movie" : "TV"}${r.year ? ` · ${escape(r.year)}` : ""}${includeContentRating ? `<span class="row-cert row-cert-pending" aria-hidden="true"></span>` : ""}</p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}${shelf ? "" : `<div class="result-action">${action}</div>`}</article>`;
+  return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}${watchedBadgeHtml(r)}</div>${shelf && action.startsWith("<button") ? action : ""}<h3>${escape(r.title)}</h3><p class="result-meta">${[r.mediaType === "movie" ? "Movie" : "TV", r.year, shelf ? r.contentRating : null].filter(Boolean).map(escape).join(" · ")}${includeContentRating ? `<span class="row-cert row-cert-pending" aria-hidden="true"></span>` : ""}</p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}${shelf ? "" : `<div class="result-action">${action}</div>`}</article>`;
 }
 function renderSearch(results) {
   $("#search-results").innerHTML = results.length
@@ -1221,8 +1227,8 @@ async function loadInTheaters() {
   if (!state.prefs.inTheaters) return;
   try {
     const data = await api("/api/in-theaters");
-    $("#inTheaters-content").innerHTML = data.items.length ? data.items.map(item => resultCardHtml(item)).join("") : '<p class="empty">No theater titles returned for the US.</p>';
-    $("#inTheaters-status").textContent = data.capped ? `Showing the first ${data.items.length} US theater titles from TMDB.` : "";
+    $("#inTheaters-content").innerHTML = data.items.length ? data.items.slice(0,25).map(item => resultCardHtml(item)).join("") : '<p class="empty">No theater titles returned for the US.</p>';
+    $("#inTheaters-status").textContent = "";
     fixBrokenPosters();
   } catch (error) { $("#inTheaters-content").replaceChildren(); $("#inTheaters-status").textContent = error.message; }
 }
@@ -1818,7 +1824,7 @@ function leavingLabel(item) {
 function renderPersonalShelf(key, items) {
   $(`#${key}-content`).innerHTML = items.length ? items.map((item, index) => {
     const poster = item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`;
-    return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}${key === "continueWatching" ? `<progress class="poster-progress" max="100" value="${Math.min(100, Math.max(0, Number(item.progress) || 0))}" aria-label="${escape(item.title)} watch progress"></progress>` : ""}</div><h3>${escape(item.title)}</h3></button><p>${escape(item.subtitle || item.year || "")}</p>${key === "leavingSoon" ? `<p class="leaving-date">${escape(leavingLabel(item))}</p>` : ""}${key === "continueWatching" ? `<p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-id="${escape(item.favoriteId)}" aria-label="Remove ${escape(item.title)} from Jellyfin favorites" title="Remove from Jellyfin favorites" aria-pressed="true">${heartIcon}</button>` : ""}</article>`;
+    return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}${key === "continueWatching" ? `<progress class="poster-progress" max="100" value="${Math.min(100, Math.max(0, Number(item.progress) || 0))}" aria-label="${escape(item.title)} watch progress"></progress>` : ""}</div><h3>${escape(item.title)}</h3></button><p>${escape(libraryShelfMetadata(item))}</p>${key === "leavingSoon" ? `<p class="leaving-date">${escape(leavingLabel(item))}</p>` : ""}${key === "continueWatching" ? `<p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-id="${escape(item.favoriteId)}" aria-label="Remove ${escape(item.title)} from Jellyfin favorites" title="Remove from Jellyfin favorites" aria-pressed="true">${heartIcon}</button>` : ""}</article>`;
   }).join("") : `<p class="empty">${key === "leavingSoon" ? "No eligible scheduled departures in your Jellyfin library." : key === "watchlist" ? "Your Jellyfin movie and series favorites appear here. Use the heart in a title's popout to add one." : key === "continueWatching" ? "Nothing in progress. Start watching in Jellyfin and it appears here." : "No next episodes yet. Your Jellyfin viewing history fills this shelf."}</p>`;
   fixBrokenPosters();
 }
@@ -1877,7 +1883,7 @@ function renderNotifications() {
   $("#notify-test").disabled = !notificationEnabled;
   $("#notify-show-list").innerHTML = notificationPrefs.shows.length ? notificationPrefs.shows.map(show => {
     const title = notificationShows.find(item => item.id === show.id)?.title || "Selected show (temporarily unavailable)";
-    return `<article class="reminder-row"><div class="reminder-heading"><strong>${escape(title)}</strong><button class="utility-icon" data-reminder-remove="${escape(show.id)}" aria-label="Remove ${escape(title)} reminder" title="Remove reminder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/></svg></button></div><label class="setting">Airs today<input type="checkbox" data-reminder-id="${escape(show.id)}" data-reminder-type="airs" ${show.airs ? "checked" : ""}></label><label class="setting">New episode available<input type="checkbox" data-reminder-id="${escape(show.id)}" data-reminder-type="available" ${show.available ? "checked" : ""}></label></article>`;
+    return `<article class="reminder-row"><strong class="reminder-title">${escape(title)}</strong><div class="reminder-options"><label class="reminder-option"><input type="checkbox" data-reminder-id="${escape(show.id)}" data-reminder-type="airs" ${show.airs ? "checked" : ""}>Airs today</label><label class="reminder-option"><input type="checkbox" data-reminder-id="${escape(show.id)}" data-reminder-type="available" ${show.available ? "checked" : ""}>New episode available</label></div><button class="utility-icon" data-reminder-remove="${escape(show.id)}" aria-label="Remove ${escape(title)} reminder" title="Remove reminder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/></svg></button></article>`;
   }).join("") : '<p class="empty">No shows selected. Find a show to add it.</p>';
 }
 async function loadNotifications() {

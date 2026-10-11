@@ -547,6 +547,25 @@ export async function seerrDetails(type, id, userId) {
   };
 }
 
+// Certification is title metadata, but cache by exact viewer/config to avoid account crossover.
+const shelfCertificationCache = new Map();
+export async function withShelfCertifications(items, userId) {
+  const output = [];
+  for (let start = 0; start < items.length; start += 8) {
+    output.push(...await Promise.all(items.slice(start, start + 8).map(async item => {
+      const key = JSON.stringify([process.env.SEERR_URL, process.env.SEERR_API_KEY, userId, item.mediaType, item.id]);
+      let entry = shelfCertificationCache.get(key);
+      if (!entry || entry.expires <= Date.now()) {
+        if (shelfCertificationCache.size >= 1000) shelfCertificationCache.delete(shelfCertificationCache.keys().next().value);
+        entry = { expires: Date.now() + 86400000, value: upstream(process.env.SEERR_URL, `/api/v1/${item.mediaType}/${item.id}`, { headers: { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) } }).then(detail => detail.id === item.id ? seerrContentRating(detail, item.mediaType) : null).catch(() => { entry.expires = Date.now() + 60000; return null; }) };
+        shelfCertificationCache.set(key, entry);
+      }
+      return { ...item, contentRating: await entry.value };
+    })));
+  }
+  return output;
+}
+
 export async function seerrPopular(userId) {
   const [movies, tv] = await Promise.all(
     ["movies", "tv"].map(async (type) => {
@@ -578,7 +597,8 @@ export async function seerrPopular(userId) {
       return results.slice(0, 10);
     }),
   );
-  return { movies, tv };
+  const enriched = await withShelfCertifications([...movies, ...tv], userId);
+  return { movies: enriched.slice(0, movies.length), tv: enriched.slice(movies.length) };
 }
 
 export async function seerrRequest(mediaType, mediaId, userId, options = {}) {
@@ -944,5 +964,5 @@ export async function recommendations(user, seerrUserId) {
       if (items.length === 20) break;
     }
   }
-  return { seed: seeds[0].title, seeds: seeds.map(seed => seed.title), items: await withWatched(user, items) };
+  return { seed: seeds[0].title, seeds: seeds.map(seed => seed.title), items: await withWatched(user, await withShelfCertifications(items, seerrUserId)) };
 }

@@ -78,7 +78,7 @@ test("theater feed fails closed on missing credentials, malformed data or unveri
   );
 });
 
-test("theater feed keeps later-page titles past 20 and 40, dedupes, caches and isolates viewers", async () => {
+test("theater feed keeps second-page titles up to 25, dedupes, caches and isolates viewers", async () => {
   process.env.TMDB_API_KEY = "paged-mock";
   const calls = [];
   const read = async (base, route, options) => {
@@ -102,17 +102,17 @@ test("theater feed keeps later-page titles past 20 and 40, dedupes, caches and i
     };
   };
   const result = await inTheaters(7, { read });
-  assert.equal(result.items.length, 60);
-  assert.equal(result.items[45].title, "The Social Reckoning");
-  assert.equal(result.capped, false);
-  assert.equal(calls.filter((c) => c.base.includes("themoviedb")).length, 3);
+  assert.equal(result.items.length, 25);
+  assert.equal(result.items[24].title, "Movie 2-4");
+  assert.equal(result.capped, true);
+  assert.equal(calls.filter((c) => c.base.includes("themoviedb")).length, 2);
   const count = calls.length;
   await inTheaters(7, { read });
   assert.equal(calls.length, count);
   const other = await inTheaters(8, { read });
   assert.equal(other.items[0].availability, 1);
   assert.equal(result.items[0].availability, 5);
-  assert.equal(calls.filter((c) => c.base.includes("themoviedb")).length, 3);
+  assert.equal(calls.filter((c) => c.base.includes("themoviedb")).length, 2);
 });
 
 test("theater pagination stops at its cap and reports partial coverage", async () => {
@@ -131,7 +131,7 @@ test("theater pagination stops at its cap and reports partial coverage", async (
       return { id: Number(route.split("/").at(-1)) };
     },
   });
-  assert.equal(result.items.length, 200);
+  assert.equal(result.items.length, 25);
   assert.equal(result.capped, true);
 });
 
@@ -266,4 +266,33 @@ test("restarting with a 23-hour-old persisted list keeps only its remaining hour
     Date.now = realNow;
     await fs.rm(dir, { recursive: true, force: true });
   }
+});
+
+test("legacy 200-title disk caches refresh to 25 and hydrate US certification from existing viewer detail calls", async () => {
+  const fs = await import("node:fs/promises"), os = await import("node:os"), path = await import("node:path");
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "marquee-theater-migration-"));
+  await fs.writeFile(path.join(dir, "theater-list.json"), JSON.stringify({ region:"US", capped:true, fetchedAt:Date.now(), titles:Array.from({length:200},(_,i)=>({id:i+1,mediaType:"movie",title:"Old"})) }));
+  let pages = 0, details = 0;
+  try {
+    const result = await inTheaters(7, {dataDir:dir, read:async(base,route)=>{
+      if(base.includes("themoviedb")) { pages++; return {total_pages:10,results:Array.from({length:20},(_,i)=>({id:(pages-1)*20+i+1,title:"Fresh"}))}; }
+      details++; return {id:Number(route.split("/").at(-1)),releases:{results:[{iso_3166_1:"US",release_dates:[{certification:"R"}]}]}};
+    }});
+    assert.equal(pages,2); assert.equal(details,25); assert.equal(result.items.length,25); assert.equal(result.items[0].contentRating,"R");
+    assert.equal(JSON.parse(await fs.readFile(path.join(dir,"theater-list.json"),"utf8")).titles.length,25);
+  } finally {await fs.rm(dir,{recursive:true,force:true});}
+});
+
+test("shelf certifications cache per viewer and preserve unknown fallback", async () => {
+  const { withShelfCertifications } = await import("../src/adapters.js");
+  const original = global.fetch; let calls = 0;
+  global.fetch = async url => { calls++; const id = Number(new URL(url).pathname.split("/").at(-1)); return new Response(JSON.stringify({id,releases:{results:[{iso_3166_1:"US",release_dates:[{certification:id===1?"PG-13":""}]}]}})); };
+  try {
+    process.env.SEERR_URL="http://shelf-cert.test";
+    const items=[{id:1,mediaType:"movie"},{id:2,mediaType:"movie"}];
+    const result=await withShelfCertifications(items,701);
+    assert.equal(result[0].contentRating,"PG-13"); assert.equal(result[1].contentRating,null);
+    await withShelfCertifications(items,701); assert.equal(calls,2);
+    await withShelfCertifications(items,702); assert.equal(calls,4);
+  } finally {global.fetch=original;}
 });

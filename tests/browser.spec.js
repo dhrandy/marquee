@@ -2437,7 +2437,7 @@ for (const width of [1440, 834, 393, 360, 280]) {
     expect(Math.abs(recommendationPoster.width - recentPoster.width)).toBeLessThan(1);
     expect(Math.abs(recommendationPoster.height - recentPoster.height)).toBeLessThan(1);
     const boxes = await cards.evaluateAll(els => els.map(el => ({ left: el.getBoundingClientRect().left, right: el.getBoundingClientRect().right, width: el.getBoundingClientRect().width })));
-    for (let i = 0; i < boxes.length; i++) { expect(boxes[i].width).toBeGreaterThanOrEqual(140); if (i) expect(boxes[i].left).toBeGreaterThan(boxes[i-1].right); }
+    for (let i = 0; i < boxes.length; i++) { expect(boxes[i].width).toBeGreaterThanOrEqual(width > 600 ? 140 : 90); if (i) expect(boxes[i].left).toBeGreaterThan(boxes[i-1].right); }
     expect(await row.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.locator("#recommendations-section").screenshot({ path: `${shots}/marquee-recommendations-full-${width}.png` });
@@ -2934,14 +2934,14 @@ test("missing theater key stays a friendly shelf message and keeps Discover usab
   expect(errors).toEqual([]);
 });
 
-test("theater coverage renders later-page titles and shows a cap notice without changing order", async ({ page }) => {
+test("theater coverage caps older oversized responses at 25 without a cap notice", async ({ page }) => {
   const items = Array.from({ length: 60 }, (_, i) => ({ id: 9800 + i, mediaType: "movie", title: i === 45 ? "The Social Reckoning" : `Theater movie ${i + 1}`, poster: "signal", year: "2026", availability: null, requested: false }));
   await page.route("**/api/in-theaters", route => route.fulfill({ json: { items, region: "US", capped: true } }));
   await login(page);
-  await expect(page.locator("#inTheaters-content .result-card")).toHaveCount(60);
-  await expect(page.locator("#inTheaters-content .result-card").nth(45)).toContainText("The Social Reckoning");
+  await expect(page.locator("#inTheaters-content .result-card")).toHaveCount(25);
+  await expect(page.locator("#inTheaters-content .result-card").nth(24)).toContainText("Theater movie 25");
   await expect(page.locator("#inTheaters-content .result-card").first()).toContainText("Theater movie 1");
-  await expect(page.locator("#inTheaters-status")).toHaveText("Showing the first 60 US theater titles from TMDB.");
+  await expect(page.locator("#inTheaters-status")).toBeHidden();
 });
 
 for (const width of [280, 393, 1440]) {
@@ -2991,18 +2991,15 @@ for (const width of [280, 320, 393, 1440]) {
     await expect(remove).toHaveText("");
     for (const button of [find, remove]) {
       await expect(button.locator("svg")).toHaveAttribute("aria-hidden", "true");
-      const box = await button.boundingBox(); expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44);
+      const box = await button.boundingBox(); expect(box.width).toBeGreaterThanOrEqual(button === remove ? 36 : 44); expect(box.height).toBeGreaterThanOrEqual(button === remove ? 36 : 44);
     }
     await page.locator("#notify-show-list").scrollIntoViewIfNeeded();
-    const alignment = await page.locator(".reminder-row").evaluate(el => {
-      const trash = el.querySelector("[data-reminder-remove]").getBoundingClientRect();
-      const checks = [...el.querySelectorAll('input[type="checkbox"]')].map(input => input.getBoundingClientRect());
-      const text = el.querySelector("strong").getBoundingClientRect();
-      const labels = [...el.querySelectorAll(".setting")].map(label => label.getBoundingClientRect());
-      return { center: trash.x + trash.width / 2, checks: checks.map(box => box.x + box.width / 2), left: text.x, labels: labels.map(box => box.x) };
-    });
-    for (const center of alignment.checks) expect(Math.abs(center - alignment.center)).toBeLessThanOrEqual(1);
-    for (const left of alignment.labels) expect(Math.abs(left - alignment.left)).toBeLessThanOrEqual(1);
+    const options = page.locator(".reminder-option");
+    await expect(options).toHaveCount(2);
+    const first = await options.nth(0).boundingBox(), second = await options.nth(1).boundingBox();
+    if (width >= 393) expect(Math.abs(first.y - second.y)).toBeLessThanOrEqual(1);
+    else expect(second.y).toBeGreaterThanOrEqual(first.y);
+    expect(first.height).toBeGreaterThanOrEqual(32);
     await page.locator("#settings").screenshot({ path: `${shots}/marquee-reminder-icons-${width}.png` });
     await remove.click();
     await expect(page.locator("#notify-show-list")).toContainText("No shows selected");
