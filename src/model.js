@@ -282,3 +282,16 @@ export function streamerCredit(data, type) {
   const brands = new Set((Array.isArray(credits) ? credits : []).map(item => aliases.get(String(item?.name || "").trim().toLowerCase())).filter(Boolean));
   return brands.size === 1 ? [...brands][0] : null;
 }
+
+// Trim and dedupe before applying display limits, preserving the first spelling/order.
+export function uniqueCreditNames(values, limit = 3) {
+  const seen = new Set(), names = [];
+  for (const value of Array.isArray(values) ? values : []) {
+    if (typeof value !== "string") continue;
+    const name = value.trim(), key = name.toLowerCase();
+    if (!name || seen.has(key)) continue;
+    seen.add(key); names.push(name);
+    if (names.length >= limit) break;
+  }
+  return names.join(", ") || null;
+}

@@ -7,6 +7,7 @@ import {
   topCast,
   seerrContentRating,
   streamerCredit,
+  uniqueCreditNames,
   seerrFacts,
   normalizeSeerrResults,
   normalizeSeerrRequests,
@@ -274,10 +275,7 @@ export async function recentItems(user) {
               : "Movie",
           overview: item.Overview || "Overview not available yet.",
           genres: (item.Genres || []).slice(0, 8),
-          network: (item.Studios || [])
-            .slice(0, 3)
-            .map((studio) => studio.Name)
-            .join(", "),
+          network: uniqueCreditNames((item.Studios || []).map(studio => studio.Name)),
           runtime: item.RunTimeTicks
             ? Math.round(item.RunTimeTicks / 600000000)
             : null,
@@ -537,10 +535,7 @@ export async function seerrDetails(type, id, userId) {
     overview: data.overview || "Overview not available yet.",
     genres: (data.genres || []).slice(0, 8).map((genre) => genre.name),
     network:
-      (type === "tv" ? data.networks : data.productionCompanies)
-        ?.map((item) => item.name)
-        .slice(0, 3)
-        .join(", ") || null,
+      uniqueCreditNames((type === "tv" ? data.networks : data.productionCompanies)?.map(item => item.name)),
     runtime: data.runtime || data.episodeRunTime?.[0] || null,
     rating: normalizedRating(data.voteAverage, "TMDB", data.voteCount),
     poster: safeArt(data.posterPath),
@@ -867,7 +862,7 @@ export async function personalItems(user, kind) {
       image: Boolean(item.ImageTags?.Primary || item.SeriesId), art: "placeholder", link: jellyfinLink(item.Id),
       backdropId: item.ParentBackdropItemId || (item.BackdropImageTags?.length ? item.Id : item.SeriesId || null),
       progress, remaining: item.RunTimeTicks > ticks ? Math.ceil((item.RunTimeTicks - ticks) / 600000000) : null,
-      detail: { episodeAirDate: item.Type === "Episode" ? item.PremiereDate || null : null, title: item.SeriesName || item.Name, subtitle: personalItemSubtitle(item), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), mediaType: item.Type === "Movie" ? "movie" : "tv", network: (item.Studios || []).slice(0, 3).map(studio => studio.Name).join(", "), year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
+      detail: { episodeAirDate: item.Type === "Episode" ? item.PremiereDate || null : null, title: item.SeriesName || item.Name, subtitle: personalItemSubtitle(item), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), mediaType: item.Type === "Movie" ? "movie" : "tv", network: uniqueCreditNames((item.Studios || []).map(studio => studio.Name)), year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
     };
   });
 }

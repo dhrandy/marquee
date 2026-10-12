@@ -408,3 +408,10 @@ test("streamer labels use exactly one explicit credited brand, never providers o
  assert.equal(streamerCredit({networks:[{name:"HBO"}]},"tv"),null);
  assert.equal(streamerCredit({},"movie"),null);
 });
+
+test("network and company names dedupe trimmed case variants before the display limit", async()=>{
+ const {uniqueCreditNames}=await import("../src/model.js");
+ assert.equal(uniqueCreditNames([" Paramount+ ","Paramount+","paramount+","Netflix","Apple","Other"]),"Paramount+, Netflix, Apple");
+ assert.equal(uniqueCreditNames(["",null," "]),null);
+ assert.equal(uniqueCreditNames(["Company, Inc.","Company, Inc."]),"Company, Inc.");
+});

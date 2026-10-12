@@ -3127,3 +3127,12 @@ for (const width of [1440,393,280]) {
   await page.evaluate(()=>showDetail({title:"Movie",mediaType:"movie",subtitle:"2026 · Movie",contentRating:"R"}));await expect(page.locator('#episode-certification-line')).toBeHidden();await expect(page.locator('#episode-subtitle')).toHaveText("2026 · R");
  });
 }
+
+for(const width of [393,1440]){
+ test(`TV network duplicates are removed from the detail at ${width}px`,async({page})=>{
+  await page.setViewportSize({width,height:1000});await login(page);
+  await page.evaluate(()=>showDetail({title:"Network test",mediaType:"tv",subtitle:"S1E1 · Pilot",network:"Paramount+, Paramount+, paramount+, Netflix",contentRating:"TV-MA"}));
+  await expect(page.locator('#episode-network')).toHaveText("Network · Paramount+, Netflix");
+  await page.evaluate(()=>showDetail({title:"No network",mediaType:"tv",subtitle:"S1E1"}));await expect(page.locator('#episode-network')).toBeHidden();
+ });
+}

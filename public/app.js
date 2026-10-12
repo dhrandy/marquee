@@ -784,6 +784,14 @@ async function loadDetailFavorite(event) {
 }
 function setDetailNetwork(event) {
   const network = $("#episode-network");
+  if (typeof event.network === "string") {
+    const seen = new Set();
+    event.network = event.network.split(",").map(name => name.trim()).filter(name => {
+      const key = name.toLowerCase();
+      if (!name || seen.has(key)) return false;
+      seen.add(key); return true;
+    }).join(", ");
+  }
   network.textContent = event.mediaType === "tv" && event.network ? `Network · ${event.network}` : "";
   network.hidden = !network.textContent;
 }
