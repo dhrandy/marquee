@@ -778,7 +778,8 @@ function renderDetailFacts(facts) {
     .filter(([key]) => Number.isFinite(scores[key]) && scores[key] >= 0);
   let html = state.prefs.ratings && ratings.length ? `<div class="detail-scores">${ratings.map(([key, icon, label, suffix]) => `<span class="detail-score" title="${label}" aria-label="${label}: ${scores[key]}${suffix}"><span class="score-mark ${key}">${icon}</span> ${scores[key]}${suffix}</span>`).join("")}</div>` : "";
   const row = (label, value) => `<div class="detail-fact"><strong>${label}</strong><span>${value}</span></div>`;
-  if (facts.status) html += row("Status", escape(facts.status));
+  const seasonLabel = Number.isInteger(facts.seasonCount) && facts.seasonCount > 0 ? `${facts.seasonCount} ${facts.seasonCount === 1 ? "season" : "seasons"}` : null;
+  if (facts.status || seasonLabel) html += row("Status", [facts.status, seasonLabel].filter(Boolean).map(escape).join(" · "));
   if (facts.releases?.length) html += row("Release dates", facts.releases.map(r => {
     const date = new Date(`${r.date}T12:00:00Z`);
     if (!Number.isFinite(date.getTime())) return "";

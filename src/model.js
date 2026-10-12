@@ -237,7 +237,7 @@ export function topCast(people, jellyfin = false) {
 }
 
 // Facts for the detail popups (looked up through Seerr). Missing data stays missing.
-export function seerrFacts(data, type, ratings = {}) {
+export function seerrFacts(data, type, ratings = {}, now = new Date()) {
   const score = (v, max) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : null;
   const day = (v) => {
     if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}(T|$)/.test(v)) return null;
@@ -255,8 +255,15 @@ export function seerrFacts(data, type, ratings = {}) {
     const date = day(type === "tv" ? data.firstAirDate : data.releaseDate);
     if (date) releases.push({ type: type === "tv" ? "First aired" : "Release", date, region: null });
   }
+  const seasons = type === "tv" && Array.isArray(data.seasons) ? data.seasons.filter(s => Number.isInteger(s?.seasonNumber) && s.seasonNumber > 0) : null;
+  const today = now.toISOString().slice(0, 10);
+  // A season counts once it starts airing; specials and announced future seasons do not.
+  // Unknown dates cannot establish an aired-to-date total, so leave it missing.
+  const seasonCount = seasons && seasons.length && seasons.every(s => day(s.airDate))
+    ? new Set(seasons.filter(s => day(s.airDate) <= today).map(s => s.seasonNumber)).size : null;
   return {
     status: typeof data.status === "string" ? data.status.slice(0, 80) : null,
+    seasonCount: seasonCount > 0 ? seasonCount : null,
     productionCountries: (Array.isArray(data.productionCountries) ? data.productionCountries : []).filter(c => /^[A-Z]{2}$/.test(c.iso_3166_1) && typeof c.name === "string").slice(0, 12).map(c => ({ code: c.iso_3166_1, name: c.name.slice(0, 100) })),
     originalLanguage: typeof data.originalLanguage === "string" && /^[a-z]{2,3}$/.test(data.originalLanguage) ? data.originalLanguage : null,
     releases,

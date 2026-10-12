@@ -3265,3 +3265,15 @@ for (const width of [393,834,1440]) test(`Popular metadata follows title and sco
     for(const item of result) { expect(Math.abs(item.score-result[0].score),size).toBeLessThan(1); expect(item.gap,size).toBeGreaterThanOrEqual(0); expect(item.gap,size).toBeLessThan(8); expect(item.metaBottom,size).toBeLessThan(item.score); }
   }
 });
+
+for(const width of [393,1440]) test(`TV status includes season count and hides missing count at ${width}px`,async({page})=>{
+  await page.setViewportSize({width,height:1000});await login(page);
+  await page.evaluate(()=>showDetail({title:"Test series",mediaType:"tv",facts:{status:"Returning series",seasonCount:4}}));
+  await expect(page.locator("#episode-facts")).toContainText("Returning series · 4 seasons");
+  await page.evaluate(()=>renderDetailFacts({status:"Ended",seasonCount:1}));
+  await expect(page.locator("#episode-facts")).toContainText("Ended · 1 season");
+  await page.evaluate(()=>renderDetailFacts({status:"Returning series",seasonCount:null}));
+  await expect(page.locator("#episode-facts")).not.toContainText("seasons");
+  await page.evaluate(()=>renderDetailFacts({status:"Released"}));
+  await expect(page.locator("#episode-facts")).toContainText("Released");
+});

@@ -436,3 +436,14 @@ test("search certification cache is capped, prunes expired entries and isolates 
     await seerrContentRatings(one, 8001); assert.equal(calls, before + 2);
   } finally { globalThis.fetch = realFetch; Date.now = realNow; if (oldUrl === undefined) delete process.env.SEERR_URL; else process.env.SEERR_URL = oldUrl; }
 });
+
+test("TV facts count aired normal seasons without future seasons or specials", async () => {
+  const {seerrFacts}=await import("../src/model.js");
+  const now=new Date("2026-10-11T12:00:00Z");
+  const data={status:"Returning Series",seasons:[{seasonNumber:0,airDate:"2020-01-01"},{seasonNumber:1,airDate:"2021-01-01"},{seasonNumber:2,airDate:"2022-01-01"},{seasonNumber:2,airDate:"2022-01-01"},{seasonNumber:3,airDate:"2026-10-11"},{seasonNumber:4,airDate:"2026-10-12"}]};
+  assert.equal(seerrFacts(data,"tv",{},now).seasonCount,3);
+  assert.equal(seerrFacts(data,"movie",{},now).seasonCount,null);
+  assert.equal(seerrFacts({seasons:[{seasonNumber:1,airDate:null}],numberOfSeasons:4},"tv",{},now).seasonCount,null);
+  assert.equal(seerrFacts({seasons:[{seasonNumber:1,airDate:"2026-02-30"}]},"tv",{},now).seasonCount,null);
+  assert.equal(seerrFacts({seasons:[{seasonNumber:1,airDate:"2027-01-01"}]},"tv",{},now).seasonCount,null);
+});
