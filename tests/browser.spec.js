@@ -244,7 +244,7 @@ test("external titles are rendered as text, not executable markup", async ({
   );
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();
-  await expect(page.locator(".poster-card h3")).toHaveText(
+  await expect(page.locator("#recent .poster-card h3")).toHaveText(
     "<img src=x onerror=alert(1)>",
   );
   await expect(page.locator(".poster-card h3 img")).toHaveCount(0);
