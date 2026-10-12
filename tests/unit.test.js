@@ -447,3 +447,34 @@ test("TV facts count aired normal seasons without future seasons or specials", a
   assert.equal(seerrFacts({seasons:[{seasonNumber:1,airDate:"2026-02-30"}]},"tv",{},now).seasonCount,null);
   assert.equal(seerrFacts({seasons:[{seasonNumber:1,airDate:"2027-01-01"}]},"tv",{},now).seasonCount,null);
 });
+
+test("network names match whole-word prefixes generically without selecting ambiguous IDs", async()=>{
+ const {matchNetworks}=await import("../src/networks.js");
+ const rows=[{id:1,name:"History"},{id:2,name:"History"},{id:3,name:"Discovery Channel"},{id:4,name:"Discovery+"},{id:5,name:"Apple TV"},{id:6,name:"Pineapple"},{id:7,name:"Netflix"}];
+ assert.deepEqual(matchNetworks(rows,"history").map(x=>x.id),[1,2]);
+ assert.deepEqual(matchNetworks(rows,"discovery").map(x=>x.id),[4,3]);
+ assert.deepEqual(matchNetworks(rows,"apple").map(x=>x.id),[5]);
+ assert.deepEqual(matchNetworks(rows,"netflix").map(x=>x.id),[7]);
+ assert.deepEqual(matchNetworks(rows,"avengers"),[]);
+ assert.deepEqual(matchNetworks(rows,"a"),[]);
+});
+test("recommendations use rolling five years and never future or invalid dates",async()=>{
+ const {isRecentRecommendation}=await import("../src/adapters.js");const now=new Date("2026-10-12T10:00:00Z");
+ for(const date of ["2021-10-12","2024-01-01","2026-10-12"])assert.equal(isRecentRecommendation({date},now),true);
+ for(const date of ["2021-10-11","2026-10-13","2026-02-30","",null])assert.equal(isRecentRecommendation({date},now),false);
+});
+test("network discovery uses viewer-scoped Seerr, newest-first and aired cutoff",async()=>{
+ const {networkShows}=await import("../src/networks.js");let calls=0;
+ const data=await networkShows(65,2,4,"/tmp",{rows:[{id:65,name:"History"}],read:async(base,path,options)=>{
+  calls++;const url=new URL(path,"https://seerr.test");assert.equal(url.pathname,"/api/v1/discover/tv");assert.equal(url.searchParams.get("network"),"65");assert.equal(url.searchParams.get("page"),"2");assert.equal(url.searchParams.get("sortBy"),"first_air_date.desc");assert.equal(options.headers["X-API-User"],"4");
+  return {totalPages:3,results:[{id:1,name:"Aired",firstAirDate:"2024-01-01",mediaInfo:{status:5}},{id:2,name:"Future",firstAirDate:"2099-01-01"},{id:3,name:"Missing date"}]};
+ }});assert.equal(calls,1);assert.equal(data.results.length,1);assert.equal(data.results[0].availability,5);assert.equal(data.totalPages,3);
+ await assert.rejects(()=>networkShows(999,1,4,"/tmp",{rows:[{id:65,name:"History"}]}),/Unknown network/);
+});
+test("network directory downloads once, coalesces readers, persists and uses cache",async()=>{
+ const fs=await import("node:fs/promises"),os=await import("node:os"),path=await import("node:path"),{gzipSync}=await import("node:zlib");
+ const {networkDirectory}=await import("../src/networks.js");const dir=await fs.mkdtemp(path.join(os.tmpdir(),"networks-test-"));const original=global.fetch;let calls=0;
+ global.fetch=async url=>{calls++;assert.match(String(url),/^https:\/\/files\.tmdb\.org\/p\/exports\/tv_network_ids_\d{2}_\d{2}_\d{4}\.json\.gz$/);return new Response(gzipSync('{"id":65,"name":"History"}\n{"id":213,"name":"Netflix"}\n'));};
+ try {const results=await Promise.all([networkDirectory(dir),networkDirectory(dir),networkDirectory(dir)]);assert.equal(calls,1);assert.equal(results[0].length,2);assert.equal(JSON.parse(await fs.readFile(path.join(dir,"network-list.json"),"utf8")).rows.length,2);await networkDirectory(dir);assert.equal(calls,1);}
+ finally{global.fetch=original;await fs.rm(dir,{recursive:true,force:true});}
+});

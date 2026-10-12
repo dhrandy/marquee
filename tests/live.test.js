@@ -366,7 +366,7 @@ const service = http.createServer(async (req, res) => {
   if (/^\/api\/v1\/(movie|tv)\/\d+\/recommendations$/.test(url.pathname)) {
     assert.equal(req.headers["x-api-user"], "4"); assert.equal(url.searchParams.get("page"), "1");
     const id = Number(url.pathname.split("/")[4]);
-    return res.end(JSON.stringify({ results: [{ id, name: "Seed excluded", title: "Seed excluded" }, { id: 9001, name: "A recommendation", title: "A recommendation", first_air_date: "2024-01-01", release_date: "2024-01-01" }, { id: 10000 + id, name: `Suggestion ${id}`, title: `Suggestion ${id}` }] }));
+    return res.end(JSON.stringify({ results: [{ id, name: "Seed excluded", title: "Seed excluded" }, { id: 9001, name: "A recommendation", title: "A recommendation", firstAirDate: "2024-01-01", releaseDate: "2024-01-01" }, { id: 10000 + id, name: `Suggestion ${id}`, title: `Suggestion ${id}`, firstAirDate: "2023-01-01", releaseDate: "2023-01-01" }] }));
   }
   if (url.pathname === "/api/v1/request" && req.method === "GET") {
     if (url.searchParams.has("requestedBy")) { assert.equal(url.searchParams.get("requestedBy"), "4"); return res.end(JSON.stringify({ results: [{ id: 99, type: "movie", requestedBy: { id: 4, displayName: "Sample viewer" }, media: { mediaType: "movie", tmdbId: 9001 } }] })); }

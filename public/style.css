@@ -1695,3 +1695,7 @@ main > section:not([hidden]), .personal-section:not([hidden]) { padding-bottom:1
 .popular-row .caption-meta-space { height:24px; overflow:hidden; }
 .popular-row .caption-copy .result-meta { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
 @media(max-width:600px) { .popular-row .caption-meta-space { height:39px; } }
+
+.network-matches { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.network-matches:empty { display:none; }
+.network-matches button { font-size:12px; padding:6px 10px; }

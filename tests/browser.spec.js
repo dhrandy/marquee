@@ -2497,7 +2497,7 @@ for (const width of [1440, 393]) {
     await page.route("**/api/recommendations", route => route.fulfill({ json: { seeds: ["Cops", "The Last Signal", "North of Nowhere", "Orbit Nine", "After Hours"], items: Array.from({ length: 20 }, (_, i) => ({ id: 300 + i, mediaType: i % 2 ? "movie" : "tv", title: ["Rob Dyrdek's Fantasy Factory", "A New Movie", "Counting Cars", "Another Movie"][i % 4], year: "2024", rating: { value: 7.8, source: "TMDB" }, poster: ["north", "signal", "orbit"][i % 3], availability: 1 })) } }));
     await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.locator('[data-pref="recommendations"]').check(); await page.getByRole("button", { name: "Close settings" }).click();
-    await expect(page.locator("#recommendation-seed")).toHaveText("Because you watched Cops, The Last Signal, North of Nowhere, Orbit Nine, After Hours");
+    await expect(page.locator("#recommendation-seed")).toHaveText("Recent picks · Because you watched Cops, The Last Signal, North of Nowhere, Orbit Nine, After Hours");
     const row = page.locator("#recommendations-content");
     expect(await row.evaluate(el => getComputedStyle(el).scrollbarColor)).toBe("rgb(180, 154, 255) rgb(25, 28, 40)");
     await page.locator("#recommendations-section").screenshot({ path: `${shots}/marquee-last-five-${width}.png` });
@@ -3276,4 +3276,21 @@ for(const width of [393,1440]) test(`TV status includes season count and hides m
   await expect(page.locator("#episode-facts")).not.toContainText("seasons");
   await page.evaluate(()=>renderDetailFacts({status:"Released"}));
   await expect(page.locator("#episode-facts")).toContainText("Released");
+});
+
+for(const width of [393,1440]) test(`network search choices preserve titles and browse newest shows at ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:1000});await login(page);
+ await page.route("**/api/networks?*",r=>r.fulfill({json:{networks:[{id:65,name:"History",country:"US"},{id:2360,name:"History",country:"CA"}]}}));
+ await page.route("**/api/seerr/search?*",r=>{const url=new URL(r.request().url());const network=url.searchParams.get("network");return r.fulfill({json:{results:[{id:9001,mediaType:"tv",title:network?"New History series":"Title match",year:"2026",date:"2026-08-01",poster:"north"}],...(network?{network:{id:65,name:"History"},totalPages:2}:{})}});});
+ await page.getByPlaceholder("Search movies and shows").fill("history");
+ await expect(page.locator("#search-results")).toContainText("Title match");
+ await expect(page.getByRole("button",{name:"History · US",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"History · US",exact:true}).click();
+ await expect(page.locator("#search-results")).toContainText("New History series");
+ await expect(page.locator("#search-status")).toContainText("newest series premieres");
+ await page.getByRole("button",{name:"Next",exact:true}).click();
+ await expect(page.locator("#search-status")).toContainText("page 2");
+ await page.getByRole("button",{name:"Back to title search",exact:true}).click();
+ await expect(page.locator("#search-results")).toContainText("Title match");
+ await page.locator("#search-clear").click();await expect(page.locator("#network-matches")).toBeEmpty();
 });

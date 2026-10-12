@@ -87,7 +87,7 @@ function resetAccountState() {
   currentDetail = null; state.recentItems = []; state.watchlistItems = []; state.personalItems = {}; state.events = [];
   notificationShows = []; notificationEnabled = false;
   all("dialog[open]").forEach(dialog => dialog.close());
-  for (const selector of ["#recent", "#calendar", "#search-results", "#requests", "#recommendations-content", "#inTheaters-content", "#popular-movies", "#popular-tv", "#notify-show-list", "#notify-show-results"]) $(selector)?.replaceChildren();
+  for (const selector of ["#recent", "#calendar", "#network-matches", "#search-results", "#requests", "#recommendations-content", "#inTheaters-content", "#popular-movies", "#popular-tv", "#notify-show-list", "#notify-show-results"]) $(selector)?.replaceChildren();
   all(".personal-section .poster-row").forEach(row => row.replaceChildren());
 }
 async function api(path, options = {}) {
@@ -1313,8 +1313,8 @@ async function loadRecommendations() {
   try {
     const { seed, seeds, items } = await api("/api/recommendations");
     const titles = seeds?.length ? seeds : seed ? [seed] : [];
-    $("#recommendation-seed").textContent = titles.length ? `Because you watched ${titles.join(", ")}` : "Watch a movie or show in Jellyfin to get suggestions.";
-    updateShelfHtml($("#recommendations-content"), items.length ? items.map(r => resultCardHtml(r)).join("") : '<p class="empty">No suggestions yet.</p>');
+    $("#recommendation-seed").textContent = titles.length ? `Recent picks · Because you watched ${titles.join(", ")}` : "Watch a movie or show in Jellyfin to get suggestions.";
+    updateShelfHtml($("#recommendations-content"), items.length ? items.map(r => resultCardHtml(r)).join("") : '<p class="empty">No recent suggestions from your watched titles yet.</p>');
     $("#recommendations-status").textContent = ""; fixBrokenPosters();
   } catch (error) { $("#recommendations-status").textContent = error.message; }
 }
@@ -1594,11 +1594,20 @@ all("[data-view]").forEach((button) =>
 let searchTimer = null;
 let searchController = null;
 let searchSeq = 0;
-async function runSearch(query) {
+async function runSearch(query, network = null, page = 1) {
   clearTimeout(searchTimer);
   searchController?.abort();
   const seq = ++searchSeq;
   query = query.trim();
+  $("#network-matches").replaceChildren();
+  if (!network && query.length >= 3) api(`/api/networks?${new URLSearchParams({query})}`).then(data => {
+    if (seq !== searchSeq) return;
+    const networks = data.networks || [];
+    $("#network-matches").innerHTML = networks.map(n => {
+      const duplicate = networks.filter(other => other.name === n.name && other.country === n.country).length > 1;
+      return `<button type="button" data-network="${n.id}" data-network-name="${escape(n.name)}">${escape(n.name)}${n.country ? ` · ${escape(n.country)}` : ""}${!n.country || duplicate ? ` · ID ${n.id}` : ""}</button>`;
+    }).join("");
+  }).catch(() => {});
   if (!query) {
     $("#search-status").textContent = "";
     if (!query) updateShelfHtml($("#search-results"), "");
@@ -1611,14 +1620,18 @@ async function runSearch(query) {
     if (seq === searchSeq) $("#search-status").textContent = "Searching…";
   }, 600);
   try {
-    const { results, requestAccess } = await api(
-      `/api/seerr/search?${new URLSearchParams({ query })}`,
+    const { results, requestAccess, network: selected, totalPages } = await api(
+      `/api/seerr/search?${new URLSearchParams({ query, ...(network ? {network, page} : {}) })}`,
       { signal: searchController.signal },
     );
     if (seq !== searchSeq) return;
     $("#search-status").textContent = "";
     if (requestAccess) state.requestAccess = requestAccess;
     renderSearch(results);
+    if (selected) {
+      $("#search-status").textContent = `${selected.name}: newest series premieres · page ${page}`;
+      $("#network-matches").innerHTML = `<button type="button" data-network-reset>Back to title search</button>${page > 1 ? `<button type="button" data-network="${network}" data-network-name="${escape(query)}" data-network-page="${page-1}">Previous</button>` : ""}${page < totalPages ? `<button type="button" data-network="${network}" data-network-name="${escape(query)}" data-network-page="${page+1}">Next</button>` : ""}`;
+    }
   } catch (error) {
     if (error.name === "AbortError" || seq !== searchSeq) return;
     // Keep what is on screen; only say what went wrong.
@@ -1629,6 +1642,7 @@ async function runSearch(query) {
     clearTimeout(slow);
   }
 }
+$("#network-matches").addEventListener("click",event=>{const button=event.target.closest("button");if(!button)return;if(button.hasAttribute("data-network-reset"))runSearch($("#search-form input[name=query]").value);else if(button.dataset.network)runSearch(button.dataset.networkName,button.dataset.network,Number(button.dataset.networkPage)||1);});
 // Leave search: empty the box and the results and go back to the normal page.
 function clearSearch() {
   clearTimeout(searchTimer);
@@ -1636,6 +1650,7 @@ function clearSearch() {
   searchSeq++;
   const input = $("#search-form input[name=query]");
   input.value = "";
+  $("#network-matches").replaceChildren();
   updateShelfHtml($("#search-results"), "");
   $("#search-status").textContent = "";
   $("#search-clear").hidden = true;

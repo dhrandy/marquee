@@ -11,6 +11,14 @@ A self-hosted media dashboard with recent titles, a release calendar, personal J
 <p align="center"><img src="docs/images/mobile.png" alt="Marquee mobile demo with readable calendar list" width="300"></p>
 </details>
 
+### Network search and recent recommendations
+
+Search keeps normal title results and offers matching TV networks as buttons. Pick a network to browse its newest series premieres, excluding future premieres, with page controls. This is network credit, not current streaming availability, and does not sort by the latest episode of an older show. Same-name networks show country or catalog ID so they are not silently merged.
+
+The network directory is TMDB's full daily ID export, fetched on demand and persisted as `network-list.json` in the settings folder for 24 hours. A cached copy survives restarts and can be used during a temporary download outage. Displayed network identities use the existing TMDB key for country details and are cached for a day; without it, choices show their IDs. Directory failure never breaks title search. Each selected network page reads Seerr's TV discovery endpoint with the linked viewer's request state; normal watched/certification lookups still apply.
+
+Recommendations stay based on the last five distinct watched movies/shows, but only picks released within a rolling five-year window are shown. Future or missing release dates are excluded. Seerr's recommendations endpoint has no release-date filter, so Marquee filters on the server before extra metadata work. A short recent pool stays short rather than filling with old titles.
+
 ## Beta
 
 Marquee runs from source using the official Node image. There is no published Marquee image yet. The single-container stack below downloads the current beta when you restart or recreate it; a running app does not update itself.

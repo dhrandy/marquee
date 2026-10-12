@@ -925,6 +925,13 @@ export async function favoriteItems(user) {
   }));
 }
 
+export function isRecentRecommendation(item, now = new Date()) {
+  const cutoff = new Date(now); cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 5);
+  const date = item.date;
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsed = new Date(date + "T00:00:00Z");
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0,10) === date && date >= cutoff.toISOString().slice(0,10) && date <= now.toISOString().slice(0,10);
+}
 export async function recommendations(user, seerrUserId) {
   // Read enough history to skip repeat episodes of the same show and missing metadata.
   const query = new URLSearchParams({ UserId: user.id, Recursive: "true", IncludeItemTypes: "Movie,Episode", IsPlayed: "true", SortBy: "DatePlayed", SortOrder: "Descending", Fields: "ProviderIds", EnableUserData: "true", Limit: "50" });
@@ -956,7 +963,7 @@ export async function recommendations(user, seerrUserId) {
   for (let index = 0; index < maxLength && items.length < 20; index++) {
     for (const pool of pools) {
       const item = pool[index];
-      if (!item) continue;
+      if (!item || !isRecentRecommendation(item)) continue;
       const key = `${item.mediaType}:${item.id}`;
       if (seen.has(key)) continue;
       seen.add(key); items.push(item);

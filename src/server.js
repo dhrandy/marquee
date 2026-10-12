@@ -1,3 +1,4 @@
+import { networkMatches, networkShows } from "./networks.js";
 import { inTheaters } from "./in-theaters.js";
 import { leavingSoon } from "./maintainerr.js";
 import express from "express";
@@ -681,6 +682,13 @@ app.get("/api/seerr/popular", requireUser, async (req, res) => {
     });
   }
 });
+app.get("/api/networks", requireUser, async (req,res)=>{
+  const query=req.query.query;
+  if(typeof query!=="string"||query.length>120||query.trim().length<3)return res.status(400).json({error:"Enter at least three characters."});
+  if(demo)return res.json({networks:[],warning:"Network directory uses live TMDB data outside demo mode."});
+  try {const access=await cachedAccess(req.user);if(access.error)return res.status(403).json({error:access.error});res.json({networks:await networkMatches(query,path.dirname(settingsPath))});}
+  catch {res.json({networks:[],warning:"Network matching unavailable. Title search still works."});}
+});
 app.get("/api/seerr/search", requireUser, async (req, res) => {
   const query = req.query.query;
   const page = Number(req.query.page || 1);
@@ -703,6 +711,12 @@ app.get("/api/seerr/search", requireUser, async (req, res) => {
   try {
     const access = await cachedAccess(req.user);
     if (access.error) return res.status(403).json({ error: access.error });
+    if(req.query.network !== undefined) {
+      const id=Number(req.query.network);
+      if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:"Invalid network."});
+      const data=await networkShows(id,page,access.id,path.dirname(settingsPath));
+      return res.json({...data,results:await withWatched(req.user,data.results),requestAccess:publicAccess(access)});
+    }
     const results = await seerrSearch(query, page, access.id);
     if (page === 1 && query.trim().length >= 3 && query.trim().length <= 40) {
       // Franchise searches ("Marvel", "DC") also list that studio's movies.
