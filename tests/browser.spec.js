@@ -1986,9 +1986,9 @@ for (const width of [1440, 393]) {
     await page.getByRole("button", { name: "Close settings" }).click();
     await view(page, "home");
     await expect(page.locator("#watchlist-section")).toBeVisible();
-    await expect(page.locator("#watchlist-section").getByRole("button", { name: "Collapse Watchlist" })).toBeVisible();
+    await expect(page.locator("#watchlist-section").getByRole("button", { name: "Collapse Favorites" })).toBeVisible();
   await view(page, "home");
-    await page.locator("#watchlist-section").getByRole("button", { name: "Collapse Watchlist" }).click();
+    await page.locator("#watchlist-section").getByRole("button", { name: "Collapse Favorites" }).click();
     await expect(page.locator("#watchlist-content")).toBeHidden();
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Reset Discover order", exact: true }).click();

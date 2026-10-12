@@ -159,7 +159,7 @@ function saveWeather() {
     });
   return weatherWrites;
 }
-const sectionLabels = { search: "Search and request", weather: "Weather", watchlist: "Watchlist", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", leavingSoon: "Leaving soon", recommendations: "Recommendations", popular: "Popular right now", inTheaters: "In theaters", requests: "Request status" };
+const sectionLabels = { search: "Search and request", weather: "Weather", watchlist: "Favorites", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", leavingSoon: "Leaving soon", recommendations: "Recommendations", popular: "Popular right now", inTheaters: "In theaters", requests: "Request status" };
 const defaultSectionOrder = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "leavingSoon", "requests"];
 let sectionOrder = [...defaultSectionOrder], orderWrites = Promise.resolve();
 const sectionElement = key => $(key === "weather" ? "#weather" : key === "popular" ? "#popular-wrap" : `#${key}-section`);
@@ -328,7 +328,7 @@ function applyPrefs() {
     if (collapse) {
       collapse.setAttribute("aria-expanded", !state.prefs[`${key}Collapsed`]);
       collapse.title = `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${sectionLabels[key]}`;
-      collapse.setAttribute("aria-label", `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${{ watchlist: "Watchlist", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", leavingSoon: "Leaving soon" }[key]}`);
+      collapse.setAttribute("aria-label", `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${{ watchlist: "Favorites", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", leavingSoon: "Leaving soon" }[key]}`);
     }
   }
   $("#personal-shelves").hidden = !["watchlist", "continueWatching", "nextUp", "watchNext", "leavingSoon"].some(key => state.prefs[key]);
@@ -342,7 +342,7 @@ function applyPrefs() {
 }
 function buildSettings() {
   const labels = {
-    watchlist: "Watchlist - Jellyfin favorites (off by default)",
+    watchlist: "Favorites - Jellyfin favorites (off by default)",
     leavingSoon: "Leaving soon (Maintainerr, off by default)",
     recommendations: "Recommendations (off by default)",
     continueWatching: "Continue watching (off by default)",
@@ -1886,7 +1886,7 @@ document.addEventListener("error", (event) => {
     img.replaceWith(Object.assign(document.createElement("span"), { className: "flag-code", textContent: img.dataset.code || "" }));
 }, true);
 
-const personalLabels = { leavingSoon: "Leaving soon", watchlist: "Watchlist", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up" };
+const personalLabels = { leavingSoon: "Leaving soon", watchlist: "Favorites", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up" };
 let personalLoad = 0;
 async function loadPersonalShelves() {
   const seq = ++personalLoad;

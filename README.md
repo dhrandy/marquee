@@ -34,7 +34,7 @@ Marquee runs from source using the official Node image. There is no published Ma
 
 - Discover and On Jellyfin pages with hideable, collapsible shelves. Reorder shelves separately for each page in Settings.
 - Recently added movies and TV seasons, with added dates, episode details and watched status from your Jellyfin account.
-- Optional Continue watching, Next up and Watchlist shelves. Watchlist uses Jellyfin favorites; the filled heart removes a favorite. Episode favorites apply to the parent series.
+- Optional Continue watching, Next up and Favorites shelves. Favorites uses Jellyfin favorites; the filled heart removes a favorite. Episode favorites apply to the parent series.
 - Optional Recommendations based on up to five latest distinct watched movies/shows, with related titles from Seerr/TMDB.
 - Seerr search, popular movies/shows and requests, using your linked Seerr permissions and quotas. Requests can show Everyone or My requests when your Seerr permissions allow it.
 - Shared Sonarr/Radarr release calendar with month, week, day, agenda and list views. Agenda is the default. Sunday-first layout, release filters, cinema/home releases and a status legend.
