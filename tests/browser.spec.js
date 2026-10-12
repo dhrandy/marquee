@@ -657,7 +657,7 @@ for (const width of [1440, 393, 320, 280]) {
     expect(await premiere.evaluate((el) => getComputedStyle(el).color)).toBe(
       "rgb(239, 207, 114)",
     );
-    const episode = page.locator(".entry[data-event]").first();
+    const episode = premiere; // Select a verified TV event, not a date-dependent first movie.
     await episode.click();
     const modal = page.locator("#episode-detail");
     await expect(modal).toBeVisible();
