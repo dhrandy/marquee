@@ -1629,6 +1629,7 @@ main > #search-section .search-bar { max-width: 560px; }
 .episode-hero { padding-top:76px; }
 /* Use one shape throughout the detail toolbar. */
 .episode-toolbar #episode-close { border-radius:8px; }
+.episode-toolbar #episode-star,
 .episode-toolbar #episode-save,
 .episode-toolbar #episode-play,
 .episode-toolbar #episode-trailer,
@@ -1637,6 +1638,7 @@ main > #search-section .search-bar { max-width: 560px; }
  box-sizing:border-box; border:1px solid #b49aff77; border-radius:8px;
  background:rgba(12,15,24,.45); color:#c9b8ff;
 }
+.episode-toolbar #episode-star:hover,
 .episode-toolbar #episode-save:hover,
 .episode-toolbar #episode-play:hover,
 .episode-toolbar #episode-trailer:hover,
@@ -1713,3 +1715,6 @@ main > section:not([hidden]), .personal-section:not([hidden]) { padding-bottom:1
 .request-row {position:relative;}
 .request-row .watch-star {position:static;flex-shrink:0;}
 .entry .watch-star {position:static;float:right;width:24px;height:24px;padding:3px;margin-left:6px;}
+
+.episode-toolbar #episode-star {position:static; padding:9px;}
+.episode-toolbar #episode-star.starred {color:#e5c778;}

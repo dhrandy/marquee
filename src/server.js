@@ -479,23 +479,24 @@ app.post("/api/section-order", requireUser, async (req, res) => {
   } catch { res.status(500).json({ error: "Could not save section order. Check the settings volume is writable." }); }
 });
 app.get("/api/watch-later", requireUser, async (req,res) => {
-  const items = savedSettings.watchLaterByUser?.[personalKey(req.user)] || [];
+  const items = (savedSettings.watchLaterByUser?.[personalKey(req.user)] || []).filter(item=>item.libraryId).map(item=>({...item,key:`library:${item.type}:${item.libraryId}`}));
   const libraryIds=items.map(item=>item.libraryId).filter(Boolean);
   const accessible=new Set();
   if(libraryIds.length && !demo) {
-    try {const params=new URLSearchParams({UserId:req.user.id,Ids:libraryIds.join(","),Recursive:"true",Fields:"ProviderIds",Limit:String(libraryIds.length)});const data=await upstream(process.env.JELLYFIN_URL,`/Items?${params}`,{headers:jellyfinHeaders(req.user.token,req.user.deviceId)});for(const item of data.Items || [])accessible.add(item.Id);}
+    try {const params=new URLSearchParams({UserId:req.user.id,Ids:libraryIds.join(","),Recursive:"true",Fields:"ProviderIds",Limit:String(libraryIds.length)});const data=await upstream(process.env.JELLYFIN_URL,`/Items?${params}`,{headers:jellyfinHeaders(req.user.token,req.user.deviceId)});for(const item of data.Items || [])if(["Movie","Series"].includes(item.Type) && !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual")accessible.add(item.Id);}
     catch {return res.status(502).json({error:"Could not verify saved Jellyfin titles. Your Watchlist is unchanged."});}
   }
-  const visible=items.map(item=>{if(!item.libraryId || demo)return item;if(accessible.has(item.libraryId)){req.user.state.allowedImages.add(item.libraryId);return {...item,link:jellyfinLink(item.libraryId)};}return {...item,image:false,libraryUnavailable:true};});
+  const visible=items.filter(item=>demo || accessible.has(item.libraryId)).map(item=>{if(demo)return item;req.user.state.allowedImages.add(item.libraryId);return {...item,link:jellyfinLink(item.libraryId)};});
   res.json({items:visible});
 });
 app.post("/api/watch-later", requireUser, async (req,res) => {
   const {key,saved} = req.body;
   if(typeof key !== "string" || key.length>150 || typeof saved !== "boolean") return res.status(400).json({error:"Choose a valid Watchlist title."});
   const existing = savedSettings.watchLaterByUser?.[personalKey(req.user)] || [];
-  const snapshot = req.user.state.watchCandidates?.get(key) || (!saved ? existing.find(item=>item.key===key) : null);
+  const snapshot = req.user.state.watchCandidates?.get(key) || (!saved ? existing.find(item=>item.key===key || (item.libraryId && `library:${item.type}:${item.libraryId}`===key)) : null);
   if(!snapshot) return res.status(404).json({error:"Open this title in Marquee before adding it."});
   try {
+    if(saved && !demo) {let item;try {item=await upstream(process.env.JELLYFIN_URL,`/Users/${encodeURIComponent(req.user.id)}/Items/${encodeURIComponent(snapshot.libraryId)}`,{headers:jellyfinHeaders(req.user.token,req.user.deviceId)});}catch{return res.status(502).json({error:"Could not verify this Jellyfin title. Watchlist is unchanged."});}if(item.Id !== snapshot.libraryId || !["Movie","Series"].includes(item.Type) || item.IsMissing || item.IsPlaceHolder || item.LocationType === "Virtual")return res.status(404).json({error:"Watchlist requires a movie or series on your Jellyfin server."});}
     await saveSettings(current=>({...current,watchLaterByUser:{...current.watchLaterByUser,[personalKey(req.user)]:updateWatchLater(current.watchLaterByUser?.[personalKey(req.user)] || [],snapshot,saved)}}));
     res.json({key,saved});
   } catch(error) {res.status(500).json({error:error.message.includes("500 titles") ? error.message : "Could not save Watchlist. Check the settings folder is writable."});}

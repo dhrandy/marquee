@@ -61,7 +61,7 @@ const service = http.createServer(async (req, res) => {
     assert.ok(req.headers.authorization.includes(`token-${user}`));
     if (url.searchParams.has("ParentId") || url.searchParams.has("SeriesId")) {
       const parent = url.searchParams.get("ParentId") || url.searchParams.get("SeriesId");
-      if (parent === "great-series" && url.pathname !== "/Shows/NextUp") return res.end(JSON.stringify({ Items: [{ Id: "great-episode", Type: "Episode", SeriesId: parent, SeriesName: "The Great", Name: "The Wedding", ParentIndexNumber: 2, IndexNumber: 4, RunTimeTicks: 24000000000, UserData: { LastPlayedDate: new Date().toISOString(), PlaybackPositionTicks: 12000000000 } }] }));
+      if (["great-series","great-season"].includes(parent) && url.pathname !== "/Shows/NextUp") return res.end(JSON.stringify({ Items: [{ Id: "great-episode", Type: "Episode", SeriesId: "great-series", SeriesName: "The Great", Name: "The Wedding", ParentIndexNumber: 2, IndexNumber: 4, RunTimeTicks: 24000000000, UserData: { LastPlayedDate: new Date().toISOString(), PlaybackPositionTicks: 12000000000 } }] }));
       if (parent === "landman-series" && url.pathname === "/Shows/NextUp") return res.end(JSON.stringify({ Items: [{ Id: "landman-episode", Type: "Episode", SeriesId: parent, SeriesName: "Landman", Name: "Next chapter", ParentIndexNumber: 1, IndexNumber: 3, UserData: {LastPlayedDate: new Date().toISOString()} }] }));
       if (parent === "broken-series") { res.writeHead(500); return res.end("{}"); }
       return res.end(JSON.stringify({ Items: [] }));
@@ -70,7 +70,7 @@ const service = http.createServer(async (req, res) => {
       assert.equal(url.searchParams.get("EnableResumable"), "false");
       assert.equal(url.searchParams.get("EnableRewatching"), "false");
     }
-    return res.end(JSON.stringify({ Items: [{ Id: `episode-${user}`, SeriesId: `series-${user}`, SeriesName: `Personal ${user}`, Name: "The next episode", Type: "Episode", ParentIndexNumber: 1, IndexNumber: 2, RunTimeTicks: 24000000000, UserData: { LastPlayedDate: new Date().toISOString(), PlaybackPositionTicks: 12000000000 }, ImageTags: { Primary: "tag" } }, { Id: "great-series", Name: "The Great", Type: "Series", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2020 }, { Id: "landman-series", Name: "Landman", Type: "Series", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2024 }, { Id: "personal-movie", Name: "A film", Type: "Movie", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2026 }, { Id: "broken-series", Name: "Unresolved show", Type: "Series", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2022 }] }));
+    return res.end(JSON.stringify({ Items: [{ Id: `episode-${user}`, SeriesId: `series-${user}`, SeriesName: `Personal ${user}`, Name: "The next episode", Type: "Episode", ParentIndexNumber: 1, IndexNumber: 2, RunTimeTicks: 24000000000, UserData: { LastPlayedDate: new Date().toISOString(), PlaybackPositionTicks: 12000000000 }, ImageTags: { Primary: "tag" } }, { Id: "great-series", Name: "The Great", Type: "Series", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2020 }, { Id: "landman-series", Name: "Landman", Type: "Series", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2024 }, { Id: "personal-movie", Name: "A film", Type: "Movie", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2026 }, { Id: "broken-series", Name: "Unresolved show", Type: "Series", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2022 }, ...(url.pathname !== "/Shows/NextUp" ? [{Id:"great-episode",Type:"Episode",SeriesId:"great-series",SeriesName:"The Great",Name:"The Wedding",ParentIndexNumber:2,IndexNumber:4,RunTimeTicks:24000000000,UserData:{LastPlayedDate:new Date().toISOString(),PlaybackPositionTicks:12000000000}}, {Id:"great-season",Type:"Season",SeriesId:"great-series",Name:"Season 2",UserData:{LastPlayedDate:new Date().toISOString()}}] : [])] }));
   }
   if (url.pathname === "/Items") {
     if (url.searchParams.get("UserId") === "revoked-viewer") { res.writeHead(401); return res.end("{}"); }
@@ -79,6 +79,7 @@ const service = http.createServer(async (req, res) => {
       res.writeHead(403);
       return res.end("{}");
     }
+    if (url.searchParams.has("Ids")) return res.end(JSON.stringify({Items:url.searchParams.get("Ids").split(",").map(Id=>({Id,Type:"Series"}))}));
     if (url.searchParams.get("IsPlayed") === "false") {
       assert.equal(url.searchParams.get("SortBy"),"Random");assert.equal(url.searchParams.get("IncludeItemTypes"),"Movie,Series");assert.equal(url.searchParams.get("Limit"),"18");
       assert.equal(url.searchParams.get("ExcludeLocationTypes"),"Virtual");assert.equal(url.searchParams.get("IsMissing"),"false");assert.equal(url.searchParams.get("IsPlaceHolder"),"false");
@@ -1230,7 +1231,7 @@ try {
       assert.equal(data.items[0].title, "Personal alice");
       assert.equal(data.items[0].subtitle, "S1E2 · The next episode");
       assert.equal(data.items[1].subtitle, kind === "continueWatching" ? "S2E4 · The Wedding" : "2020 · Series");
-      if (kind === "continueWatching") { assert.equal(data.items[1].progress, 50); assert.match(data.items[1].link, /great-episode/); }
+      if (kind === "continueWatching") { assert.equal(data.items.length,5);assert.equal(data.items.filter(item=>item.subtitle==="S2E4 · The Wedding").length,1);assert.equal(data.items[1].progress, 50); assert.match(data.items[1].link, /great-episode/); }
       assert.equal(data.items[2].subtitle, "S1E3 · Next chapter");
       assert.equal(data.items[3].subtitle, "2026 · Movie");
       assert.equal(data.items[4].subtitle, "2022 · Series");
@@ -1276,7 +1277,8 @@ try {
     assert.equal((await post("/api/watchlist", alice, { itemId: "great-series", saved: true })).status, 200);
     assert.equal((await get("/api/watchlist", alice)).items[0].title, "Favorite title");
     assert.equal((await get("/api/watchlist", alice)).items[0].watched, true);
-    const catalog=(await get("/api/seerr/search?query=Signal",alice)).results[0];
+    const catalog=(await get("/api/watchlist",alice)).items[0];
+    const unowned=(await get("/api/seerr/search?query=Signal",alice)).results.find(item=>!item.favoriteId);assert.equal(unowned?.watchKey,undefined);
     assert.ok(catalog.watchKey);assert.equal((await post("/api/watch-later",alice,{key:catalog.watchKey,saved:true})).status,200);
     assert.equal((await post("/api/watch-later",alice,{key:catalog.watchKey,saved:true})).status,200);
     assert.equal((await get("/api/watch-later",alice)).items.length,1);assert.equal((await get("/api/watch-later",bob)).items.length,0);

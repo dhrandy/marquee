@@ -833,6 +833,10 @@ export function isRecentResume(item, now = Date.now()) {
   const played = typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) ? Date.parse(value) : NaN;
   return Number.isFinite(played) && played >= now - 180 * 86400000 && played <= now;
 }
+export function uniquePlaybackItems(items) {
+  const seen = new Set();
+  return items.filter(item=>{if(typeof item.Id!=="string" || !item.Id)return true;if(seen.has(item.Id))return false;seen.add(item.Id);return true;});
+}
 export async function personalItems(user, kind) {
   const query = new URLSearchParams({ UserId: user.id, Limit: "18", Fields: "PremiereDate,Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People,ProviderIds", EnableUserData: "true", EnableImages: "true" });
   const endpoint = kind === "watchNext" ? "/Items" : kind === "continueWatching" ? `/Users/${encodeURIComponent(user.id)}/Items/Resume` : "/Shows/NextUp";
@@ -864,7 +868,8 @@ export async function personalItems(user, kind) {
     // Metadata failures must not hide a whole shelf or invent episode numbers.
     return item;
   }));
-  return resolved.filter(item => kind !== "continueWatching" || isRecentResume(item)).map(item => {
+  const filtered = resolved.filter(item => kind !== "continueWatching" || isRecentResume(item));
+  return (kind === "continueWatching" || kind === "nextUp" ? uniquePlaybackItems(filtered) : filtered).map(item => {
     const ticks = item.UserData?.PlaybackPositionTicks || 0;
     const progress = item.RunTimeTicks > 0 ? Math.max(0, Math.min(100, Math.round(ticks / item.RunTimeTicks * 100))) : 0;
     return {
@@ -896,7 +901,7 @@ export async function withWatched(user, items) {
       try {
         const query = new URLSearchParams({ UserId: user.id, SearchTerm: item.title, Recursive: "true", IncludeItemTypes: type === "movie" ? "Movie" : "Series", Fields: "ProviderIds", EnableUserData: "true", Limit: "50" });
         const data = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
-        const matches = (data.Items || []).filter(candidate => Number(candidate.ProviderIds?.Tmdb) === id && candidate.Type === (type === "movie" ? "Movie" : "Series"));
+        const matches = (data.Items || []).filter(candidate => Number(candidate.ProviderIds?.Tmdb) === id && candidate.Type === (type === "movie" ? "Movie" : "Series") && !candidate.IsMissing && !candidate.IsPlaceHolder && candidate.LocationType !== "Virtual");
         const played = matches.length && matches.every(candidate => typeof candidate.UserData?.Played === "boolean") ? matches.every(candidate => candidate.UserData.Played) : null;
         item.libraryOwned = matches.length > 0;
         item.favoriteId = matches.length === 1 ? matches[0].Id : null; item.favorite = matches.length === 1 ? matches[0].UserData?.IsFavorite === true : null;
