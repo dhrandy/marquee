@@ -17,7 +17,7 @@ Search keeps normal title results and offers matching TV networks as buttons. Pi
 
 The network directory is TMDB's full daily ID export, fetched on demand and persisted as `network-list.json` in the settings folder for 24 hours. A cached copy survives restarts and can be used during a temporary download outage. Displayed network identities use the existing TMDB key for country details and are cached for a day; without it, choices show their IDs. Directory failure never breaks title search. Each selected network page reads Seerr's TV discovery endpoint with the linked viewer's request state; normal watched/certification lookups still apply.
 
-Recommendations stay based on the last five distinct watched movies/shows, but only picks released within a rolling five-year window are shown. Future or missing release dates are excluded. Seerr's recommendations endpoint has no release-date filter, so Marquee filters on the server before extra metadata work. A short recent pool stays short rather than filling with old titles.
+Recommendations stay based on the last five distinct watched movies/shows, but only picks released within a rolling five-year window are shown. Future or missing release dates are excluded. Available and partially available titles (including 4K-only copies) are excluded using existing Seerr metadata; existing Jellyfin provider-ID checks also remove library matches, even if unwatched. No extra availability calls are added. Seerr's recommendations endpoint has no release-date filter, so Marquee filters on the server before extra metadata work. A short recent pool stays short rather than filling with old titles.
 
 ## Beta
 
@@ -392,3 +392,9 @@ Country flags use the [flag-icons](https://github.com/lipis/flag-icons) package 
 ## Rights
 
 Copyright (c) 2026 dhrandy. All rights reserved. Marquee is proprietary; no open-source license is granted. Third-party asset notices apply only to those assets.
+
+### What to watch next
+
+On Jellyfin includes an optional What to watch next shelf, enabled by default. It uses one bounded, viewer-scoped Jellyfin query for random unwatched movies and shows. Missing, virtual, placeholder and in-progress results are excluded. No Seerr/TMDB calls or library crawl. Next up stays separate for ongoing shows.
+
+Continue watching only shows activity within the last 180 days, using Jellyfin UserData.LastPlayedDate after resolving resumed episodes. Missing, invalid or future timestamps are excluded. Resume has no date cutoff option, so this filter is local with no extra calls.

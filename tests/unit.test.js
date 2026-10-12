@@ -378,7 +378,7 @@ test("section order adds Leaving soon while preserving approved ten-section orde
  test("default shelf orders match the two pages without changing saved orders", async () => {
   const { cleanSectionOrder, sectionOrderDefaults } = await import("../src/personal.js");
   const discover = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations"];
-  const home = ["nextUp", "continueWatching", "watchlist", "leavingSoon", "requests"];
+  const home = ["nextUp", "continueWatching", "watchNext", "watchlist", "leavingSoon", "requests"];
   assert.deepEqual(sectionOrderDefaults, [...discover, ...home]);
   const saved = [...home].reverse().concat([...discover].reverse());
   assert.deepEqual(cleanSectionOrder(saved), saved);
@@ -478,3 +478,21 @@ test("network directory downloads once, coalesces readers, persists and uses cac
  try {const results=await Promise.all([networkDirectory(dir),networkDirectory(dir),networkDirectory(dir)]);assert.equal(calls,1);assert.equal(results[0].length,2);assert.equal(JSON.parse(await fs.readFile(path.join(dir,"network-list.json"),"utf8")).rows.length,2);await networkDirectory(dir);assert.equal(calls,1);}
  finally{global.fetch=original;await fs.rm(dir,{recursive:true,force:true});}
 });
+
+ test("recommendations exclude available and partial media, including 4K only",async()=>{
+ const {isServerOwnedRecommendation}=await import("../src/adapters.js");
+ for(const key of ["status","status4k"])for(const status of [4,5]) assert.equal(isServerOwnedRecommendation({mediaInfo:{[key]:status}}),true);
+ for(const status of [1,2,3,6,7,null])assert.equal(isServerOwnedRecommendation({mediaInfo:{status,status4k:status}}),false);
+ assert.equal(isServerOwnedRecommendation({}),false);
+ });
+
+ test("old shelf ordering adds watch-next after continue-watching without reordering anything", async()=>{
+ const {cleanSectionOrder,sectionOrderDefaults}=await import("../src/personal.js");const old=sectionOrderDefaults.filter(k=>k!=="watchNext").reverse();const result=cleanSectionOrder(old);assert.deepEqual(result.filter(k=>k!=="watchNext"),old);assert.equal(result.indexOf("watchNext"),result.indexOf("continueWatching")+1);
+ });
+
+ test("continue watching only qualifies real activity within180days",async()=>{
+ const {isRecentResume}=await import("../src/adapters.js");const now=Date.parse("2026-10-12T15:00:00Z");
+ for(const delta of [0,1,180*86400000])assert.equal(isRecentResume({UserData:{LastPlayedDate:new Date(now-delta).toISOString()}},now),true);
+ for(const delta of [-1,180*86400000+1])assert.equal(isRecentResume({UserData:{LastPlayedDate:new Date(now-delta).toISOString()}},now),false);
+ for(const value of [null,"invalid","2026-01-01",undefined])assert.equal(isRecentResume({UserData:{LastPlayedDate:value}},now),false);assert.equal(isRecentResume({},now),false);
+ });

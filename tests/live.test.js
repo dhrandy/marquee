@@ -61,8 +61,8 @@ const service = http.createServer(async (req, res) => {
     assert.ok(req.headers.authorization.includes(`token-${user}`));
     if (url.searchParams.has("ParentId") || url.searchParams.has("SeriesId")) {
       const parent = url.searchParams.get("ParentId") || url.searchParams.get("SeriesId");
-      if (parent === "great-series" && url.pathname !== "/Shows/NextUp") return res.end(JSON.stringify({ Items: [{ Id: "great-episode", Type: "Episode", SeriesId: parent, SeriesName: "The Great", Name: "The Wedding", ParentIndexNumber: 2, IndexNumber: 4, RunTimeTicks: 24000000000, UserData: { PlaybackPositionTicks: 12000000000 } }] }));
-      if (parent === "landman-series" && url.pathname === "/Shows/NextUp") return res.end(JSON.stringify({ Items: [{ Id: "landman-episode", Type: "Episode", SeriesId: parent, SeriesName: "Landman", Name: "Next chapter", ParentIndexNumber: 1, IndexNumber: 3 }] }));
+      if (parent === "great-series" && url.pathname !== "/Shows/NextUp") return res.end(JSON.stringify({ Items: [{ Id: "great-episode", Type: "Episode", SeriesId: parent, SeriesName: "The Great", Name: "The Wedding", ParentIndexNumber: 2, IndexNumber: 4, RunTimeTicks: 24000000000, UserData: { LastPlayedDate: new Date().toISOString(), PlaybackPositionTicks: 12000000000 } }] }));
+      if (parent === "landman-series" && url.pathname === "/Shows/NextUp") return res.end(JSON.stringify({ Items: [{ Id: "landman-episode", Type: "Episode", SeriesId: parent, SeriesName: "Landman", Name: "Next chapter", ParentIndexNumber: 1, IndexNumber: 3, UserData: {LastPlayedDate: new Date().toISOString()} }] }));
       if (parent === "broken-series") { res.writeHead(500); return res.end("{}"); }
       return res.end(JSON.stringify({ Items: [] }));
     }
@@ -70,7 +70,7 @@ const service = http.createServer(async (req, res) => {
       assert.equal(url.searchParams.get("EnableResumable"), "false");
       assert.equal(url.searchParams.get("EnableRewatching"), "false");
     }
-    return res.end(JSON.stringify({ Items: [{ Id: `episode-${user}`, SeriesId: `series-${user}`, SeriesName: `Personal ${user}`, Name: "The next episode", Type: "Episode", ParentIndexNumber: 1, IndexNumber: 2, RunTimeTicks: 24000000000, UserData: { PlaybackPositionTicks: 12000000000 }, ImageTags: { Primary: "tag" } }, { Id: "great-series", Name: "The Great", Type: "Series", ProductionYear: 2020 }, { Id: "landman-series", Name: "Landman", Type: "Series", ProductionYear: 2024 }, { Id: "personal-movie", Name: "A film", Type: "Movie", ProductionYear: 2026 }, { Id: "broken-series", Name: "Unresolved show", Type: "Series", ProductionYear: 2022 }] }));
+    return res.end(JSON.stringify({ Items: [{ Id: `episode-${user}`, SeriesId: `series-${user}`, SeriesName: `Personal ${user}`, Name: "The next episode", Type: "Episode", ParentIndexNumber: 1, IndexNumber: 2, RunTimeTicks: 24000000000, UserData: { LastPlayedDate: new Date().toISOString(), PlaybackPositionTicks: 12000000000 }, ImageTags: { Primary: "tag" } }, { Id: "great-series", Name: "The Great", Type: "Series", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2020 }, { Id: "landman-series", Name: "Landman", Type: "Series", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2024 }, { Id: "personal-movie", Name: "A film", Type: "Movie", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2026 }, { Id: "broken-series", Name: "Unresolved show", Type: "Series", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2022 }] }));
   }
   if (url.pathname === "/Items") {
     if (url.searchParams.get("UserId") === "revoked-viewer") { res.writeHead(401); return res.end("{}"); }
@@ -78,6 +78,15 @@ const service = http.createServer(async (req, res) => {
     if (!req.headers.authorization?.includes(`token-${user}`)) {
       res.writeHead(403);
       return res.end("{}");
+    }
+    if (url.searchParams.get("IsPlayed") === "false") {
+      assert.equal(url.searchParams.get("SortBy"),"Random");assert.equal(url.searchParams.get("IncludeItemTypes"),"Movie,Series");assert.equal(url.searchParams.get("Limit"),"18");
+      assert.equal(url.searchParams.get("ExcludeLocationTypes"),"Virtual");assert.equal(url.searchParams.get("IsMissing"),"false");assert.equal(url.searchParams.get("IsPlaceHolder"),"false");
+      return res.end(JSON.stringify({Items:[
+      {Id:`pick-${user}`,Name:`Unwatched ${user}`,Type:"Movie",UserData:{Played:false},ImageTags:{Primary:"tag"}},
+      {Id:`show-${user}`,Name:"Fresh series",Type:"Series",UserData:{Played:false,PlayedPercentage:0}},
+      ...[{Played:true},{Played:false,PlaybackPositionTicks:100},{Played:false,PlayedPercentage:20}].map((UserData,i)=>({Id:`skip-${i}`,Name:"Skip",Type:"Series",UserData})),
+      ...[{IsMissing:true},{IsPlaceHolder:true},{LocationType:"Virtual"}].map((extra,i)=>({Id:`virtual-${i}`,Type:"Movie",UserData:{Played:false},...extra}))]}));
     }
     if (url.searchParams.get("IsPlayed") === "true") {
       assert.equal(url.searchParams.get("SortBy"), "DatePlayed");
@@ -90,6 +99,7 @@ const service = http.createServer(async (req, res) => {
     if (url.searchParams.has("SearchTerm") && url.searchParams.get("Fields") === "ProviderIds") {
       return res.end(JSON.stringify({ Items: [
         { Id: "watched-film", Name: "Film", Type: "Movie", ProviderIds: { Tmdb: "9001" }, UserData: { Played: user === "alice" } },
+        { Id: "unwatched-owned", Name: "Unwatched owned", Type: "Movie", ProviderIds: { Tmdb: "9003" }, UserData: { Played: false } },
         { Id: "wrong-match", Name: "Same title", Type: "Movie", ProviderIds: { Tmdb: "9002" }, UserData: { Played: true } },
         { Id: "watched-series", Name: "Series", Type: "Series", ProviderIds: { Tmdb: "7" }, UserData: { Played: user === "alice" } },
       ] }));
@@ -366,7 +376,7 @@ const service = http.createServer(async (req, res) => {
   if (/^\/api\/v1\/(movie|tv)\/\d+\/recommendations$/.test(url.pathname)) {
     assert.equal(req.headers["x-api-user"], "4"); assert.equal(url.searchParams.get("page"), "1");
     const id = Number(url.pathname.split("/")[4]);
-    return res.end(JSON.stringify({ results: [{ id, name: "Seed excluded", title: "Seed excluded" }, { id: 9001, name: "A recommendation", title: "A recommendation", firstAirDate: "2024-01-01", releaseDate: "2024-01-01" }, { id: 10000 + id, name: `Suggestion ${id}`, title: `Suggestion ${id}`, firstAirDate: "2023-01-01", releaseDate: "2023-01-01" }] }));
+    return res.end(JSON.stringify({ results: [{id:9003,title:"Unwatched owned",name:"Unwatched owned",releaseDate:"2024-01-01",firstAirDate:"2024-01-01"}, ...[4,5].flatMap(status => ["status","status4k"].map(key => ({id:50000 + status*10 + (key === "status4k" ? 1 : 0),title:"Owned excluded",name:"Owned excluded",releaseDate:"2024-01-01",firstAirDate:"2024-01-01",mediaInfo:{[key]:status}}))), { id, name: "Seed excluded", title: "Seed excluded" }, { id: 9001, name: "A recommendation", title: "A recommendation", firstAirDate: "2024-01-01", releaseDate: "2024-01-01" }, { id: 10000 + id, name: `Suggestion ${id}`, title: `Suggestion ${id}`, firstAirDate: "2023-01-01", releaseDate: "2023-01-01" }] }));
   }
   if (url.pathname === "/api/v1/request" && req.method === "GET") {
     if (url.searchParams.has("requestedBy")) { assert.equal(url.searchParams.get("requestedBy"), "4"); return res.end(JSON.stringify({ results: [{ id: 99, type: "movie", requestedBy: { id: 4, displayName: "Sample viewer" }, media: { mediaType: "movie", tmdbId: 9001 } }] })); }
@@ -1240,14 +1250,23 @@ try {
       assert.deepEqual((await withWatched({ id: "alice", token: "token-alice" }, titles)).map(t => t.watched), [true, true, null]);
       assert.deepEqual((await withWatched({ id: "bob", token: "token-bob" }, titles)).map(t => t.watched), [false, false, null]);
     } finally { if (oldUrl === undefined) delete process.env.JELLYFIN_URL; else process.env.JELLYFIN_URL = oldUrl; }
+    const callStart = calls.length;
+    const watchNext = await get("/api/personal/watchNext",alice);
+    assert.deepEqual(watchNext.items.map(i=>i.id),["pick-alice","show-alice"]);
+    assert.equal(calls.slice(callStart).filter(c=>c.path === "/Items").length,1);
+    assert.ok(!calls.slice(callStart).some(c=>c.path.startsWith("/api/v1") || c.path === "/Shows/NextUp"));
+    assert.deepEqual((await get("/api/personal/watchNext",bob)).items.map(i=>i.id),["pick-bob","show-bob"]);
+    assert.equal((await fetch(`${base}/api/personal/watchNext`)).status,401);
     const suggestions = await get("/api/recommendations", alice);
     assert.equal(suggestions.seed, "Favorite title");
     assert.deepEqual(suggestions.seeds, ["Favorite title", "Watched 8", "Watched 9", "Watched 10", "Watched 11"]);
     assert.equal(suggestions.items.length, 7);
-    assert.deepEqual(suggestions.items.slice(0,2).map(item => item.mediaType), ["tv", "movie"]);
+    assert.ok(!suggestions.items.some(item => item.id >= 50000 || item.mediaType === "movie" && [9001,9003].includes(item.id)));
+    assert.ok(suggestions.items.every(item => item.libraryOwned !== true));
+    assert.ok(suggestions.items.some(item => item.mediaType === "movie"));
     assert.equal(new Set(suggestions.items.map(item => `${item.mediaType}:${item.id}`)).size, suggestions.items.length);
     assert.ok(!suggestions.items.some(item => [7,8,9,10,11].includes(item.id)));
-    assert.equal(suggestions.items[0].mediaType, "tv"); assert.equal(suggestions.items[0].id, 9001);
+    assert.ok(suggestions.items.some(item => item.mediaType === "tv" && item.id === 9001));
     assert.deepEqual(await get("/api/recommendations", bob), { seed: null, seeds: [], items: [] });
     const noMetadata = (await get("/api/personal/nextUp", alice)).items[0];
     assert.equal(noMetadata.favoriteId, "series-alice");
@@ -1257,7 +1276,7 @@ try {
     assert.equal((await post("/api/watchlist", alice, { itemId: "great-series", saved: true })).status, 200);
     assert.equal((await get("/api/watchlist", alice)).items[0].title, "Favorite title");
     assert.equal((await get("/api/watchlist", alice)).items[0].watched, true);
-    const order = ["calendar", "search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "leavingSoon", "recommendations", "popular", "inTheaters", "requests"];
+    const order = ["watchNext", "calendar", "search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "leavingSoon", "recommendations", "popular", "inTheaters", "requests"];
     assert.equal((await post("/api/section-order", alice, { order })).status, 200);
     assert.deepEqual((await get("/api/section-order", alice)).order, order);
     assert.notDeepEqual((await get("/api/section-order", bob)).order, order);

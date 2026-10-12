@@ -827,14 +827,22 @@ export function personalItemSubtitle(item) {
   const season = item.Type === "Season" && item.IndexNumber != null ? `Season ${item.IndexNumber}` : label;
   return [item.ProductionYear, season].filter(Boolean).join(" · ");
 }
+export function isRecentResume(item, now = Date.now()) {
+  const value = item.UserData?.LastPlayedDate;
+  const played = typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) ? Date.parse(value) : NaN;
+  return Number.isFinite(played) && played >= now - 180 * 86400000 && played <= now;
+}
 export async function personalItems(user, kind) {
   const query = new URLSearchParams({ UserId: user.id, Limit: "18", Fields: "PremiereDate,Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People,ProviderIds", EnableUserData: "true", EnableImages: "true" });
-  const endpoint = kind === "continueWatching" ? `/Users/${encodeURIComponent(user.id)}/Items/Resume` : "/Shows/NextUp";
+  const endpoint = kind === "watchNext" ? "/Items" : kind === "continueWatching" ? `/Users/${encodeURIComponent(user.id)}/Items/Resume` : "/Shows/NextUp";
+  if (kind === "watchNext") {
+    for (const [key,value] of Object.entries({Recursive:"true",IncludeItemTypes:"Movie,Series",IsPlayed:"false",SortBy:"Random",ExcludeLocationTypes:"Virtual",IsMissing:"false",IsPlaceHolder:"false"})) query.set(key,value);
+  }
   if (kind === "nextUp") { query.set("EnableResumable", "false"); query.set("EnableRewatching", "false"); }
   const data = await upstream(process.env.JELLYFIN_URL, `${endpoint}?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
-  const visible = (data.Items || []).filter(item => !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual").slice(0, 18);
+  const visible = (data.Items || []).filter(item => !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual" && (kind !== "watchNext" || ["Movie","Series"].includes(item.Type) && item.UserData?.Played === false && !(item.UserData?.PlaybackPositionTicks > 0) && !(item.Type === "Series" && item.UserData?.PlayedPercentage > 0))).slice(0, 18);
   const resolved = await Promise.all(visible.map(async item => {
-    if (!["Series", "Season"].includes(item.Type)) return item;
+    if (kind === "watchNext" || !["Series", "Season"].includes(item.Type)) return item;
     const seriesId = item.SeriesId || (item.Type === "Series" ? item.Id : null);
     try {
       if (kind === "continueWatching") {
@@ -855,7 +863,7 @@ export async function personalItems(user, kind) {
     // Metadata failures must not hide a whole shelf or invent episode numbers.
     return item;
   }));
-  return resolved.map(item => {
+  return resolved.filter(item => kind !== "continueWatching" || isRecentResume(item)).map(item => {
     const ticks = item.UserData?.PlaybackPositionTicks || 0;
     const progress = item.RunTimeTicks > 0 ? Math.max(0, Math.min(100, Math.round(ticks / item.RunTimeTicks * 100))) : 0;
     return {
@@ -889,10 +897,11 @@ export async function withWatched(user, items) {
         const data = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
         const matches = (data.Items || []).filter(candidate => Number(candidate.ProviderIds?.Tmdb) === id && candidate.Type === (type === "movie" ? "Movie" : "Series"));
         const played = matches.length && matches.every(candidate => typeof candidate.UserData?.Played === "boolean") ? matches.every(candidate => candidate.UserData.Played) : null;
+        item.libraryOwned = matches.length > 0;
         item.favoriteId = matches.length === 1 ? matches[0].Id : null; item.favorite = matches.length === 1 ? matches[0].UserData?.IsFavorite === true : null;
         item.watched = played; item.watchedScope = type === "tv" ? "series" : "movie";
         if (watchedCache.size > 500) watchedCache.clear();
-        watchedCache.set(key, { value: { watched: played, favoriteId: item.favoriteId, favorite: item.favorite, watchedScope: item.watchedScope }, until: Date.now() + 60000 });
+        watchedCache.set(key, { value: { watched: played, libraryOwned: item.libraryOwned, favoriteId: item.favoriteId, favorite: item.favorite, watchedScope: item.watchedScope }, until: Date.now() + 60000 });
       } catch { /* Watched is optional; unknown never becomes unwatched or watched. */ }
     }
   }));
@@ -932,6 +941,9 @@ export function isRecentRecommendation(item, now = new Date()) {
   const parsed = new Date(date + "T00:00:00Z");
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0,10) === date && date >= cutoff.toISOString().slice(0,10) && date <= now.toISOString().slice(0,10);
 }
+export function isServerOwnedRecommendation(item) {
+  return [4, 5].includes(item.mediaInfo?.status) || [4, 5].includes(item.mediaInfo?.status4k);
+}
 export async function recommendations(user, seerrUserId) {
   // Read enough history to skip repeat episodes of the same show and missing metadata.
   const query = new URLSearchParams({ UserId: user.id, Recursive: "true", IncludeItemTypes: "Movie,Episode", IsPlayed: "true", SortBy: "DatePlayed", SortOrder: "Descending", Fields: "ProviderIds", EnableUserData: "true", Limit: "50" });
@@ -954,7 +966,7 @@ export async function recommendations(user, seerrUserId) {
   // Fetch once per distinct title, in parallel. A failed seed need not hide the others.
   const responses = await Promise.allSettled(seeds.map(async seed => {
     const data = await upstream(process.env.SEERR_URL, `/api/v1/${seed.type}/${seed.id}/recommendations?page=1`, { headers: { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(seerrUserId) } });
-    return normalizeSeerrResults({ results: (data.results || []).map(item => ({ ...item, mediaType: seed.type })) });
+    return normalizeSeerrResults({ results: (data.results || []).filter(item => !isServerOwnedRecommendation(item)).map(item => ({ ...item, mediaType: seed.type })) });
   }));
   if (responses.every(response => response.status === "rejected")) throw responses[0].reason;
   const pools = responses.filter(response => response.status === "fulfilled").map(response => response.value);
@@ -970,5 +982,7 @@ export async function recommendations(user, seerrUserId) {
       if (items.length === 20) break;
     }
   }
-  return { seed: seeds[0].title, seeds: seeds.map(seed => seed.title), items: await withWatched(user, await withShelfCertifications(items, seerrUserId)) };
+  const checked = await withWatched(user, items);
+  const unowned = checked.filter(item => item.libraryOwned !== true);
+  return { seed: seeds[0].title, seeds: seeds.map(seed => seed.title), items: await withShelfCertifications(unowned, seerrUserId) };
 }

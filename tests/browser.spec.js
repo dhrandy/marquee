@@ -9,14 +9,14 @@ async function login(page) {
   // Existing-user fixture: most tests exercise the search-enabled home page.
   await page.addInitScript(() => {
     const key = "marquee:Demo viewer:preferences";
-    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ search: true }));
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ search: true, watchNext: false }));
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();
   await expect(
     page.getByRole("heading", { name: "Recently added" }),
   ).toBeVisible();
-  await expect(page.locator(".poster-card")).toHaveCount(6);
+  await expect(page.locator("#recent .poster-card")).toHaveCount(6);
   await expect(page.locator(".entry").first()).toBeVisible();
 }
 test("private APIs require login, writes reject cross-origin, and headers prevent crawl", async ({
@@ -141,7 +141,7 @@ test("screenshots for review", async ({ page }) => {
     .screenshot({ path: `${shots}/marquee-calendar.png` });
   await page.setViewportSize({ width: 393, height: 852 });
   await page.reload();
-  await expect(page.locator(".poster-card")).toHaveCount(6);
+  await expect(page.locator("#recent .poster-card")).toHaveCount(6);
   await expect(page.locator(".entry").first()).toBeVisible();
   await page.screenshot({
     path: `${shots}/marquee-mobile.png`,
@@ -934,7 +934,7 @@ for (const width of [1440, 1660, 393, 280]) {
       }));
       await route.fulfill({ json: data });
     });
-    await page.addInitScript(() => localStorage.setItem("marquee:Demo viewer:preferences", JSON.stringify({ search: true })));
+    await page.addInitScript(() => localStorage.setItem("marquee:Demo viewer:preferences", JSON.stringify({ search: true, watchNext: false })));
     await page.goto("/");
     await page.getByRole("button", { name: "Explore demo" }).click();
     await expect(page.locator(".poster-card")).toHaveCount(18);
@@ -1809,7 +1809,7 @@ for (const [label, saved, enabled] of [
     }, saved);
     await page.goto("/");
     await page.getByRole("button", { name: "Explore demo" }).click();
-    await expect(page.locator(".poster-card")).toHaveCount(6);
+    await expect(page.locator("#recent .poster-card")).toHaveCount(6);
     await expect(page.locator("#search-section")).toBeVisible({ visible: enabled });
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("marquee:Demo viewer:preferences")).search)).toBe(enabled);
     await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -1818,7 +1818,7 @@ for (const [label, saved, enabled] of [
     await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#search-section")).toBeVisible({ visible: !enabled });
     await page.reload();
-    await expect(page.locator(".poster-card")).toHaveCount(6);
+    await expect(page.locator("#recent .poster-card")).toHaveCount(6);
     await expect(page.locator("#search-section")).toBeVisible({ visible: !enabled });
     if (label === "fresh") {
       await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -1961,7 +1961,7 @@ for (const width of [1440, 393]) {
     await page.setViewportSize({ width, height: 950 });
     await login(page);
     await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await expect(page.locator("#section-order-list li")).toHaveCount(12);
+    await expect(page.locator("#section-order-list li")).toHaveCount(13);
     const handle = page.getByRole("button", { name: "Drag Release calendar", exact: true });
     const target = page.locator('#section-order-list li[data-order-key="search"]');
     await handle.scrollIntoViewIfNeeded();
@@ -2413,7 +2413,7 @@ for (const width of [1440, 393, 280]) {
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     const keys = pageName => page.locator(`[data-order-page="${pageName}"] li`).evaluateAll(rows => rows.map(row => row.dataset.orderKey));
     const discover = await keys("discover"), home = await keys("home");
-    expect(discover).toHaveLength(7); expect(home).toHaveLength(5);
+    expect(discover).toHaveLength(7); expect(home).toHaveLength(6);
     await page.getByRole("button", { name: "Move Continue watching up", exact: true }).click();
     expect(await keys("discover")).toEqual(discover);
     expect((await keys("home"))[0]).toBe("continueWatching");
@@ -2686,7 +2686,7 @@ for (const width of [393, 1440]) {
       await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
     }
     const keys = page.locator("#section-order-list li");
-    expect(await keys.evaluateAll(rows => rows.map(row => row.dataset.orderKey))).toEqual(["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchlist", "leavingSoon", "requests"]);
+    expect(await keys.evaluateAll(rows => rows.map(row => row.dataset.orderKey))).toEqual(["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "leavingSoon", "requests"]);
     await page.getByRole("button", { name: "Move Next up down", exact: true }).click();
     await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
     const beforeHome = await page.locator('[data-order-page="home"] li').evaluateAll(rows => rows.map(row => row.dataset.orderKey));
@@ -3294,3 +3294,11 @@ for(const width of [393,1440]) test(`network search choices preserve titles and 
  await expect(page.locator("#search-results")).toContainText("Title match");
  await page.locator("#search-clear").click();await expect(page.locator("#network-matches")).toBeEmpty();
 });
+
+ test("watch next stays on Jellyfin, collapses, follows settings and opens owned details",async({page})=>{
+ await page.goto("/");await page.getByRole("button",{name:"Explore demo"}).click();await page.locator('[data-page="home"]').click();
+ await expect(page.locator("#watchNext-section")).toBeVisible();await expect(page.locator("#watchNext-content .poster-card")).toHaveCount(3);
+ await page.locator('[data-collapse="watchNext"]').click();await expect(page.locator("#watchNext-content")).toBeHidden();
+ await page.locator('[data-collapse="watchNext"]').click();await page.locator('#watchNext-content [data-personal]').first().click();await expect(page.locator('#episode-detail')).toBeVisible();await expect(page.locator('#episode-detail [data-request]')).toHaveCount(0);await page.getByRole('button',{name:'Close episode details'}).click();
+ await page.locator('[data-page="discover"]').click();await expect(page.locator('#watchNext-section')).toBeHidden();
+ });

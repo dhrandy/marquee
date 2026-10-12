@@ -778,7 +778,7 @@ app.get("/api/leaving-soon", requireUser, async (req, res) => {
   } catch { res.status(502).json({ error: "Could not verify Maintainerr departures. Check its URL, version, collections and exclusions." }); }
 });
 app.get("/api/recommendations", requireUser, async (req, res) => {
-  if (demo) return res.json({ seed: "North of Nowhere", seeds: ["North of Nowhere", "The Last Signal", "After Hours", "Orbit Nine", "Wild Coast"], items: demoSearch("") });
+  if (demo) return res.json({ seed: "North of Nowhere", seeds: ["North of Nowhere", "The Last Signal", "After Hours", "Orbit Nine", "Wild Coast"], items: demoSearch("").filter(item => ![4,5].includes(item.availability)) });
   try {
     const access = await requestAccess(req.user);
     if (access.error) return res.status(403).json({ error: access.error });
@@ -961,9 +961,10 @@ app.get("/api/seerr/image", requireUser, async (req, res) => {
   }
 });
 app.get("/api/personal/:kind", requireUser, async (req, res) => {
-  if (!["continueWatching", "nextUp"].includes(req.params.kind)) return res.sendStatus(404);
+  if (!["continueWatching", "nextUp", "watchNext"].includes(req.params.kind)) return res.sendStatus(404);
   try {
     const items = demo ? (req.params.kind === "nextUp" ? titles.filter(item => item.type === "tv") : titles).slice(0, 3).map((item, index) => ({ ...item, favoriteId: item.id, favorite: false, progress: req.params.kind === "continueWatching" ? 30 + index * 20 : 0, remaining: 25 + index * 8 })) : await personalItems(req.user, req.params.kind);
+    if (demo && req.params.kind === "watchNext") for (const item of items) { item.watched = false; item.subtitle = [item.detail?.year || "2026", item.type === "movie" ? "Movie" : "Series"].join(" · "); item.progress = 0; }
     for (const item of items) {
       req.user.state.allowedImages.add(item.id);
       if (item.backdropId) req.user.state.allowedImages.add(item.backdropId);

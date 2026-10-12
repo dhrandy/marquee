@@ -4,8 +4,8 @@ export const displayPreferenceDefaults = {
   shelfNavigation: true, search: true, hideUnmonitored: false,
   inTheaters: true, requests: true, popular: true, ratings: true, jellyfinLink: true,
   firstTab: "discover", popularCollapsed: false, defaultView: "auto", watchlist: false,
-  leavingSoon: false, leavingSoonCollapsed: false, recommendations: false, myRequests: false, continueWatching: false, nextUp: false, watchlistCollapsed: false,
-  continueWatchingCollapsed: false, nextUpCollapsed: false,
+  leavingSoon: false, leavingSoonCollapsed: false, recommendations: false, myRequests: false, continueWatching: false, nextUp: false, watchNext: true, watchlistCollapsed: false,
+  continueWatchingCollapsed: false, nextUpCollapsed: false, watchNextCollapsed: false,
 };
 export function cleanDisplayPreferences(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -29,13 +29,14 @@ export function cleanDisplayPreferences(value) {
   return clean;
 }
 
-export const sectionOrderDefaults = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchlist", "leavingSoon", "requests"];
+export const sectionOrderDefaults = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "leavingSoon", "requests"];
 export function cleanSectionOrder(value) {
   if (!Array.isArray(value) || new Set(value).size !== value.length || value.some(key => !sectionOrderDefaults.includes(key))) return null;
-  const required = sectionOrderDefaults.filter(key => !["recommendations", "leavingSoon", "inTheaters"].includes(key));
+  const required = sectionOrderDefaults.filter(key => !["recommendations", "leavingSoon", "inTheaters", "watchNext"].includes(key));
   if (!required.every(key => value.includes(key))) return null;
   const order = [...value];
   for (const key of ["leavingSoon", "recommendations"]) if (!order.includes(key)) order.splice(order.indexOf("popular"), 0, key);
   if (!order.includes("inTheaters")) order.splice(order.indexOf("popular") + 1, 0, "inTheaters");
+  if (!order.includes("watchNext")) order.splice(order.indexOf("continueWatching") + 1, 0, "watchNext");
   return order.length === sectionOrderDefaults.length ? order : null;
 }
