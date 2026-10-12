@@ -1675,3 +1675,6 @@ main > section:not([hidden]), .personal-section:not([hidden]) { padding-bottom:1
 .reminder-option:has(input:checked) { color:var(--ink); border-color:#a78bfa80; background:#a78bfa14; }
 .reminder-option input { margin:0; accent-color:var(--purple); }
 .reminder-option:focus-within { outline:2px solid var(--purple); outline-offset:2px; }
+
+#episode-certification-line { margin:8px 0 0; color:#e2e5ed; font-size:15px; line-height:1.35; }
+#episode-certification-line:not([hidden]) + #episode-subtitle { margin-top:6px; }

@@ -3020,7 +3020,8 @@ for (const width of [1440,393,280]) {
       await page.locator("#episode-close").click();
     }
     await page.evaluate(()=>showDetail({title:"A series",mediaType:"tv",subtitle:"TV series",contentRating:"TV-14"}));
-    await expect(page.locator("#episode-subtitle")).toHaveText("TV series · TV-14");
+    await expect(page.locator("#episode-subtitle")).toHaveText("TV series");
+    await expect(page.locator("#episode-certification-line")).toHaveText("TV-14");
     await page.locator("#episode-close").click();
     await page.evaluate(()=>showDetail({title:"Missing certification",mediaType:"movie",subtitle:"Movie"}));
     await expect(page.locator("#episode-subtitle")).toHaveText("");
@@ -3112,5 +3113,17 @@ for (const width of [393,1440]) {
   });
   await expect(page.locator('#popular-movies .result-meta')).toHaveText(["Netflix · 2026 · R","Apple · 2026 · R","Movie · 2026 · R"]);
   for(const row of await page.locator('#search-results .result-meta').all()) await expect(row).toContainText("Movie · 2026");
+ });
+}
+
+for (const width of [1440,393,280]) {
+ test(`TV certification has its own line above episode and resets for movies at ${width}px`,async({page})=>{
+  await page.setViewportSize({width,height:1000});await login(page);
+  await page.evaluate(()=>showDetail({title:"Landman",year:2024,mediaType:"tv",subtitle:"S1E5 · Where is Home · TV-MA",contentRating:"TV-MA",runtime:65,episodeAirDate:"2024-12-08"}));
+  await expect(page.locator('#episode-certification-line')).toHaveText("TV-MA");await expect(page.locator('#episode-certification-line')).toBeVisible();
+  await expect(page.locator('#episode-subtitle')).toHaveText("S1E5 · Where is Home");
+  const rating=await page.locator('#episode-certification-line').boundingBox(),episode=await page.locator('#episode-subtitle').boundingBox();expect(rating.y+rating.height).toBeLessThanOrEqual(episode.y);
+  await page.evaluate(()=>showDetail({title:"No rating",mediaType:"tv",subtitle:"S1E1 · Pilot"}));await expect(page.locator('#episode-certification-line')).toBeHidden();await expect(page.locator('#episode-subtitle')).toHaveText("S1E1 · Pilot");
+  await page.evaluate(()=>showDetail({title:"Movie",mediaType:"movie",subtitle:"2026 · Movie",contentRating:"R"}));await expect(page.locator('#episode-certification-line')).toBeHidden();await expect(page.locator('#episode-subtitle')).toHaveText("2026 · R");
  });
 }

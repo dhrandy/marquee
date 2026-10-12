@@ -800,13 +800,16 @@ function showDetail(event) {
     `${event.title}${event.year && !new RegExp(`(?:\\(\\s*${String(event.year).replace(/[^0-9]/g, "")}\\s*\\)|\\b${String(event.year).replace(/[^0-9]/g, "")}\\b)\\s*$`).test(event.title) ? ` (${event.year})` : ""}`;
   const certification = typeof event.contentRating === "string" ? event.contentRating.trim() : "";
   const movie = event.mediaType === "movie" || /(?:^| · )Movie(?: · |$)/i.test(event.subtitle || "");
-  const subtitleParts = (event.subtitle || "").split(" · ");
+  const subtitleParts = (event.subtitle || "").split(" · ").filter(part => movie || part.trim() !== certification);
   let placedRating = false;
   const detailSubtitle = subtitleParts.map(part => {
     if (movie && /^movie$/i.test(part.trim())) { placedRating = true; return certification; }
     return part;
   }).filter(Boolean);
-  if (certification && !placedRating && !detailSubtitle.includes(certification)) detailSubtitle.push(certification);
+  if (movie && certification && !placedRating && !detailSubtitle.includes(certification)) detailSubtitle.push(certification);
+  const certificationLine = $("#episode-certification-line");
+  certificationLine.textContent = movie ? "" : certification;
+  certificationLine.hidden = movie || !certification;
   $("#episode-subtitle").textContent = detailSubtitle.join(" · ");
   const requestButton = $("#episode-request");
   const actionLabel = mediaActionLabel(event);
