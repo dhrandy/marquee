@@ -76,13 +76,30 @@ function addDays(date, amount) {
 function startOfWeek(date) {
   return addDays(midnight(date), -date.getDay());
 }
+let accountGeneration = 0;
+function resetAccountState() {
+  accountGeneration++;
+  lastRequests = null; requestsVersion++;
+  factsCache.clear(); certCache.clear(); shelfRequests.clear();
+  for (const key of Object.keys(shelfLastLoaded)) delete shelfLastLoaded[key];
+  personalLoad++; recentRequest++; calendarRequest++; factsRequest++; searchSeq++; reminderSearchVersion++;
+  searchController?.abort(); clearTimeout(searchTimer); clearTimeout(reminderSearchTimer);
+  currentDetail = null; state.recentItems = []; state.watchlistItems = []; state.personalItems = {}; state.events = [];
+  notificationShows = []; notificationEnabled = false;
+  all("dialog[open]").forEach(dialog => dialog.close());
+  for (const selector of ["#recent", "#calendar", "#search-results", "#requests", "#recommendations-content", "#inTheaters-content", "#popular-movies", "#popular-tv", "#notify-show-list", "#notify-show-results"]) $(selector)?.replaceChildren();
+  all(".personal-section .poster-row").forEach(row => row.replaceChildren());
+}
 async function api(path, options = {}) {
+  const generation = accountGeneration;
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
   const data = await response.json();
+  if (generation !== accountGeneration) throw new DOMException("Account changed", "AbortError");
   if (response.status === 401 && path !== "/api/login") {
+    resetAccountState();
     $("#dashboard").hidden = true;
     $("#login").hidden = false;
   }
@@ -381,6 +398,7 @@ function buildSettings() {
   $("#weather-settings-status").textContent = "";
 }
 async function enter(name) {
+  resetAccountState();
   state.key = `marquee:${name}:preferences`;
   try {
     const saved = JSON.parse(localStorage.getItem(state.key) || "null");
@@ -500,8 +518,49 @@ function libraryShelfMetadata(item) {
   if (!movie) return item.subtitle || item.year || ""; // Keep season/episode context on television library shelves.
   return ["Movie", detail.year || item.year, detail.contentRating || item.contentRating].filter(Boolean).join(" · ");
 }
+const shelfMarkup = new WeakMap();
+function updateShelfHtml(container, html) {
+  const previousMarkup = shelfMarkup.get(container);
+  if (previousMarkup?.html === html && previousMarkup.first === container.firstChild) return;
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const key = node => node.nodeType === 1 ? node.querySelector("img")?.getAttribute("src") : null;
+  const oldCards = new Map();
+  for (const child of container.children) {
+    const source = key(child);
+    if (!source) continue;
+    if (!oldCards.has(source)) oldCards.set(source, []);
+    oldCards.get(source).push(child);
+  }
+  function patch(old, next) {
+    if (old.nodeType !== next.nodeType || old.nodeName !== next.nodeName) { old.replaceWith(next); return next; }
+    if (old.nodeType !== 1) { if (old.nodeValue !== next.nodeValue) old.nodeValue = next.nodeValue; return old; }
+    for (const attr of [...old.attributes]) if (!next.hasAttribute(attr.name)) old.removeAttribute(attr.name);
+    for (const attr of next.attributes) if (old.getAttribute(attr.name) !== attr.value) old.setAttribute(attr.name, attr.value);
+    const children = [...next.childNodes];
+    for (let i = 0; i < children.length; i++) {
+      if (old.childNodes[i]) patch(old.childNodes[i], children[i]);
+      else old.append(children[i]);
+    }
+    while (old.childNodes.length > children.length) old.lastChild.remove();
+    return old;
+  }
+  const desired = [];
+  for (const child of [...template.content.childNodes]) {
+    const previous = oldCards.get(key(child))?.shift();
+    desired.push(previous ? patch(previous, child) : child);
+  }
+  for (let i = 0; i < desired.length; i++) {
+    if (container.childNodes[i] === desired[i]) continue;
+    const before = container.childNodes[i] || null;
+    if (container.moveBefore && desired[i].parentNode === container) container.moveBefore(desired[i], before);
+    else container.insertBefore(desired[i], before);
+  }
+  while (container.childNodes.length > desired.length) container.lastChild.remove();
+  shelfMarkup.set(container, { html, first: container.firstChild });
+}
 function renderRecent(items) {
-  $("#recent").innerHTML = items.length
+  updateShelfHtml($("#recent"), items.length
       ? items
           .map((item) => {
             const art = `<div class="poster-art"><img src="${item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${escape(item.art)}.svg`}" alt="${escape(item.title)} poster" loading="lazy">${watchedBadgeHtml(item)}</div>`;
@@ -511,7 +570,7 @@ function renderRecent(items) {
             return `<article class="poster-card">${head}${time}<p>${escape(libraryShelfMetadata(item))}</p>${ratingHtml(item.rating)}</article>`;
           })
           .join("")
-      : '<p class="empty">No recent titles in your Jellyfin library.</p>';
+      : '<p class="empty">No recent titles in your Jellyfin library.</p>');
   fixBrokenPosters();
 }
 let recentRequest = 0;
@@ -527,7 +586,7 @@ async function loadRecent({ quiet = false } = {}) {
     replaceShelfContent($("#recent"), () => renderRecent(items));
   } catch (error) {
     if (quiet) { $("#shelf-refresh-status").textContent = "Refresh unavailable. Keeping the last loaded shelves."; return; }
-    $("#recent").innerHTML = `<p class="empty">${escape(error.message)}</p>`;
+    updateShelfHtml($("#recent"), `<p class="empty">${escape(error.message)}</p>`);
   }
 }
 let shelfTimer = null, shelfRefreshBusy = false, shelfInteractionAt = 0;
@@ -549,14 +608,14 @@ function scheduleShelfRefresh() {
 async function autoRefreshShelves() {
   if (shelfRefreshBusy || !shelfRefreshInterval() || !safeShelfRefresh()) return;
   const interval = shelfRefreshInterval() * 60000;
-  const keys = ["recent", "continueWatching", "nextUp"].filter(key => pageSections[dashboardPage].includes(key) && state.prefs[key] && Date.now() - (shelfLastLoaded[key] || 0) >= interval);
+  const keys = ["recent", "continueWatching", "nextUp", "leavingSoon", "requests", "calendar"].filter(key => pageSections[dashboardPage].includes(key) && state.prefs[key] && Date.now() - (shelfLastLoaded[key] || 0) >= interval);
   if (!keys.length) return;
   shelfRefreshBusy = true;
   try {
     // Failed reads also wait one interval instead of hammering an unavailable server.
     for (const key of keys) shelfLastLoaded[key] = Date.now();
     $("#shelf-refresh-status").textContent = "";
-    await Promise.all(keys.map(key => key === "recent" ? loadRecent({ quiet: true }) : loadPersonalShelf(key, { quiet: true })));
+    await Promise.all(keys.map(key => key === "recent" ? loadRecent({ quiet: true }) : key === "calendar" ? loadCalendar({ quiet: true }) : key === "requests" ? loadRequests({ quiet: true }) : loadPersonalShelf(key, { quiet: true })));
   } finally { shelfRefreshBusy = false; }
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) autoRefreshShelves(); });
@@ -611,24 +670,29 @@ function period() {
   return { start, end };
 }
 let calendarRequest = 0;
-async function loadCalendar() {
+async function loadCalendar({ quiet = false } = {}) {
   const request = ++calendarRequest;
   const { start, end } = period();
   $("#refresh").disabled = true;
-  $("#calendar").innerHTML = '<p class="empty">Loading calendar…</p>';
+  if (!quiet) $("#calendar").innerHTML = '<p class="empty">Loading calendar…</p>';
   try {
     const data = await api(
       `/api/calendar?${new URLSearchParams({ start: start.toISOString(), end: end.toISOString() })}`,
     );
     if (request !== calendarRequest) return;
+    if (quiet && !safeShelfRefresh()) { delete shelfLastLoaded.calendar; return; }
+    shelfLastLoaded.calendar = Date.now();
+    const changed = JSON.stringify(state.events) !== JSON.stringify(data.events);
     state.events = data.events;
-    $("#calendar-warning").textContent = data.warnings.join(" ");
+    const warning = data.warnings.join(" ");
+    if ($("#calendar-warning").textContent !== warning) $("#calendar-warning").textContent = warning;
     $("#calendar-warning").hidden = !data.warnings.length;
-    renderCalendar();
-    $("#updated").textContent =
+    if (!quiet || changed) renderCalendar();
+    if (!quiet || changed) $("#updated").textContent =
       `Refreshed ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
   } catch (error) {
-    if (request === calendarRequest)
+    if (quiet) { $("#shelf-refresh-status").textContent = "Refresh unavailable. Keeping the last loaded calendar."; }
+    else if (request === calendarRequest)
       $("#calendar").innerHTML =
         `<p class="empty">${escape(error.message)}</p>`;
   } finally {
@@ -784,7 +848,7 @@ async function loadDetailFavorite(event) {
 }
 function setDetailNetwork(event) {
   const network = $("#episode-network");
-  if (typeof event.network === "string") {
+  if (event.mediaType === "tv" && typeof event.network === "string") {
     const seen = new Set();
     event.network = event.network.split(",").map(name => name.trim()).filter(name => {
       const key = name.toLowerCase();
@@ -1120,9 +1184,9 @@ function resultCardHtml(r, includeContentRating = false) {
   return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}${watchedBadgeHtml(r)}</div>${shelf && action.startsWith("<button") ? action : ""}<h3>${escape(r.title)}</h3><p class="result-meta">${[shelf && r.streamer ? r.streamer : r.mediaType === "movie" ? "Movie" : "TV", r.year, shelf ? r.contentRating : null].filter(Boolean).map(escape).join(" · ")}${includeContentRating ? `<span class="row-cert row-cert-pending" aria-hidden="true"></span>` : ""}</p>${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}${shelf ? "" : `<div class="result-action">${action}</div>`}</article>`;
 }
 function renderSearch(results) {
-  $("#search-results").innerHTML = results.length
+  updateShelfHtml($("#search-results"), results.length
     ? results.map(r => resultCardHtml(r, true)).join("")
-    : '<p class="empty">Nothing found. Try another title.</p>';
+    : '<p class="empty">Nothing found. Try another title.</p>');
   fixBrokenPosters();
   addRowRatings(results);
 }
@@ -1221,12 +1285,12 @@ async function loadPopular() {
   try {
     const data = await api("/api/seerr/popular");
     for (const type of ["movies", "tv"]) {
-      $("#popular-" + type).innerHTML = data[type]
+      updateShelfHtml($("#popular-" + type), data[type]
         .map(
           (item, i) =>
             `<div class="ranked-poster"><span class="popular-rank">${i + 1}</span>${resultCardHtml(item)}</div>`,
         )
-        .join("");
+        .join(""));
     }
     $("#popular-status").textContent = "";
     fixBrokenPosters();
@@ -1238,7 +1302,7 @@ async function loadInTheaters() {
   if (!state.prefs.inTheaters) return;
   try {
     const data = await api("/api/in-theaters");
-    $("#inTheaters-content").innerHTML = data.items.length ? data.items.slice(0,25).map(item => resultCardHtml(item)).join("") : '<p class="empty">No theater titles returned for the US.</p>';
+    updateShelfHtml($("#inTheaters-content"), data.items.length ? data.items.slice(0,25).map(item => resultCardHtml(item)).join("") : '<p class="empty">No theater titles returned for the US.</p>');
     $("#inTheaters-status").textContent = "";
     fixBrokenPosters();
   } catch (error) { $("#inTheaters-content").replaceChildren(); $("#inTheaters-status").textContent = error.message; }
@@ -1249,7 +1313,7 @@ async function loadRecommendations() {
     const { seed, seeds, items } = await api("/api/recommendations");
     const titles = seeds?.length ? seeds : seed ? [seed] : [];
     $("#recommendation-seed").textContent = titles.length ? `Because you watched ${titles.join(", ")}` : "Watch a movie or show in Jellyfin to get suggestions.";
-    $("#recommendations-content").innerHTML = items.length ? items.map(r => resultCardHtml(r)).join("") : '<p class="empty">No suggestions yet.</p>';
+    updateShelfHtml($("#recommendations-content"), items.length ? items.map(r => resultCardHtml(r)).join("") : '<p class="empty">No suggestions yet.</p>');
     $("#recommendations-status").textContent = ""; fixBrokenPosters();
   } catch (error) { $("#recommendations-status").textContent = error.message; }
 }
@@ -1270,13 +1334,20 @@ function renderRequests(requests) {
         .join("")
     : '<p class="empty">No requests yet.</p>';
 }
-async function loadRequests() {
+let lastRequests = null, requestsVersion = 0;
+async function loadRequests({ quiet = false } = {}) {
+  const version = ++requestsVersion;
   if (!state.prefs.requests) return;
   try {
     const { requests } = await api(`/api/seerr/requests${state.prefs.myRequests ? "?mine=true" : ""}`);
-    renderRequests(requests);
+    if (version !== requestsVersion) return;
+    if (quiet && !safeShelfRefresh()) { delete shelfLastLoaded.requests; return; }
+    shelfLastLoaded.requests = Date.now();
+    if (JSON.stringify(lastRequests) !== JSON.stringify(requests) || !$("#requests").childElementCount) renderRequests(requests);
+    lastRequests = requests;
   } catch (error) {
-    $("#requests").innerHTML = `<p class="empty">${escape(error.message)}</p>`;
+    if (quiet) $("#shelf-refresh-status").textContent = "Refresh unavailable. Keeping the last loaded requests.";
+    else $("#requests").innerHTML = `<p class="empty">${escape(error.message)}</p>`;
   }
 }
 $("#login-form").addEventListener("submit", async (event) => {
@@ -1529,7 +1600,7 @@ async function runSearch(query) {
   query = query.trim();
   if (!query) {
     $("#search-status").textContent = "";
-    if (!query) $("#search-results").innerHTML = "";
+    if (!query) updateShelfHtml($("#search-results"), "");
     return;
   }
   searchController = new AbortController();
@@ -1564,7 +1635,7 @@ function clearSearch() {
   searchSeq++;
   const input = $("#search-form input[name=query]");
   input.value = "";
-  $("#search-results").innerHTML = "";
+  updateShelfHtml($("#search-results"), "");
   $("#search-status").textContent = "";
   $("#search-clear").hidden = true;
   input.blur();
@@ -1824,7 +1895,7 @@ async function loadPersonalShelf(key, { quiet = false, seq = personalLoad } = {}
     replaceShelfContent($(`#${key}-content`), () => renderPersonalShelf(key, items));
   } catch (error) {
     if (quiet) { $("#shelf-refresh-status").textContent = "Refresh unavailable. Keeping the last loaded shelves."; return; }
-    $(`#${key}-content`).innerHTML = `<p class="empty">${escape(error.message)}</p>`;
+    updateShelfHtml($(`#${key}-content`), `<p class="empty">${escape(error.message)}</p>`);
   }
 }
 function leavingLabel(item) {
@@ -1833,10 +1904,10 @@ function leavingLabel(item) {
   return date <= new Date() ? "Eligible for removal" : `Eligible ${date.toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" })}`;
 }
 function renderPersonalShelf(key, items) {
-  $(`#${key}-content`).innerHTML = items.length ? items.map((item, index) => {
+  updateShelfHtml($(`#${key}-content`), items.length ? items.map((item, index) => {
     const poster = item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`;
     return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}${key === "continueWatching" ? `<progress class="poster-progress" max="100" value="${Math.min(100, Math.max(0, Number(item.progress) || 0))}" aria-label="${escape(item.title)} watch progress"></progress>` : ""}</div><h3>${escape(item.title)}</h3></button><p>${escape(libraryShelfMetadata(item))}</p>${key === "leavingSoon" ? `<p class="leaving-date">${escape(leavingLabel(item))}</p>` : ""}${key === "continueWatching" ? `<p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-id="${escape(item.favoriteId)}" aria-label="Remove ${escape(item.title)} from Jellyfin favorites" title="Remove from Jellyfin favorites" aria-pressed="true">${heartIcon}</button>` : ""}</article>`;
-  }).join("") : `<p class="empty">${key === "leavingSoon" ? "No eligible scheduled departures in your Jellyfin library." : key === "watchlist" ? "Your Jellyfin movie and series favorites appear here. Use the heart in a title's popout to add one." : key === "continueWatching" ? "Nothing in progress. Start watching in Jellyfin and it appears here." : "No next episodes yet. Your Jellyfin viewing history fills this shelf."}</p>`;
+  }).join("") : `<p class="empty">${key === "leavingSoon" ? "No eligible scheduled departures in your Jellyfin library." : key === "watchlist" ? "Your Jellyfin movie and series favorites appear here. Use the heart in a title's popout to add one." : key === "continueWatching" ? "Nothing in progress. Start watching in Jellyfin and it appears here." : "No next episodes yet. Your Jellyfin viewing history fills this shelf."}</p>`);
   fixBrokenPosters();
 }
 async function updateWatchlist(itemId, saved) {

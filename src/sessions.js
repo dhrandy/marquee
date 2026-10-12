@@ -37,18 +37,29 @@ export function createSessions({ dataDir, ttl }) {
     .update("marquee-session-v1:" + loadSecret(dataDir))
     .digest();
   const revokedFile = path.join(dataDir, "revoked-sessions.json");
+  const pendingFile = revokedFile + ".pending";
+  if (fs.existsSync(pendingFile)) throw new Error("Session revocation state could not be read. An interrupted write needs storage repair before starting.");
   // sid -> expiry. Sign-out lists the session here so a copied cookie stops
   // working too. Kept on disk so a restart does not forget it.
   const revoked = new Map();
   try {
-    for (const [sid, exp] of JSON.parse(fs.readFileSync(revokedFile, "utf8")))
-      if (exp > Date.now()) revoked.set(sid, exp);
-  } catch {}
+    const rows = JSON.parse(fs.readFileSync(revokedFile, "utf8"));
+    if (!Array.isArray(rows) || rows.some(row => !Array.isArray(row) || row.length !== 2 || !/^[a-f0-9]{32}$/.test(row[0]) || !Number.isFinite(row[1]))) throw new Error("Invalid revocation state");
+    for (const [sid, exp] of rows) if (exp > Date.now()) revoked.set(sid, exp);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw new Error("Session revocation state could not be read. Repair the settings storage before starting.");
+  }
   function persist() {
     try {
       fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-      fs.writeFileSync(revokedFile, JSON.stringify([...revoked]), { mode: 0o600 });
-    } catch {}
+      fs.writeFileSync(pendingFile, "pending", { mode: 0o600 });
+      fs.writeFileSync(revokedFile + ".tmp", JSON.stringify([...revoked]), { mode: 0o600 });
+      fs.renameSync(revokedFile + ".tmp", revokedFile);
+      fs.unlinkSync(pendingFile);
+    } catch {
+      console.error("Session revocation could not be saved. Check the settings storage.");
+      throw new Error("Could not save sign-out. Check the settings storage.");
+    }
   }
   // Per-session image allow lists. These only cache what the shelf and
   // calendar last showed, so losing them on restart is harmless.
@@ -62,7 +73,7 @@ export function createSessions({ dataDir, ttl }) {
     return Buffer.concat([iv, cipher.getAuthTag(), body]).toString("base64url");
   }
   function open(value, internal = false) {
-    if (typeof value !== "string" || value.length > (internal ? 1000000 : 4096) || !/^[A-Za-z0-9_-]{40,}$/.test(value))
+    if (typeof value !== "string" || value.length > (internal ? 40000000 : 4096) || !/^[A-Za-z0-9_-]{40,}$/.test(value))
       return null;
     try {
       const raw = Buffer.from(value, "base64url");
@@ -97,7 +108,7 @@ export function createSessions({ dataDir, ttl }) {
     for (const [sid, exp] of revoked)
       if (exp < Date.now()) (revoked.delete(sid), (changed = true));
     for (const [sid, data] of state) if (data.exp < Date.now()) state.delete(sid);
-    if (changed) persist();
+    if (changed) { try { persist(); } catch { /* Logged; in-memory revocations remain authoritative. */ } }
   }
   return { seal, fromRequest, revoke, sweep };
 }

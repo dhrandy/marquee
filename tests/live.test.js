@@ -18,6 +18,13 @@ const service = http.createServer(async (req, res) => {
     apiKey: req.headers["x-api-key"],
   });
   res.setHeader("Content-Type", "application/json");
+  const accountPath = new URL(req.url, "http://localhost").pathname;
+  if (/^\/Users\/[^/]+$/.test(accountPath) && accountPath !== "/Users/AuthenticateByName") {
+    const id = decodeURIComponent(accountPath.split("/").pop());
+    if (id === "revoked-viewer") { res.writeHead(401); return res.end("{}"); }
+    return res.end(JSON.stringify({ Id: id, Name: id, Policy: { IsAdministrator: id === "admin" } }));
+  }
+
   if (url.pathname === "/Users/AuthenticateByName") {
     authDeviceIds.push(/DeviceId="([^"]+)"/.exec(req.headers.authorization)?.[1]);
     let body = "";

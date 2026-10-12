@@ -789,13 +789,15 @@ export async function jellyfinTmdb(user, itemId) {
 
 // MPAA / TV rating for search rows. Seerr only returns it on a title's own
 // page, so look titles up one by one and remember the answer for a day.
+// Search certification cache: bounded, expired entries pruned, isolated by viewer.
 const certCache = new Map();
 export async function seerrContentRatings(items, userId) {
   const headers = { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) };
   const out = {};
   await Promise.all(
     items.slice(0, 30).map(async ({ type, id }) => {
-      const key = `${type}:${id}`;
+      const key = JSON.stringify([process.env.SEERR_URL, userId, type, id]);
+      for (const [old, entry] of certCache) if (entry.until <= Date.now()) certCache.delete(old);
       const hit = certCache.get(key);
       if (hit && hit.until > Date.now()) {
         out[key] = hit.value;
@@ -804,6 +806,7 @@ export async function seerrContentRatings(items, userId) {
       try {
         const data = await upstream(process.env.SEERR_URL, `/api/v1/${type}/${id}`, { headers });
         const value = seerrContentRating(data, type) || "";
+        if (certCache.size >= 1000) certCache.delete(certCache.keys().next().value);
         certCache.set(key, { value, until: Date.now() + 86400000 });
         out[key] = value;
       } catch {

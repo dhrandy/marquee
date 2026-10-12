@@ -3136,3 +3136,104 @@ for(const width of [393,1440]){
   await page.evaluate(()=>showDetail({title:"No network",mediaType:"tv",subtitle:"S1E1"}));await expect(page.locator('#episode-network')).toBeHidden();
  });
 }
+
+test("expired-session account switch clears private facts and ignores old responses", async ({ page }) => {
+  await login(page);
+  let viewer = "first", calls = 0;
+  await page.route("**/api/library/shared/facts", route => {
+    calls++;
+    route.fulfill({ json: { facts: { status: `${viewer} status`, scores: { imdb: 7.2 } }, mediaType: "tv", mediaId: 10, favoriteId: "shared", favorite: viewer === "first", watched: viewer === "first" } });
+  });
+  await page.evaluate(() => showDetail({ title: "Shared item", mediaType: "tv", factsUrl: "/api/library/shared/facts" }));
+  await expect(page.locator("#episode-facts")).toContainText("first status");
+  await page.locator("#episode-close").click();
+  await page.route("**/api/accessibility-settings", route => route.fulfill({ status: 401, json: { error: "Please sign in." } }));
+  await page.evaluate(() => api("/api/accessibility-settings").catch(() => {}));
+  await expect(page.locator("#login")).toBeVisible();
+  await expect(page.locator("#recent")).toBeEmpty();
+  await page.unroute("**/api/accessibility-settings");
+  viewer = "second";
+  await page.evaluate(() => enter("Second viewer"));
+  await page.evaluate(() => showDetail({ title: "Shared item", mediaType: "tv", factsUrl: "/api/library/shared/facts" }));
+  await expect(page.locator("#episode-facts")).toContainText("second status");
+  await expect(page.locator("#episode-save")).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("#episode-poster-status .watched-badge")).toHaveCount(0);
+  expect(calls).toBe(2);
+});
+test("movie production company commas remain intact while TV duplicates dedupe", async ({ page }) => {
+  await login(page);
+  await page.evaluate(() => showDetail({ title: "Synthetic movie", mediaType: "movie", subtitle: "Movie", network: "First Company, Inc., Second Company, Inc.", runtime: 90 }));
+  await expect(page.locator("#episode-meta-top")).toHaveText("First Company, Inc., Second Company, Inc. · 90 min");
+});
+
+test("all shelf renders preserve unchanged posters and unchanged cards", async ({ page }) => {
+  await login(page);
+  const result = await page.evaluate(() => {
+    const outcomes = [];
+    for (const selector of ["#recent", "#search-results", "#popular-movies", "#popular-tv", "#inTheaters-content", "#recommendations-content", "#continueWatching-content", "#nextUp-content", "#leavingSoon-content", "#watchlist-content"]) {
+      const container = document.querySelector(selector);
+      const html = '<article><img src="/art/north.svg" loading="lazy"><h3>A</h3></article><article><img src="/art/south.svg" loading="lazy"><h3>B</h3></article>';
+      updateShelfHtml(container, html);
+      const cards = [...container.children], images = [...container.querySelectorAll("img")];
+      updateShelfHtml(container, html);
+      const same = cards.every((card, i) => card === container.children[i]);
+      updateShelfHtml(container, '<article><img src="/art/south.svg" loading="lazy"><h3>B changed</h3></article><article><img src="/art/north.svg" loading="lazy"><h3>A changed</h3></article>');
+      outcomes.push({ selector, same, reordered: container.querySelectorAll("img")[0] === images[1] && container.querySelectorAll("img")[1] === images[0] });
+    }
+    return outcomes;
+  });
+  for (const item of result) { expect(item.same, item.selector).toBe(true); expect(item.reordered, item.selector).toBe(true); }
+  await page.evaluate(() => updateShelfHtml(document.querySelector("#recent"), '<article><img src="/art/south.svg?poster-test=1" loading="eager"><h3>Before</h3></article>'));
+  const image = await page.locator("#recent img").first().elementHandle();
+  await expect.poll(() => image.evaluate(el => el.complete)).toBe(true);
+  let imageRequests = 0;
+  page.on("request", request => { if (request.url().includes("poster-test=1")) imageRequests++; });
+  await page.evaluate(() => updateShelfHtml(document.querySelector("#recent"), '<article><img src="/art/south.svg?poster-test=1" loading="eager"><h3>New metadata</h3></article>'));
+  expect(await image.evaluate(el => el.isConnected)).toBe(true);
+  await page.waitForTimeout(100);
+  expect(imageRequests).toBe(0);
+});
+
+test("loaded poster reorders do not issue new image requests, including moveBefore fallback", async ({ page }) => {
+  await login(page);
+  await page.evaluate(() => {
+    document.querySelector("#recent").moveBefore = undefined;
+    updateShelfHtml(document.querySelector("#recent"), '<article><img src="/art/north.svg?reorder=1" loading="eager"><h3>A</h3></article><article><img src="/art/south.svg?reorder=2" loading="eager"><h3>B</h3></article>');
+  });
+  await expect.poll(() => page.locator("#recent img").evaluateAll(els => els.every(el => el.complete))).toBe(true);
+  let requests = 0; page.on("request", req => { if (req.url().includes("reorder=")) requests++; });
+  await page.evaluate(() => updateShelfHtml(document.querySelector("#recent"), '<article><img src="/art/south.svg?reorder=2" loading="eager"><h3>B changed</h3></article><article><img src="/art/north.svg?reorder=1" loading="eager"><h3>A changed</h3></article>'));
+  await page.waitForTimeout(100); expect(requests).toBe(0);
+});
+
+test("calendar Requests and Leaving soon refresh only on the visible active page and unchanged data is a no-op", async ({ page }) => {
+  await page.clock.install(); await login(page);
+  await page.evaluate(() => { state.prefs.shelfRefreshMinutes = 1; state.prefs.requests = true; state.prefs.calendar = true; state.prefs.leavingSoon = true; persist(); });
+  let calls = { calendar: 0, requests: 0, leavingSoon: 0 };
+  for (const [key, url] of Object.entries({ calendar: "**/api/calendar?*", requests: "**/api/seerr/requests*", leavingSoon: "**/api/leaving-soon" })) {
+    await page.route(url, async route => { calls[key]++; const response = await route.fetch(); await route.fulfill({ response }); });
+  }
+  await view(page, "discover");
+  await page.evaluate(() => document.activeElement.blur());
+  await page.clock.runFor(75000);
+  await expect.poll(() => calls.calendar).toBeGreaterThan(0);
+  const calendarCalls = calls.calendar;
+  const calendarNode = await page.locator("#calendar").evaluateHandle(el => el.firstChild);
+  await page.clock.runFor(75000);
+  await expect.poll(() => calls.calendar).toBeGreaterThan(calendarCalls);
+  expect(await calendarNode.evaluate(el => el.isConnected)).toBe(true);
+  await view(page, "home");
+  await page.evaluate(() => document.activeElement.blur());
+  await page.clock.runFor(75000);
+  await expect.poll(() => calls.requests).toBeGreaterThan(0);
+  await expect.poll(() => calls.leavingSoon).toBeGreaterThan(0);
+  const requestsNode = await page.locator("#requests").evaluateHandle(el => el.firstChild);
+  const leavingNode = await page.locator("#leavingSoon-content").evaluateHandle(el => el.firstChild);
+  await page.clock.runFor(75000);
+  expect(await requestsNode.evaluate(el => el.isConnected)).toBe(true);
+  expect(await leavingNode.evaluate(el => el.isConnected)).toBe(true);
+  await page.evaluate(() => Object.defineProperty(document, "hidden", { configurable: true, value: true }));
+  const before = { ...calls };
+  await page.clock.runFor(150000);
+  expect(calls).toEqual(before);
+});

@@ -415,3 +415,24 @@ test("network and company names dedupe trimmed case variants before the display 
  assert.equal(uniqueCreditNames(["",null," "]),null);
  assert.equal(uniqueCreditNames(["Company, Inc.","Company, Inc."]),"Company, Inc.");
 });
+
+test("search certification cache is capped, prunes expired entries and isolates viewers", async () => {
+  const { seerrContentRatings } = await import("../src/adapters.js");
+  const realFetch = globalThis.fetch, realNow = Date.now;
+  const oldUrl = process.env.SEERR_URL;
+  process.env.SEERR_URL = "http://synthetic.test";
+  let calls = 0, clock = realNow();
+  try {
+    Date.now = () => clock;
+    globalThis.fetch = async () => { calls++; return { ok: true, status: 200, json: async () => ({ releases: { results: [{ iso_3166_1: "US", release_dates: [{ certification: "PG" }] }] } }) }; };
+    const one = [{ type: "movie", id: 987654321 }];
+    await seerrContentRatings(one, 8001); await seerrContentRatings(one, 8001);
+    assert.equal(calls, 1);
+    await seerrContentRatings(one, 8002); assert.equal(calls, 2);
+    for (let offset = 0; offset < 1020; offset += 30) await seerrContentRatings(Array.from({ length: 30 }, (_, i) => ({ type: "movie", id: 700000000 + offset + i })), 8001);
+    const before = calls;
+    await seerrContentRatings(one, 8001); assert.equal(calls, before + 1);
+    clock += 86400001;
+    await seerrContentRatings(one, 8001); assert.equal(calls, before + 2);
+  } finally { globalThis.fetch = realFetch; Date.now = realNow; if (oldUrl === undefined) delete process.env.SEERR_URL; else process.env.SEERR_URL = oldUrl; }
+});

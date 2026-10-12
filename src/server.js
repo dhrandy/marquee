@@ -147,7 +147,26 @@ app.use(express.json({ limit: "4kb" }));
 function session(req) {
   return sessions.fromRequest(req);
 }
-function requireUser(req, res, next) {
+const accountChecks = new Map();
+async function verifiedAccount(user, fresh) {
+  const key = user.sid;
+  const hit = accountChecks.get(key);
+  if (!fresh && hit && hit.expires > Date.now()) return hit.value;
+  for (const [old, entry] of accountChecks) if (entry.expires <= Date.now()) accountChecks.delete(old);
+  if (accountChecks.size >= 1000) accountChecks.delete(accountChecks.keys().next().value);
+  const entry = { expires: Date.now() + 30000, value: upstream(process.env.JELLYFIN_URL, `/Users/${encodeURIComponent(user.id)}`, { headers: jellyfinHeaders(user.token, user.deviceId) }).then(account => {
+    if (account.Id !== user.id || account.Policy?.IsDisabled === true) throw new Error("Service answered HTTP 401.");
+    return account;
+  }) };
+  accountChecks.set(key, entry);
+  try {
+    return await entry.value;
+  } catch (error) {
+    accountChecks.delete(key);
+    throw error;
+  }
+}
+async function requireUser(req, res, next) {
   req.user = session(req);
   if (!req.user) return res.status(401).json({ error: "Please sign in." });
   const key = demo ? req.user.sid : req.user.id;
@@ -162,6 +181,19 @@ function requireUser(req, res, next) {
     return res
       .status(429)
       .json({ error: "Too many requests. Try again in a minute." });
+  if (!demo) {
+    try {
+      const account = await verifiedAccount(req.user, !["GET", "HEAD"].includes(req.method));
+      req.user.isAdmin = account.Policy?.IsAdministrator === true;
+    } catch (error) {
+      if (/HTTP (401|403)\b/.test(error.message)) {
+        try { sessions.revoke(req.user.sid, req.user.expires); } catch { /* Memory revocation remains effective; persistence failure is logged. */ }
+        cookie(res, "", 0);
+        return res.status(401).json({ error: "Jellyfin ended this sign-in. Please sign in again." });
+      }
+      return res.status(503).json({ error: "Could not verify your Jellyfin sign-in. Try again when Jellyfin is available." });
+    }
+  }
   next();
 }
 async function imageBytes(response, limit) {
@@ -280,7 +312,9 @@ app.post("/api/login", async (req, res) => {
 });
 app.post("/api/logout", requireUser, async (req, res) => {
   await notifications.remove(notificationUser(req.user));
-  sessions.revoke(req.user.sid, req.user.expires);
+  accountChecks.delete(req.user.sid);
+  try { sessions.revoke(req.user.sid, req.user.expires); }
+  catch { return res.status(503).json({ error: "Could not save sign-out. Check the server settings storage before restarting." }); }
   if (!demo && req.user.token) {
     // Also end the Jellyfin login this cookie carried, best effort.
     try {

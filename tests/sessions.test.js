@@ -1,4 +1,6 @@
 import test from "node:test";
+import { createSessions } from "../src/sessions.js";
+const createTestSessions = dataDir => createSessions({ dataDir, ttl: 60000 });
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -118,4 +120,23 @@ test("90-day sessions remain valid at 89 days and expire at 90 days", async () =
   } finally {
     Date.now = realNow;
   }
+});
+
+test("revocation storage is atomic and unreadable/corrupt state fails closed", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "marquee-revocation-"));
+  try {
+    const { seal, fromRequest, revoke } = createTestSessions(root);
+    const value = seal({ id: "user" }), req = { headers: { cookie: `marquee_session=${value}` } };
+    const user = fromRequest(req);
+    fs.mkdirSync(path.join(root, "revoked-sessions.json.tmp"));
+    assert.throws(() => revoke(user.sid, user.expires), /Could not save sign-out/);
+    assert.equal(fromRequest(req), null);
+    assert.throws(() => createTestSessions(root), /revocation state could not be read/);
+    fs.rmSync(path.join(root, "revoked-sessions.json.pending"));
+    fs.rmSync(path.join(root, "revoked-sessions.json.tmp"), { recursive: true });
+    fs.writeFileSync(path.join(root, "revoked-sessions.json"), "broken");
+    assert.throws(() => createTestSessions(root), /revocation state could not be read/);
+    fs.writeFileSync(path.join(root, "revoked-sessions.json"), JSON.stringify([["bad", "expiry"]]));
+    assert.throws(() => createTestSessions(root), /revocation state could not be read/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

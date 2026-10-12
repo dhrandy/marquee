@@ -5,8 +5,18 @@ import { spawn } from "node:child_process";
 
 // Security probe suite: runs the live-mode server against a minimal mock
 // Jellyfin and attacks it the way an outside caller would.
+let revokedAccount = false, accountOutage = false, adminRole = false, accountReads = 0;
 const upstream = http.createServer(async (req, res) => {
   res.setHeader("Content-Type", "application/json");
+  const accountPath = new URL(req.url, "http://localhost").pathname;
+  if (/^\/Users\/[^/]+$/.test(accountPath) && accountPath !== "/Users/AuthenticateByName") {
+    const id = decodeURIComponent(accountPath.split("/").pop());
+    if (id === "revoked-viewer") { res.writeHead(401); return res.end("{}"); }
+    accountReads++;
+    if (revokedAccount || accountOutage) { res.writeHead(revokedAccount ? 401 : 500); return res.end("{}"); }
+    return res.end(JSON.stringify({ Id: id, Name: id, Policy: { IsAdministrator: adminRole } }));
+  }
+
   if (url(req).pathname === "/Users/AuthenticateByName") {
     let body = "";
     for await (const chunk of req) body += chunk;
@@ -312,6 +322,33 @@ try {
     });
     assert.notEqual(response.status, 200);
   });
+  await test("protected routes check revoked credentials, current role and fail closed during outage", async () => {
+    const jar = await login();
+    adminRole = true;
+    assert.equal((await post("/api/display-name", '{"name":"Allowed admin"}', { Cookie: jar })).status, 200);
+    adminRole = false;
+    assert.equal((await post("/api/display-name", '{"name":"Blocked admin"}', { Cookie: jar })).status, 403);
+    accountOutage = true;
+    assert.equal((await post("/api/weather-settings", '{}', { Cookie: jar })).status, 503);
+    accountOutage = false;
+    assert.equal((await fetch(`${base}/api/weather-settings`, { headers: { Cookie: jar } })).status, 200);
+    revokedAccount = true;
+    assert.equal((await post("/api/display-name", '{"name":"Blocked revoked"}', { Cookie: jar })).status, 401);
+    for (const target of ["/api/calendar?start=2026-10-01&end=2026-10-02", "/api/me", "/api/weather-settings"])
+      assert.equal((await fetch(`${base}${target}`, { headers: { Cookie: jar } })).status, 401);
+    revokedAccount = false;
+    assert.equal((await fetch(`${base}/api/me`, { headers: { Cookie: jar } })).status, 401);
+  });
+
+  await test("parallel read authorization is coalesced while writes use fresh policy", async () => {
+    const jar = await login(), before = accountReads;
+    const results = await Promise.all(Array.from({ length: 15 }, () => fetch(`${base}/api/weather-settings`, { headers: { Cookie: jar } })));
+    assert.ok(results.every(response => response.status === 200));
+    assert.equal(accountReads, before + 1);
+    await post("/api/display-name", '{"name":"No admin"}', { Cookie: jar });
+    assert.equal(accountReads, before + 2);
+  });
+
   await test("authenticated API floods are capped across the user's sessions", async () => {
     const cookie = await login();
     let status;

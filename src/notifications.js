@@ -92,13 +92,11 @@ export function notificationEvents(
   const current = {
     episodes: [
       ...new Set([
-        ...(previous?.episodes || []),
         ...snapshot.episodes.map((item) => item.id),
       ]),
     ],
     requests: [
       ...new Set([
-        ...(previous?.requests || []),
         ...snapshot.requests.map((item) => item.id),
       ]),
     ],

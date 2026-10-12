@@ -86,7 +86,7 @@ test("reminders baseline without backlog, detect new episodes and requests, and 
       prefs,
       new Date("2026-10-11T14:20:00Z"),
     ).events.length,
-    0,
+    2,
   );
   assert.equal(
     notificationEvents(
@@ -315,4 +315,22 @@ test("a failed replacement baseline keeps an existing device enrolled", async ()
   );
   assert.equal(notifications.status(user).enabled, true);
   await fs.rm(dir, { recursive: true, force: true });
+});
+
+test("notification cursors follow the verified snapshot, not lifetime history; large records stay enabled", async () => {
+  const snapshot = { episodes: [{ id: "current" }], requests: [{ id: "current-request" }], airings: [] };
+  const result = notificationEvents(snapshot, { episodes: ["removed"], requests: ["removed-request"] }, prefs, new Date("2026-10-11T22:00:00Z"));
+  assert.deepEqual(result.current.episodes, ["current"]);
+  assert.deepEqual(result.current.requests, ["current-request"]);
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "marquee-large-push-"));
+  try {
+    const sessions = createSessions({ dataDir: dir, ttl: 60000 });
+    const user = sessions.fromRequest({ headers: { cookie: `marquee_session=${sessions.seal({ id: "large", token: "synthetic" })}` } });
+    const large = { episodes: Array.from({ length: 25000 }, (_, i) => ({ id: i.toString(16).padStart(32, "0") })), requests: [], airings: [] };
+    const notifications = await createNotifications({ dataDir: dir, sessions, snapshot: async () => large, send: async () => {} });
+    await notifications.subscribe(user, subscription("large"));
+    assert.equal(notifications.status(user).enabled, true);
+    await notifications.tick();
+    assert.equal(notifications.status(user).enabled, true);
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
