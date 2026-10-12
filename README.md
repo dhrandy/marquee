@@ -400,3 +400,7 @@ On Jellyfin includes an optional What to watch next shelf, enabled by default. I
 Continue watching only shows activity within the last 180 days, using Jellyfin UserData.LastPlayedDate after resolving resumed episodes. Missing, invalid or future timestamps are excluded. Resume has no date cutoff option, so this filter is local with no extra calls.
 
 What to watch next has cycling Animation (No animation, Animation only, Mixed) and Type (Movies only, TV only, Both) filters. They filter the loaded18-pick pool instantly, without another request. Animation follows Jellyfin Animation genre tags; titles with missing genre tags qualify only for Mixed. Both controls default to unrestricted and save with display preferences. Filtering can produce a short or empty shelf.
+
+### Watchlist (stars)
+
+Watchlist is separate from Jellyfin Favorites (hearts). Star titles shown in Marquee to save them for later, including titles not on your server. Saved per Jellyfin viewer in the persistent settings volume, up to500titles, with no Seerr sync. Enable its shelf on On Jellyfin in Settings. Stars use TMDB movie/show IDs when known, otherwise Jellyfin IDs; missing metadata can leave the same title separate until it has a shared ID. Saved titles do not automatically request media, mark it watched or remove on completion. Library-only saved artwork/access is rechecked in one bounded query. Saved descriptive metadata is a snapshot; opening known TMDB titles loads current details.

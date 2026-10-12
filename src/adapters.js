@@ -244,6 +244,7 @@ export async function recentItems(user) {
       const imageId = item.SeriesId || item.Id;
       return {
         id: imageId,
+        tmdbId: Number.isSafeInteger(Number(item.ProviderIds?.Tmdb)) && Number(item.ProviderIds?.Tmdb) > 0 ? Number(item.ProviderIds.Tmdb) : null,
         favoriteId: imageId, favorite: item.Type === "Episode" ? null : item.UserData?.IsFavorite === true,
         watched: played,
         watchedScope: item.Type === "Episode" ? "season" : "movie",
@@ -867,7 +868,7 @@ export async function personalItems(user, kind) {
     const ticks = item.UserData?.PlaybackPositionTicks || 0;
     const progress = item.RunTimeTicks > 0 ? Math.max(0, Math.min(100, Math.round(ticks / item.RunTimeTicks * 100))) : 0;
     return {
-      id: item.SeriesId || item.Id, favoriteId: item.SeriesId || item.Id, favorite: item.Type === "Episode" ? null : item.UserData?.IsFavorite === true, title: item.SeriesName || item.Name,
+      id: item.SeriesId || item.Id, tmdbId: item.Type !== "Episode" && Number.isSafeInteger(Number(item.ProviderIds?.Tmdb)) && Number(item.ProviderIds?.Tmdb)>0 ? Number(item.ProviderIds.Tmdb) : null, favoriteId: item.SeriesId || item.Id, favorite: item.Type === "Episode" ? null : item.UserData?.IsFavorite === true, title: item.SeriesName || item.Name,
       watched: typeof item.UserData?.Played === "boolean" ? item.UserData.Played : null, watchedScope: item.Type === "Episode" ? "episode" : item.Type === "Series" ? "series" : item.Type === "Season" ? "season" : "movie",
       subtitle: personalItemSubtitle(item),
       image: Boolean(item.ImageTags?.Primary || item.SeriesId), art: "placeholder", link: jellyfinLink(item.Id),
@@ -927,7 +928,7 @@ export async function favoriteItems(user) {
     if (page.length < 100 || (Number.isFinite(data.TotalRecordCount) && start >= data.TotalRecordCount)) break;
   }
   return items.slice(0, 500).filter(item => ["Movie", "Series"].includes(item.Type) && item.UserData?.IsFavorite === true).map(item => ({
-    id: item.Id, favoriteId: item.Id, favorite: true, title: item.Name, subtitle: personalItemSubtitle(item), image: Boolean(item.ImageTags?.Primary), art: "placeholder", link: jellyfinLink(item.Id),
+    id: item.Id, tmdbId: Number.isSafeInteger(Number(item.ProviderIds?.Tmdb)) && Number(item.ProviderIds?.Tmdb)>0 ? Number(item.ProviderIds.Tmdb) : null, favoriteId: item.Id, favorite: true, title: item.Name, subtitle: personalItemSubtitle(item), image: Boolean(item.ImageTags?.Primary), art: "placeholder", link: jellyfinLink(item.Id),
     watched: typeof item.UserData?.Played === "boolean" ? item.UserData.Played : null, watchedScope: item.Type === "Series" ? "series" : "movie",
     backdropId: item.BackdropImageTags?.length ? item.Id : null,
     detail: { title: item.Name, subtitle: item.Type === "Series" ? "TV series" : "Movie", year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], cast: topCast(item.People, true), contentRating: normalizedContentRating(item.OfficialRating), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },

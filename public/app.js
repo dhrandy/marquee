@@ -34,7 +34,7 @@ const defaults = {
   jellyfinLink: true,
   popularCollapsed: false,
   defaultView: "auto",
-  watchlist: false, continueWatching: false, nextUp: false, watchNext: true,
+  watchlist: false, watchLater: false, watchLaterCollapsed: false, continueWatching: false, nextUp: false, watchNext: true,
   watchlistCollapsed: false, continueWatchingCollapsed: false, nextUpCollapsed: false, watchNextCollapsed: false, watchNextAnimation: "mixed", watchNextType: "both",
   posterSize: "standard", firstTab: "discover", leavingSoon: false, leavingSoonCollapsed: false, recommendations: false, myRequests: false,
   syncDisplay: false,
@@ -84,7 +84,7 @@ function resetAccountState() {
   for (const key of Object.keys(shelfLastLoaded)) delete shelfLastLoaded[key];
   personalLoad++; recentRequest++; calendarRequest++; factsRequest++; searchSeq++; reminderSearchVersion++;
   searchController?.abort(); clearTimeout(searchTimer); clearTimeout(reminderSearchTimer);
-  currentDetail = null; state.recentItems = []; state.watchlistItems = []; state.personalItems = {}; state.events = [];
+  currentDetail = null; state.recentItems = []; state.watchlistItems = []; state.personalItems = {}; watchLaterKeys = new Set(); state.events = [];
   notificationShows = []; notificationEnabled = false;
   all("dialog[open]").forEach(dialog => dialog.close());
   for (const selector of ["#recent", "#calendar", "#network-matches", "#search-results", "#requests", "#recommendations-content", "#inTheaters-content", "#popular-movies", "#popular-tv", "#notify-show-list", "#notify-show-results"]) $(selector)?.replaceChildren();
@@ -159,8 +159,8 @@ function saveWeather() {
     });
   return weatherWrites;
 }
-const sectionLabels = { search: "Search and request", weather: "Weather", watchlist: "Favorites", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", leavingSoon: "Leaving soon", recommendations: "Recommendations", popular: "Popular right now", inTheaters: "In theaters", requests: "Request status" };
-const defaultSectionOrder = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "leavingSoon", "requests"];
+const sectionLabels = { search: "Search and request", weather: "Weather", watchlist: "Favorites", watchLater: "Watchlist", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", leavingSoon: "Leaving soon", recommendations: "Recommendations", popular: "Popular right now", inTheaters: "In theaters", requests: "Request status" };
+const defaultSectionOrder = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "leavingSoon", "requests"];
 let sectionOrder = [...defaultSectionOrder], orderWrites = Promise.resolve();
 const sectionElement = key => $(key === "weather" ? "#weather" : key === "popular" ? "#popular-wrap" : `#${key}-section`);
 function applySectionOrder() {
@@ -185,7 +185,7 @@ function applySectionOrder() {
   applyDashboardPage();
 }
 let dashboardPage = "discover";
-const pageSections = { home: ["watchlist", "continueWatching", "nextUp", "watchNext", "leavingSoon", "requests"], discover: ["weather", "search", "recent", "popular", "inTheaters", "calendar", "recommendations"] };
+const pageSections = { home: ["watchlist", "watchLater", "continueWatching", "nextUp", "watchNext", "leavingSoon", "requests"], discover: ["weather", "search", "recent", "popular", "inTheaters", "calendar", "recommendations"] };
 let pageInitialized = false;
 function applyDashboardPage() {
   if (!pageInitialized) { dashboardPage = state.prefs.firstTab === "home" ? "home" : "discover"; pageInitialized = true; }
@@ -319,7 +319,7 @@ function applyPrefs() {
   all(".poster-card time").forEach((el) => {
     el.hidden = !state.prefs.addedDates;
   });
-  for (const key of ["watchlist", "continueWatching", "nextUp", "watchNext", "leavingSoon"]) {
+  for (const key of ["watchlist", "watchLater", "continueWatching", "nextUp", "watchNext", "leavingSoon"]) {
     const section = $(`#${key}-section`);
     if (section) section.hidden = !state.prefs[key];
     const content = $(`#${key}-content`);
@@ -328,11 +328,11 @@ function applyPrefs() {
     if (collapse) {
       collapse.setAttribute("aria-expanded", !state.prefs[`${key}Collapsed`]);
       collapse.title = `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${sectionLabels[key]}`;
-      collapse.setAttribute("aria-label", `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${{ watchlist: "Favorites", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", leavingSoon: "Leaving soon" }[key]}`);
+      collapse.setAttribute("aria-label", `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${{ watchlist: "Favorites", watchLater: "Watchlist", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", leavingSoon: "Leaving soon" }[key]}`);
     }
   }
-  $("#personal-shelves").hidden = !["watchlist", "continueWatching", "nextUp", "watchNext", "leavingSoon"].some(key => state.prefs[key]);
-  $("#nothing").hidden = state.prefs.recent || state.prefs.calendar || state.prefs.watchlist || state.prefs.continueWatching || state.prefs.nextUp || state.prefs.watchNext || state.prefs.leavingSoon || state.prefs.recommendations;
+  $("#personal-shelves").hidden = !["watchlist", "watchLater", "continueWatching", "nextUp", "watchNext", "leavingSoon"].some(key => state.prefs[key]);
+  $("#nothing").hidden = state.prefs.recent || state.prefs.calendar || state.prefs.watchlist || state.prefs.watchLater || state.prefs.continueWatching || state.prefs.nextUp || state.prefs.watchNext || state.prefs.leavingSoon || state.prefs.recommendations;
   $("#weather").hidden = !state.prefs.weather;
   if (state.prefs.weather) loadWeather();
   scheduleWeather();
@@ -343,6 +343,7 @@ function applyPrefs() {
 function buildSettings() {
   const labels = {
     watchlist: "Favorites - Jellyfin favorites (off by default)",
+    watchLater: "Watchlist - starred for later (off by default)",
     leavingSoon: "Leaving soon (Maintainerr, off by default)",
     recommendations: "Recommendations (off by default)",
     continueWatching: "Continue watching (off by default)",
@@ -383,7 +384,7 @@ function buildSettings() {
       if (el.dataset.pref === "popular" && el.checked) loadPopular();
       if (el.dataset.pref === "inTheaters" && el.checked) loadInTheaters();
       if (el.dataset.pref === "requests" && el.checked) loadRequests();
-      if (["watchlist", "continueWatching", "nextUp", "watchNext", "leavingSoon"].includes(el.dataset.pref)) loadPersonalShelves();
+      if (["watchlist", "watchLater", "continueWatching", "nextUp", "watchNext", "leavingSoon"].includes(el.dataset.pref)) loadPersonalShelves();
     }),
   );
   buildSectionOrder();
@@ -424,6 +425,7 @@ async function enter(name) {
     if (Array.isArray(order) && [9, 10, 11, 12].includes(order.length)) { order = [...order]; for (const key of ["leavingSoon", "recommendations"]) if (!order.includes(key)) order.splice(order.indexOf("popular"), 0, key); }
     if (Array.isArray(order) && order.length === 11 && !order.includes("inTheaters")) { order = [...order]; order.splice(order.indexOf("popular") + 1, 0, "inTheaters"); }
     if (Array.isArray(order) && !order.includes("watchNext") && order.includes("continueWatching")) { order = [...order]; order.splice(order.indexOf("continueWatching")+1, 0, "watchNext"); }
+    if(Array.isArray(order) && !order.includes("watchLater") && order.includes("watchlist")) {order=[...order];order.splice(order.indexOf("watchlist")+1,0,"watchLater");}
     if (Array.isArray(order) && order.length === defaultSectionOrder.length && new Set(order).size === order.length && order.every(key => defaultSectionOrder.includes(key))) sectionOrder = order;
   } catch (error) { $("#section-order-status").textContent = error.message; }
   const [weatherSettings, accessibilitySettings] = await Promise.all([
@@ -570,7 +572,7 @@ function renderRecent(items) {
             const time = `<time ${!state.prefs.addedDates ? "hidden" : ""}>${item.added ? escape(new Date(item.added).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })) : "Added date not provided"}</time>`;
             const title = `<h3>${escape(item.title)}</h3>`;
             const head = `<button class="poster-link recent-detail" data-recent-index="${items.indexOf(item)}" aria-label="Details for ${escape(item.title)}">${art}${title}</button>`;
-            return `<article class="poster-card">${head}${time}<p>${escape(libraryShelfMetadata(item))}</p>${ratingHtml(item.rating)}</article>`;
+            return `<article class="poster-card watch-later-card">${starHtml(item.watchKey,item.title)}${head}${time}<p>${escape(libraryShelfMetadata(item))}</p>${ratingHtml(item.rating)}</article>`;
           })
           .join("")
       : '<p class="empty">No recent titles in your Jellyfin library.</p>');
@@ -611,7 +613,7 @@ function scheduleShelfRefresh() {
 async function autoRefreshShelves() {
   if (shelfRefreshBusy || !shelfRefreshInterval() || !safeShelfRefresh()) return;
   const interval = shelfRefreshInterval() * 60000;
-  const keys = ["recent", "continueWatching", "nextUp", "watchNext", "leavingSoon", "requests", "calendar"].filter(key => pageSections[dashboardPage].includes(key) && state.prefs[key] && Date.now() - (shelfLastLoaded[key] || 0) >= interval);
+  const keys = ["recent", "continueWatching", "nextUp", "watchNext", "watchLater", "leavingSoon", "requests", "calendar"].filter(key => pageSections[dashboardPage].includes(key) && state.prefs[key] && Date.now() - (shelfLastLoaded[key] || 0) >= interval);
   if (!keys.length) return;
   shelfRefreshBusy = true;
   try {
@@ -630,7 +632,7 @@ $("#recent").addEventListener("click", (event) => {
   if (!item) return;
   showDetail({
     title: item.title,
-    watched: item.watched, watchedScope: item.watchedScope, favoriteId: item.favoriteId, favorite: item.favorite,
+    watched: item.watched, watchedScope: item.watchedScope, watchKey:item.watchKey, favoriteId: item.favoriteId, favorite: item.favorite,
     subtitle: item.subtitle,
     mediaType: item.type,
     ...item.detail,
@@ -725,7 +727,7 @@ function eventHtml(event) {
   });
   const premiere =
     event.premiere && !["available", "missing"].includes(event.status);
-  return `<article class="entry ${escape(event.status)}${premiere ? " premiere" : ""}"${event.type === "tv" || event.type === "movie" ? ` role="button" tabindex="0" data-event="${escape(event.id)}" aria-label="Details for ${escape(event.title)}"` : ""}><span class="entry-status">${icon}${escape(event.type === "movie" ? statusLabel[event.status] : `${time} · ${premiere ? "Season premiere" : statusLabel[event.status]}`)}</span><h4>${escape(event.title)}</h4><p>${escape(event.subtitle)}</p></article>`;
+  return `<article class="entry ${escape(event.status)}${premiere ? " premiere" : ""}"${event.type === "tv" || event.type === "movie" ? ` role="button" tabindex="0" data-event="${escape(event.id)}" aria-label="Details for ${escape(event.title)}"` : ""}><span class="entry-status">${icon}${escape(event.type === "movie" ? statusLabel[event.status] : `${time} · ${premiere ? "Season premiere" : statusLabel[event.status]}`)}</span>${starHtml(event.watchKey,event.title)}<h4>${escape(event.title)}</h4><p>${escape(event.subtitle)}</p></article>`;
 }
 function openEpisode(id) {
   const event = state.events.find((event) => event.id === id);
@@ -825,6 +827,7 @@ async function loadMissingFacts(event) {
     // Ignore the answer if another popup was opened in the meantime.
     if (request !== factsRequest || !$("#episode-detail").open || currentDetail !== event) return;
     if (["movie", "tv"].includes(data.mediaType) && Number.isSafeInteger(data.mediaId)) { event.mediaType = data.mediaType; event.mediaId = data.mediaId; if (!event.favoriteId) Object.assign(event, { favoriteId: data.favoriteId, favorite: data.favorite }); setDetailSave(event); }
+    if(data.watchKey) {event.watchKey=data.watchKey;setDetailStar(event);}
     if (data.network) { event.network = data.network; setDetailNetwork(event); }
     if (!facts) { factsCache.delete(source); return; }
     if (event.watched == null && data.watched === true) { event.watched = true; $("#episode-poster-status").innerHTML = statusBadgeHtml(event) + watchedBadgeHtml(event); }
@@ -869,7 +872,7 @@ function setDetailPlay(resume = false) {
 }
 function showDetail(event) {
   currentDetail = event;
-  setDetailSave(event);
+  setDetailSave(event); setDetailStar(event);
   factsRequest++;
   renderDetailFacts(event.facts);
   $("#episode-title").textContent =
@@ -1185,7 +1188,7 @@ function resultCardHtml(r, includeContentRating = false) {
     : state.requestAccess[r.mediaType]
       ? `<button class="request-btn${shelf ? " poster-request" : ""}"${shelf ? ` aria-label="Request ${escape(r.title)}" title="Request ${escape(r.title)}"` : ""} data-request data-media-type="${r.mediaType}" data-media-id="${r.id}" data-title="${escape(r.title)}">${shelf ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>' : "Request"}</button>`
       : `<span class="request-unavailable">${escape(state.requestAccess.reason || state.requestAccess[`${r.mediaType}Reason`] || "Requests disabled in Seerr")}</span>`;
-  return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}${watchedBadgeHtml(r)}</div>${shelf && action.startsWith("<button") ? action : ""}${shelf ? '<div class="result-caption"><div class="caption-copy">' : ""}<h3>${escape(r.title)}</h3><p class="result-meta">${[shelf && r.streamer ? r.streamer : r.mediaType === "movie" ? "Movie" : "TV", r.year, shelf ? r.contentRating : null].filter(Boolean).map(escape).join(" · ")}${includeContentRating ? `<span class="row-cert row-cert-pending" aria-hidden="true"></span>` : ""}</p>${shelf ? `</div><div class="caption-baseline" aria-hidden="true"><span class="caption-title-space"></span><span class="caption-meta-space">${[r.streamer || (r.mediaType === "movie" ? "Movie" : "TV"), r.year, r.contentRating].filter(Boolean).map(escape).join(" · ")}</span></div></div>` : ""}${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}${shelf ? "" : `<div class="result-action">${action}</div>`}</article>`;
+  return `<article class="result-card" data-availability="${Number.isInteger(r.availability) ? r.availability : ""}"><div class="poster-art" role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.id}" aria-label="Details for ${escape(r.title)}"><img src="${r.poster ? (r.poster.startsWith("/") ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}` : `/art/${encodeURIComponent(r.poster)}.svg`) : "/art/placeholder.svg"}" alt="" loading="lazy">${statusBadgeHtml(r)}${watchedBadgeHtml(r)}</div>${starHtml(r.watchKey,r.title)}${shelf && action.startsWith("<button") ? action : ""}${shelf ? '<div class="result-caption"><div class="caption-copy">' : ""}<h3>${escape(r.title)}</h3><p class="result-meta">${[shelf && r.streamer ? r.streamer : r.mediaType === "movie" ? "Movie" : "TV", r.year, shelf ? r.contentRating : null].filter(Boolean).map(escape).join(" · ")}${includeContentRating ? `<span class="row-cert row-cert-pending" aria-hidden="true"></span>` : ""}</p>${shelf ? `</div><div class="caption-baseline" aria-hidden="true"><span class="caption-title-space"></span><span class="caption-meta-space">${[r.streamer || (r.mediaType === "movie" ? "Movie" : "TV"), r.year, r.contentRating].filter(Boolean).map(escape).join(" · ")}</span></div></div>` : ""}${ratingHtml(r.rating)}${r.overview ? `<p class="result-overview">${escape(r.overview)}</p>` : ""}${shelf ? "" : `<div class="result-action">${action}</div>`}</article>`;
 }
 function renderSearch(results) {
   updateShelfHtml($("#search-results"), results.length
@@ -1333,7 +1336,7 @@ function renderRequests(requests) {
     ? requests
         .map((r) => {
           const [label, cls] = requestStatus(r);
-          return `<div class="request-row"${Number.isInteger(r.tmdbId) && r.tmdbId > 0 ? ` role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.tmdbId}" aria-label="Details for ${escape(r.title)}"` : ""}><span class="status-dot ${cls}"></span><div class="grow"><strong>${escape(r.title)}</strong><small>${r.mediaType === "movie" ? "Movie" : "TV"} · by ${escape(r.requestedBy || "Unknown requester")}${r.createdAt ? ` · requested ${escape(new Date(r.createdAt).toLocaleDateString([], { month: "short", day: "numeric" }))}` : ""}</small></div><span class="request-status-label">${label}</span></div>`;
+          return `<div class="request-row"${Number.isInteger(r.tmdbId) && r.tmdbId > 0 ? ` role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.tmdbId}" aria-label="Details for ${escape(r.title)}"` : ""}><span class="status-dot ${cls}"></span>${starHtml(r.watchKey,r.title)}<div class="grow"><strong>${escape(r.title)}</strong><small>${r.mediaType === "movie" ? "Movie" : "TV"} · by ${escape(r.requestedBy || "Unknown requester")}${r.createdAt ? ` · requested ${escape(new Date(r.createdAt).toLocaleDateString([], { month: "short", day: "numeric" }))}` : ""}</small></div><span class="request-status-label">${label}</span></div>`;
         })
         .join("")
     : '<p class="empty">No requests yet.</p>';
@@ -1886,7 +1889,7 @@ document.addEventListener("error", (event) => {
     img.replaceWith(Object.assign(document.createElement("span"), { className: "flag-code", textContent: img.dataset.code || "" }));
 }, true);
 
-const personalLabels = { leavingSoon: "Leaving soon", watchlist: "Favorites", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up" };
+const personalLabels = { leavingSoon: "Leaving soon", watchlist: "Favorites", watchLater: "Watchlist", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up" };
 let personalLoad = 0;
 async function loadPersonalShelves() {
   const seq = ++personalLoad;
@@ -1895,7 +1898,7 @@ async function loadPersonalShelves() {
   }
   applyPrefs();
   await Promise.all(Object.keys(personalLabels).map(key => {
-    if (key !== "watchlist" && !state.prefs[key]) return;
+    if (!["watchlist","watchLater"].includes(key) && !state.prefs[key]) return;
     return loadPersonalShelf(key, { seq });
   }));
 }
@@ -1903,10 +1906,11 @@ const personalRequests = {};
 async function loadPersonalShelf(key, { quiet = false, seq = personalLoad } = {}) {
   const request = (personalRequests[key] || 0) + 1; personalRequests[key] = request;
   try {
-    const { items } = await shelfApi(key === "leavingSoon" ? "/api/leaving-soon" : key === "watchlist" ? "/api/watchlist" : `/api/personal/${key}`);
+    const { items } = await shelfApi(key === "watchLater" ? "/api/watch-later" : key === "leavingSoon" ? "/api/leaving-soon" : key === "watchlist" ? "/api/watchlist" : `/api/personal/${key}`);
     if (request !== personalRequests[key] || seq !== personalLoad) return;
     if (quiet && !safeShelfRefresh()) { delete shelfLastLoaded[key]; return; }
     shelfLastLoaded[key] = Date.now();
+    if(key === "watchLater") { watchLaterKeys = new Set(items.map(item=>item.key)); refreshStars(); }
     const previous = key === "watchlist" ? state.watchlistItems : state.personalItems[key];
     if (JSON.stringify(previous) === JSON.stringify(items) && $(`#${key}-content .poster-card`)) return;
     if (key === "watchlist") state.watchlistItems = items;
@@ -1940,11 +1944,18 @@ function matchesWatchNextMode(item) {
   const animated = genres.some(genre => typeof genre === "string" && genre.trim().toLowerCase() === "animation");
   return state.prefs.watchNextAnimation === "only" ? animated : genres.length > 0 && !animated;
 }
+const starIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.3.9-4.6 4.5 1.1 6.3-5.6-3-5.6 3 1.1-6.3L3 9.6l6.2-.9Z"/></svg>';
+let watchLaterKeys = new Set();
+function starHtml(key,title) {return key ? `<button class="watch-star ${watchLaterKeys.has(key) ? "starred" : ""}" data-watch-key="${escape(key)}" aria-pressed="${watchLaterKeys.has(key)}" aria-label="${watchLaterKeys.has(key) ? "Remove from" : "Add to"} Watchlist: ${escape(title)}" title="${watchLaterKeys.has(key) ? "Remove from" : "Add to"} Watchlist">${starIcon}</button>` : "";}
+function refreshStars() { for(const button of all('[data-watch-key]')) {const saved=watchLaterKeys.has(button.dataset.watchKey);button.classList.toggle("starred",saved);button.setAttribute("aria-pressed",String(saved));button.title=`${saved ? "Remove from" : "Add to"} Watchlist`;button.setAttribute("aria-label",button.title);} }
+function setDetailStar(event) {const button=$('#episode-star');button.innerHTML=starIcon;button.hidden=!event.watchKey;button.dataset.watchKey=event.watchKey || '';refreshStars();}
 function renderPersonalShelf(key, items) {
+  if(key === "watchLater") {updateShelfHtml($('#watchLater-content'), items.length ? items.map((item,index)=>`<article class="poster-card watch-later-card"><button class="poster-link" data-watch-later-index="${index}"><div class="poster-art"><img src="${item.libraryId && item.image ? `/api/image/${encodeURIComponent(item.libraryId)}` : item.poster ? `/api/seerr/image?path=${encodeURIComponent(item.poster)}` : `/art/${escape(item.art || 'placeholder')}.svg`}" alt="" loading="lazy"></div><h3>${escape(item.title)}</h3></button>${starHtml(item.key,item.title)}<p>${escape([item.type==='movie'?'Movie':'TV',item.year].filter(Boolean).join(' · '))}</p></article>`).join('') : '<p class="empty">Star a title anywhere in Marquee to save it for later. Separate from Jellyfin Favorites.</p>');return;}
+
   updateShelfHtml($(`#${key}-content`), items.length ? items.map((item, index) => {
     if (key === "watchNext" && !matchesWatchNextMode(item)) return "";
     const poster = item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`;
-    return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}${key === "continueWatching" ? `<progress class="poster-progress" max="100" value="${Math.min(100, Math.max(0, Number(item.progress) || 0))}" aria-label="${escape(item.title)} watch progress"></progress>` : ""}</div><h3>${escape(item.title)}</h3></button><p>${escape(libraryShelfMetadata(item))}</p>${key === "leavingSoon" ? `<p class="leaving-date">${escape(leavingLabel(item))}</p>` : ""}${key === "continueWatching" ? `<p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-id="${escape(item.favoriteId)}" aria-label="Remove ${escape(item.title)} from Jellyfin favorites" title="Remove from Jellyfin favorites" aria-pressed="true">${heartIcon}</button>` : ""}</article>`;
+    return `<article class="poster-card watch-later-card">${starHtml(item.watchKey,item.title)}<button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}${key === "continueWatching" ? `<progress class="poster-progress" max="100" value="${Math.min(100, Math.max(0, Number(item.progress) || 0))}" aria-label="${escape(item.title)} watch progress"></progress>` : ""}</div><h3>${escape(item.title)}</h3></button><p>${escape(libraryShelfMetadata(item))}</p>${key === "leavingSoon" ? `<p class="leaving-date">${escape(leavingLabel(item))}</p>` : ""}${key === "continueWatching" ? `<p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-id="${escape(item.favoriteId)}" aria-label="Remove ${escape(item.title)} from Jellyfin favorites" title="Remove from Jellyfin favorites" aria-pressed="true">${heartIcon}</button>` : ""}</article>`;
   }).join("") : `<p class="empty">${key === "watchNext" ? "No unwatched library picks right now." : key === "leavingSoon" ? "No eligible scheduled departures in your Jellyfin library." : key === "watchlist" ? "Your Jellyfin movie and series favorites appear here. Use the heart in a title's popout to add one." : key === "continueWatching" ? "Nothing in progress. Start watching in Jellyfin and it appears here." : "No next episodes yet. Your Jellyfin viewing history fills this shelf."}</p>`);
   if (key === "watchNext" && !$(`#${key}-content .poster-card`)) updateShelfHtml($(`#${key}-content`), '<p class="empty">No picks in this batch match your filters.</p>');
   fixBrokenPosters();
@@ -1962,6 +1973,8 @@ $("#episode-save").addEventListener("click", async () => {
   finally { event.favoriteBusy = false; if (currentDetail === event) setDetailSave(event); }
 });
 $("#dashboard main").addEventListener("click", async event => {
+  const savedTitle = event.target.closest('[data-watch-later-index]');
+  if(savedTitle) {const item=state.personalItems.watchLater[Number(savedTitle.dataset.watchLaterIndex)];if(item.tmdbId) {try {const detail=await api(`/api/seerr/details/${item.type}/${item.tmdbId}`);showDetail({...detail,watchKey:item.key});}catch {showDetail({...item.detail,watchKey:item.key});}}else showDetail({...item.detail,watchKey:item.key,playLink:item.link,poster:item.image ? `/api/image/${encodeURIComponent(item.libraryId)}` : `/art/${item.art}.svg`,factsUrl:item.libraryUnavailable ? null : `/api/library/${encodeURIComponent(item.libraryId)}/facts`});return;}
   const filter = event.target.closest("[data-watch-next-filter]");
   if (filter) {
     const key = filter.dataset.watchNextFilter, modes = watchNextModes[key];
@@ -1975,7 +1988,7 @@ $("#dashboard main").addEventListener("click", async event => {
   const button = event.target.closest("[data-personal]");
   if (!button) return;
   const key = button.dataset.personal, item = (key === "watchlist" ? state.watchlistItems : state.personalItems[key])[Number(button.dataset.index)];
-  { showDetail({ title: item.title, subtitle: item.subtitle, mediaType: item.detail?.mediaType || (item.watchedScope === "movie" ? "movie" : "tv"), ...item.detail, favoriteId: item.favoriteId, favorite: item.favorite, watched: item.watched, watchedScope: item.watchedScope, poster: item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`, backdrop: item.backdropId ? `/api/image/${encodeURIComponent(item.backdropId)}?type=Backdrop` : null, playLink: item.link, availability: 5, factsUrl: `/api/library/${encodeURIComponent(item.id)}/facts` }); setDetailPlay(key === "continueWatching"); }
+  { showDetail({ title: item.title, subtitle: item.subtitle, mediaType: item.detail?.mediaType || (item.watchedScope === "movie" ? "movie" : "tv"), ...item.detail, watchKey:item.watchKey, favoriteId: item.favoriteId, favorite: item.favorite, watched: item.watched, watchedScope: item.watchedScope, poster: item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`, backdrop: item.backdropId ? `/api/image/${encodeURIComponent(item.backdropId)}?type=Backdrop` : null, playLink: item.link, availability: 5, factsUrl: `/api/library/${encodeURIComponent(item.id)}/facts` }); setDetailPlay(key === "continueWatching"); }
 });
 
 function buildIconGuide() {
@@ -2109,3 +2122,5 @@ $("#notify-test").addEventListener("click", async () => {
   try { await api("/api/notifications/test", { method: "POST", body: "{}" }); $("#notify-device-status").textContent = "Test sent. Check your notifications."; }
   catch (error) { $("#notify-device-status").textContent = error.message; }
 });
+
+document.addEventListener("click",async event=>{const button=event.target.closest('[data-watch-key]');if(!button || !button.dataset.watchKey)return;event.preventDefault();event.stopPropagation();const key=button.dataset.watchKey,saved=!watchLaterKeys.has(key);button.disabled=true;try{await api('/api/watch-later',{method:'POST',body:JSON.stringify({key,saved})});await loadPersonalShelf('watchLater');}catch(error){report(error);}finally{button.disabled=false;}},true);

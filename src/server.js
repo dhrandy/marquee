@@ -1,3 +1,4 @@
+import {watchLaterSnapshot, updateWatchLater} from "./watch-later.js";
 import { networkMatches, networkShows } from "./networks.js";
 import { inTheaters } from "./in-theaters.js";
 import { leavingSoon } from "./maintainerr.js";
@@ -11,7 +12,7 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import {
   authenticate,
-  recommendations, withWatched, favoriteItems, favoriteState, setFavorite,
+  jellyfinLink, recommendations, withWatched, favoriteItems, favoriteState, setFavorite,
   recentItems,
   personalItems,
   calendar,
@@ -195,6 +196,23 @@ async function requireUser(req, res, next) {
       return res.status(503).json({ error: "Could not verify your Jellyfin sign-in. Try again when Jellyfin is available." });
     }
   }
+  const originalJson = res.json.bind(res);
+  res.json = body => {
+    req.user.state.watchCandidates ||= new Map();
+    const tag = value => {
+      if (!value || typeof value !== "object") return;
+      if (Array.isArray(value)) { value.forEach(tag); return; }
+      const snapshot = watchLaterSnapshot(value);
+      if (snapshot) {
+        value.watchKey = snapshot.key;
+        const candidates = req.user.state.watchCandidates;
+        candidates.delete(snapshot.key); candidates.set(snapshot.key,snapshot);
+        while(candidates.size > 500) candidates.delete(candidates.keys().next().value);
+      }
+      for(const key of ["items","results","movies","tv","requests","events"]) if(value[key]) tag(value[key]);
+    };
+    tag(body); return originalJson(body);
+  };
   next();
 }
 async function imageBytes(response, limit) {
@@ -459,6 +477,28 @@ app.post("/api/section-order", requireUser, async (req, res) => {
     await saveSettings(current => ({ ...current, orderByUser: { ...current.orderByUser, [personalKey(req.user)]: order } }));
     res.json({ order });
   } catch { res.status(500).json({ error: "Could not save section order. Check the settings volume is writable." }); }
+});
+app.get("/api/watch-later", requireUser, async (req,res) => {
+  const items = savedSettings.watchLaterByUser?.[personalKey(req.user)] || [];
+  const libraryIds=items.map(item=>item.libraryId).filter(Boolean);
+  const accessible=new Set();
+  if(libraryIds.length && !demo) {
+    try {const params=new URLSearchParams({UserId:req.user.id,Ids:libraryIds.join(","),Recursive:"true",Fields:"ProviderIds",Limit:String(libraryIds.length)});const data=await upstream(process.env.JELLYFIN_URL,`/Items?${params}`,{headers:jellyfinHeaders(req.user.token,req.user.deviceId)});for(const item of data.Items || [])accessible.add(item.Id);}
+    catch {return res.status(502).json({error:"Could not verify saved Jellyfin titles. Your Watchlist is unchanged."});}
+  }
+  const visible=items.map(item=>{if(!item.libraryId || demo)return item;if(accessible.has(item.libraryId)){req.user.state.allowedImages.add(item.libraryId);return {...item,link:jellyfinLink(item.libraryId)};}return {...item,image:false,libraryUnavailable:true};});
+  res.json({items:visible});
+});
+app.post("/api/watch-later", requireUser, async (req,res) => {
+  const {key,saved} = req.body;
+  if(typeof key !== "string" || key.length>150 || typeof saved !== "boolean") return res.status(400).json({error:"Choose a valid Watchlist title."});
+  const existing = savedSettings.watchLaterByUser?.[personalKey(req.user)] || [];
+  const snapshot = req.user.state.watchCandidates?.get(key) || (!saved ? existing.find(item=>item.key===key) : null);
+  if(!snapshot) return res.status(404).json({error:"Open this title in Marquee before adding it."});
+  try {
+    await saveSettings(current=>({...current,watchLaterByUser:{...current.watchLaterByUser,[personalKey(req.user)]:updateWatchLater(current.watchLaterByUser?.[personalKey(req.user)] || [],snapshot,saved)}}));
+    res.json({key,saved});
+  } catch(error) {res.status(500).json({error:error.message.includes("500 titles") ? error.message : "Could not save Watchlist. Check the settings folder is writable."});}
 });
 app.get("/api/watchlist", requireUser, async (req, res) => {
   try {

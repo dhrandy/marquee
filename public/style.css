@@ -1702,3 +1702,14 @@ main > section:not([hidden]), .personal-section:not([hidden]) { padding-bottom:1
 
 .watch-next-filters { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
 .watch-next-filters button { min-height:36px; padding:6px 12px; font-size:13px; color:var(--muted); }
+
+.watch-later-card,.result-card {position:relative;}
+.watch-star {width:30px;height:30px;padding:5px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);background:#171827e8;border:1px solid var(--line);border-radius:50%;position:absolute;top:6px;left:6px;z-index:2;}
+.watch-star svg {width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;}
+.watch-star.starred {color:#e5c778;}
+.watch-star.starred svg {fill:currentColor;}
+.watch-star.detail-star {position:static;flex-shrink:0;}
+
+.request-row {position:relative;}
+.request-row .watch-star {position:static;flex-shrink:0;}
+.entry .watch-star {position:static;float:right;width:24px;height:24px;padding:3px;margin-left:6px;}

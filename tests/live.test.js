@@ -1276,7 +1276,16 @@ try {
     assert.equal((await post("/api/watchlist", alice, { itemId: "great-series", saved: true })).status, 200);
     assert.equal((await get("/api/watchlist", alice)).items[0].title, "Favorite title");
     assert.equal((await get("/api/watchlist", alice)).items[0].watched, true);
-    const order = ["watchNext", "calendar", "search", "weather", "watchlist", "continueWatching", "nextUp", "recent", "leavingSoon", "recommendations", "popular", "inTheaters", "requests"];
+    const catalog=(await get("/api/seerr/search?query=Signal",alice)).results[0];
+    assert.ok(catalog.watchKey);assert.equal((await post("/api/watch-later",alice,{key:catalog.watchKey,saved:true})).status,200);
+    assert.equal((await post("/api/watch-later",alice,{key:catalog.watchKey,saved:true})).status,200);
+    assert.equal((await get("/api/watch-later",alice)).items.length,1);assert.equal((await get("/api/watch-later",bob)).items.length,0);
+    assert.equal((await get("/api/watch-later",(await signin("alice")).headers.get("set-cookie"))).items.length,1);
+    assert.equal((await post("/api/watch-later",bob,{key:catalog.watchKey,saved:true})).status,404);
+    assert.equal((await post("/api/watch-later",alice,{key:"tmdb:movie:99999999",saved:true})).status,404);
+    assert.equal((await post("/api/watch-later",alice,{key:catalog.watchKey,saved:false})).status,200);
+    assert.equal((await get("/api/watch-later",alice)).items.length,0);
+    const order = ["watchNext", "calendar", "search", "weather", "watchlist", "watchLater", "continueWatching", "nextUp", "recent", "leavingSoon", "recommendations", "popular", "inTheaters", "requests"];
     assert.equal((await post("/api/section-order", alice, { order })).status, 200);
     assert.deepEqual((await get("/api/section-order", alice)).order, order);
     assert.notDeepEqual((await get("/api/section-order", bob)).order, order);

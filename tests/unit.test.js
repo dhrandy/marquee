@@ -378,7 +378,7 @@ test("section order adds Leaving soon while preserving approved ten-section orde
  test("default shelf orders match the two pages without changing saved orders", async () => {
   const { cleanSectionOrder, sectionOrderDefaults } = await import("../src/personal.js");
   const discover = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations"];
-  const home = ["nextUp", "continueWatching", "watchNext", "watchlist", "leavingSoon", "requests"];
+  const home = ["nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "leavingSoon", "requests"];
   assert.deepEqual(sectionOrderDefaults, [...discover, ...home]);
   const saved = [...home].reverse().concat([...discover].reverse());
   assert.deepEqual(cleanSectionOrder(saved), saved);
@@ -500,3 +500,7 @@ test("network directory downloads once, coalesces readers, persists and uses cac
  test("watchnext cycling modes sync only valid values",async()=>{
  const {cleanDisplayPreferences}=await import("../src/personal.js");for(const watchNextAnimation of ["no","only","mixed"])assert.deepEqual(cleanDisplayPreferences({watchNextAnimation}),{watchNextAnimation});for(const watchNextType of ["movie","tv","both"])assert.deepEqual(cleanDisplayPreferences({watchNextType}),{watchNextType});assert.equal(cleanDisplayPreferences({watchNextAnimation:"bad"}),null);assert.equal(cleanDisplayPreferences({watchNextType:"bad"}),null);
  });
+
+ test("watchlater snapshots strip unsafe data and preserve per-title identity",async()=>{const {watchLaterSnapshot,updateWatchLater}=await import("../src/watch-later.js");const snap=watchLaterSnapshot({id:42,mediaType:"movie",title:"Film",poster:"https://bad.invalid/image",token:"secret",overview:"Info"});assert.equal(snap.key,"tmdb:movie:42");assert.equal(snap.poster,null);assert.ok(!JSON.stringify(snap).includes("secret"));assert.equal(watchLaterSnapshot({title:"No identity"}),null);assert.equal(watchLaterSnapshot({id:"local-1",type:"tv",title:"Local",favoriteId:"local-1"}).key,"library:tv:local-1");const list=updateWatchLater([],snap,true,"now");assert.equal(updateWatchLater(list,snap,true,"later").length,1);assert.equal(updateWatchLater(list,snap,false).length,0);});
+
+ test("watchlater never mistakes a request ID or calendar ID for title identity",async()=>{const {watchLaterSnapshot}=await import("../src/watch-later.js");assert.equal(watchLaterSnapshot({id:99,mediaType:"movie",tmdbId:null,title:"Request",requestedBy:"Viewer"}),null);assert.equal(watchLaterSnapshot({id:"tv-9",type:"tv",status:"upcoming",title:"Episode",tmdbId:null}),null);assert.equal(watchLaterSnapshot({id:99,mediaType:"movie",tmdbId:42,title:"Request"}).key,"tmdb:movie:42");});

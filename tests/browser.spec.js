@@ -1961,7 +1961,7 @@ for (const width of [1440, 393]) {
     await page.setViewportSize({ width, height: 950 });
     await login(page);
     await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await expect(page.locator("#section-order-list li")).toHaveCount(13);
+    await expect(page.locator("#section-order-list li")).toHaveCount(14);
     const handle = page.getByRole("button", { name: "Drag Release calendar", exact: true });
     const target = page.locator('#section-order-list li[data-order-key="search"]');
     await handle.scrollIntoViewIfNeeded();
@@ -2413,7 +2413,7 @@ for (const width of [1440, 393, 280]) {
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     const keys = pageName => page.locator(`[data-order-page="${pageName}"] li`).evaluateAll(rows => rows.map(row => row.dataset.orderKey));
     const discover = await keys("discover"), home = await keys("home");
-    expect(discover).toHaveLength(7); expect(home).toHaveLength(6);
+    expect(discover).toHaveLength(7); expect(home).toHaveLength(7);
     await page.getByRole("button", { name: "Move Continue watching up", exact: true }).click();
     expect(await keys("discover")).toEqual(discover);
     expect((await keys("home"))[0]).toBe("continueWatching");
@@ -2686,7 +2686,7 @@ for (const width of [393, 1440]) {
       await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
     }
     const keys = page.locator("#section-order-list li");
-    expect(await keys.evaluateAll(rows => rows.map(row => row.dataset.orderKey))).toEqual(["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "leavingSoon", "requests"]);
+    expect(await keys.evaluateAll(rows => rows.map(row => row.dataset.orderKey))).toEqual(["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "leavingSoon", "requests"]);
     await page.getByRole("button", { name: "Move Next up down", exact: true }).click();
     await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
     const beforeHome = await page.locator('[data-order-page="home"] li').evaluateAll(rows => rows.map(row => row.dataset.orderKey));
@@ -3323,4 +3323,14 @@ for(const width of [393,1440]) test(`watchnext genre/type cycles are instant, co
  await page.locator('#watchNext-section').screenshot({path:`${shots}/watch-next-filters-${width}.png`});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.reload();await view(page,'home');await expect(a).toHaveText('Animation only');await expect(t).toHaveText('Both');await expect(cards).toHaveCount(2);
  await a.click();await expect(a).toHaveText('Mixed');await expect(cards).toHaveCount(5);
+});
+
+test('star watchlist is separate from hearts and saves catalog/library titles',async({page})=>{
+ await login(page);await page.getByRole('button',{name:'Settings',exact:true}).click();await page.locator('[data-pref="watchLater"]').check();await page.locator('[data-pref="watchlist"]').check();await page.getByRole('button',{name:'Close settings'}).click();
+ await page.locator('#recent [data-watch-key]').first().click();await view(page,'home');await expect(page.locator('#watchLater-content .poster-card')).toHaveCount(1);await expect(page.locator('#watchlist-content .poster-card')).toHaveCount(0);
+ await page.locator('#watchLater-content [data-watch-later-index]').first().click();await expect(page.locator('#episode-star')).toHaveAttribute('aria-pressed','true');await page.getByRole('button',{name:'Close episode details'}).click();
+ await view(page,'discover');await page.locator('#search-form input[name="query"]').fill('Orbit');await page.locator('#search-results [data-watch-key]').first().waitFor();await page.locator('#search-results [data-watch-key]').first().click();await view(page,'home');await expect(page.locator('#watchLater-content .poster-card')).toHaveCount(2);
+ await page.locator('#watchLater-section').screenshot({path:`${shots}/watchlater-preview-1440.png`});
+ await page.setViewportSize({width:393,height:1000});await page.locator('#watchLater-section').screenshot({path:`${shots}/watchlater-preview-393.png`});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.locator('#watchLater-content [data-watch-key]').first().click();await expect(page.locator('#watchLater-content .poster-card')).toHaveCount(1);await page.reload();await view(page,'home');await expect(page.locator('#watchLater-content .poster-card')).toHaveCount(1);
 });
