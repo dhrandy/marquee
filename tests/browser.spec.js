@@ -2383,6 +2383,8 @@ test("Home refreshes its active personal shelves without polling Discover", asyn
   await page.clock.install(); await login(page);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   for (const key of ["continueWatching", "nextUp"]) await page.locator(`[data-pref="${key}"]`).check();
+  // Isolate the personal-shelf timer from the independently tested Requests read.
+  await page.locator('[data-pref="requests"]').uncheck();
   await page.locator("#shelf-refresh-minutes").selectOption("1");
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(page.locator("#continueWatching-content .poster-card")).toHaveCount(3);
@@ -2399,7 +2401,7 @@ test("Home refreshes its active personal shelves without polling Discover", asyn
   await page.clock.runFor(75000);
   try { await expect.poll(() => personal).toBeGreaterThanOrEqual(2); }
   catch (error) {
-    const diagnostics = await page.evaluate(() => ({ page:dashboardPage,hidden:document.hidden,safe:safeShelfRefresh(),focus:document.activeElement?.outerHTML,busy:shelfRefreshBusy,now:Date.now(),interaction:shelfInteractionAt,loaded:{...shelfLastLoaded},prefs:[state.prefs.shelfRefreshMinutes,state.prefs.continueWatching,state.prefs.nextUp],timer:shelfTimer }));
+    const diagnostics = await page.evaluate(() => ({ page:dashboardPage,hidden:document.hidden,safe:safeShelfRefresh(),focus:document.activeElement?.tagName,busy:shelfRefreshBusy,now:Date.now(),interaction:shelfInteractionAt,loaded:{...shelfLastLoaded},prefs:[state.prefs.shelfRefreshMinutes,state.prefs.continueWatching,state.prefs.nextUp],timer:shelfTimer }));
     throw new Error(`Home refresh state: ${JSON.stringify(diagnostics)}; calls: ${personal}. ${error.message}`);
   }
   expect(recent).toBe(0);
