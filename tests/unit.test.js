@@ -496,3 +496,7 @@ test("network directory downloads once, coalesces readers, persists and uses cac
  for(const delta of [-1,180*86400000+1])assert.equal(isRecentResume({UserData:{LastPlayedDate:new Date(now-delta).toISOString()}},now),false);
  for(const value of [null,"invalid","2026-01-01",undefined])assert.equal(isRecentResume({UserData:{LastPlayedDate:value}},now),false);assert.equal(isRecentResume({},now),false);
  });
+
+ test("watchnext cycling modes sync only valid values",async()=>{
+ const {cleanDisplayPreferences}=await import("../src/personal.js");for(const watchNextAnimation of ["no","only","mixed"])assert.deepEqual(cleanDisplayPreferences({watchNextAnimation}),{watchNextAnimation});for(const watchNextType of ["movie","tv","both"])assert.deepEqual(cleanDisplayPreferences({watchNextType}),{watchNextType});assert.equal(cleanDisplayPreferences({watchNextAnimation:"bad"}),null);assert.equal(cleanDisplayPreferences({watchNextType:"bad"}),null);
+ });

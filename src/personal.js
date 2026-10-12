@@ -5,7 +5,7 @@ export const displayPreferenceDefaults = {
   inTheaters: true, requests: true, popular: true, ratings: true, jellyfinLink: true,
   firstTab: "discover", popularCollapsed: false, defaultView: "auto", watchlist: false,
   leavingSoon: false, leavingSoonCollapsed: false, recommendations: false, myRequests: false, continueWatching: false, nextUp: false, watchNext: true, watchlistCollapsed: false,
-  continueWatchingCollapsed: false, nextUpCollapsed: false, watchNextCollapsed: false,
+  continueWatchingCollapsed: false, nextUpCollapsed: false, watchNextCollapsed: false, watchNextAnimation: "mixed", watchNextType: "both",
 };
 export function cleanDisplayPreferences(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -14,6 +14,8 @@ export function cleanDisplayPreferences(value) {
     if (!(key in value)) continue;
     if (typeof defaultValue === "boolean") {
       if (typeof value[key] !== "boolean") return null;
+    } else if (key === "watchNextAnimation") { if (!["no", "only", "mixed"].includes(value[key])) return null;
+    } else if (key === "watchNextType") { if (!["movie", "tv", "both"].includes(value[key])) return null;
     } else if (key === "firstTab") { if (!["discover", "home"].includes(value[key])) return null;
     } else if (!["auto", "month", "week", "day", "agenda", "list"].includes(value[key])) return null;
     clean[key] = value[key];

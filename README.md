@@ -133,9 +133,9 @@ services:
       DEMO_MODE: ${DEMO_MODE}
       # false only for a trusted plain-HTTP LAN; keep true behind HTTPS.
       COOKIE_SECURE: ${COOKIE_SECURE}
-      SESSION_SECRET: ${SESSION_SECRET:-}
-      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
-      TRUST_PROXY: ${TRUST_PROXY:-0}
+      SESSION_SECRET: ${SESSION_SECRET}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES}
+      TRUST_PROXY: ${TRUST_PROXY}
       JELLYFIN_URL: ${JELLYFIN_URL}
       SONARR_URL: ${SONARR_URL}
       SONARR_API_KEY: ${SONARR_API_KEY}
@@ -144,8 +144,8 @@ services:
       SEERR_URL: ${SEERR_URL}
       SEERR_API_KEY: ${SEERR_API_KEY}
       TMDB_API_KEY: ${TMDB_API_KEY}
-      MAINTAINERR_URL: ${MAINTAINERR_URL:-}
-      MAINTAINERR_API_KEY: ${MAINTAINERR_API_KEY:-}
+      MAINTAINERR_URL: ${MAINTAINERR_URL}
+      MAINTAINERR_API_KEY: ${MAINTAINERR_API_KEY}
       # Browser-facing Jellyfin URL; blank falls back to JELLYFIN_URL.
       JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
     volumes:
@@ -219,9 +219,9 @@ services:
       TZ: ${TZ}
       DEMO_MODE: ${DEMO_MODE}
       COOKIE_SECURE: ${COOKIE_SECURE}
-      SESSION_SECRET: ${SESSION_SECRET:-}
-      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
-      TRUST_PROXY: ${TRUST_PROXY:-0}
+      SESSION_SECRET: ${SESSION_SECRET}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES}
+      TRUST_PROXY: ${TRUST_PROXY}
       JELLYFIN_URL: ${JELLYFIN_URL}
       SONARR_URL: ${SONARR_URL}
       SONARR_API_KEY: ${SONARR_API_KEY}
@@ -230,8 +230,8 @@ services:
       SEERR_URL: ${SEERR_URL}
       SEERR_API_KEY: ${SEERR_API_KEY}
       TMDB_API_KEY: ${TMDB_API_KEY}
-      MAINTAINERR_URL: ${MAINTAINERR_URL:-}
-      MAINTAINERR_API_KEY: ${MAINTAINERR_API_KEY:-}
+      MAINTAINERR_URL: ${MAINTAINERR_URL}
+      MAINTAINERR_API_KEY: ${MAINTAINERR_API_KEY}
       JELLYFIN_WEB_URL: ${JELLYFIN_WEB_URL}
     volumes:
       - ./:/source:ro
@@ -398,3 +398,5 @@ Copyright (c) 2026 dhrandy. All rights reserved. Marquee is proprietary; no open
 On Jellyfin includes an optional What to watch next shelf, enabled by default. It uses one bounded, viewer-scoped Jellyfin query for random unwatched movies and shows. Missing, virtual, placeholder and in-progress results are excluded. No Seerr/TMDB calls or library crawl. Next up stays separate for ongoing shows.
 
 Continue watching only shows activity within the last 180 days, using Jellyfin UserData.LastPlayedDate after resolving resumed episodes. Missing, invalid or future timestamps are excluded. Resume has no date cutoff option, so this filter is local with no extra calls.
+
+What to watch next has cycling Animation (No animation, Animation only, Mixed) and Type (Movies only, TV only, Both) filters. They filter the loaded18-pick pool instantly, without another request. Animation follows Jellyfin Animation genre tags; titles with missing genre tags qualify only for Mixed. Both controls default to unrestricted and save with display preferences. Filtering can produce a short or empty shelf.

@@ -3302,3 +3302,25 @@ for(const width of [393,1440]) test(`network search choices preserve titles and 
  await page.locator('[data-collapse="watchNext"]').click();await page.locator('#watchNext-content [data-personal]').first().click();await expect(page.locator('#episode-detail')).toBeVisible();await expect(page.locator('#episode-detail [data-request]')).toHaveCount(0);await page.getByRole('button',{name:'Close episode details'}).click();
  await page.locator('[data-page="discover"]').click();await expect(page.locator('#watchNext-section')).toBeHidden();
  });
+
+for(const width of [393,1440]) test(`watchnext genre/type cycles are instant, combined and persistent at ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:1000});let reads=0;
+ await page.route('**/api/personal/watchNext',route=>{reads++;return route.fulfill({json:{items:[
+ {id:'movie-live',title:'Live movie',type:'movie',art:'signal',detail:{mediaType:'movie',genres:['Drama']}},
+ {id:'movie-anim',title:'Animated movie',type:'movie',art:'north',detail:{mediaType:'movie',genres:[' Animation ']}},
+ {id:'tv-anim',title:'Animated show',type:'tv',art:'orbit',detail:{mediaType:'tv',genres:['Animation']}},
+ {id:'tv-live',title:'Live show',type:'tv',art:'coast',detail:{mediaType:'tv',genres:['Comedy']}},
+ {id:'unknown',title:'Unknown genre',type:'movie',art:'signal',detail:{mediaType:'movie',genres:[]}}
+ ]}})});
+ await page.goto('/');await page.getByRole('button',{name:'Explore demo'}).click();await view(page,'home');
+ const a=page.locator('[data-watch-next-filter="watchNextAnimation"]'),t=page.locator('[data-watch-next-filter="watchNextType"]'),cards=page.locator('#watchNext-content .poster-card');
+ await expect(cards).toHaveCount(5);const initial=reads;await expect(a).toHaveText('Mixed');await expect(t).toHaveText('Both');
+ await a.click();await expect(a).toHaveText('No animation');await expect(cards).toHaveCount(2);
+ await t.click();await expect(t).toHaveText('Movies only');await expect(cards).toHaveCount(1);await expect(cards).toContainText('Live movie');
+ await a.click();await expect(a).toHaveText('Animation only');await expect(cards).toHaveCount(1);await expect(cards).toContainText('Animated movie');
+ await t.click();await expect(t).toHaveText('TV only');await expect(cards).toContainText('Animated show');await cards.first().locator('[data-personal]').click();await expect(page.locator('#episode-detail h2')).toHaveText('Animated show');await page.getByRole('button',{name:'Close episode details'}).click();
+ await t.click();await expect(t).toHaveText('Both');await expect(cards).toHaveCount(2);expect(reads).toBe(initial);
+ await page.locator('#watchNext-section').screenshot({path:`${shots}/watch-next-filters-${width}.png`});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.reload();await view(page,'home');await expect(a).toHaveText('Animation only');await expect(t).toHaveText('Both');await expect(cards).toHaveCount(2);
+ await a.click();await expect(a).toHaveText('Mixed');await expect(cards).toHaveCount(5);
+});

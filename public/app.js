@@ -35,7 +35,7 @@ const defaults = {
   popularCollapsed: false,
   defaultView: "auto",
   watchlist: false, continueWatching: false, nextUp: false, watchNext: true,
-  watchlistCollapsed: false, continueWatchingCollapsed: false, nextUpCollapsed: false, watchNextCollapsed: false,
+  watchlistCollapsed: false, continueWatchingCollapsed: false, nextUpCollapsed: false, watchNextCollapsed: false, watchNextAnimation: "mixed", watchNextType: "both",
   posterSize: "standard", firstTab: "discover", leavingSoon: false, leavingSoonCollapsed: false, recommendations: false, myRequests: false,
   syncDisplay: false,
   shelfRefreshMinutes: 5,
@@ -337,6 +337,7 @@ function applyPrefs() {
   if (state.prefs.weather) loadWeather();
   scheduleWeather();
   applySectionOrder();
+  updateWatchNextControls();
   scheduleShelfRefresh();
 }
 function buildSettings() {
@@ -1890,7 +1891,7 @@ let personalLoad = 0;
 async function loadPersonalShelves() {
   const seq = ++personalLoad;
   if (!$("#watchlist-section")) {
-    $("#personal-shelves").innerHTML = Object.entries(personalLabels).map(([key, label]) => `<section id="${key}-section" class="personal-section" hidden><div class="section-heading"><div><span class="eyebrow">JUST FOR YOU</span><h2>${label}</h2>${key === "watchNext" ? `<p>Unwatched picks already on your server</p>` : key === "leavingSoon" ? `<p class="departure-note">Scheduled by Maintainerr. Dates show eligibility, not guaranteed removal.</p>` : ""}</div><button class="personal-collapse" data-collapse="${key}" aria-controls="${key}-content" aria-expanded="true" aria-label="Collapse ${label}" title="Collapse ${label}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><div id="${key}-content" class="poster-row"></div></section>`).join("");
+    $("#personal-shelves").innerHTML = Object.entries(personalLabels).map(([key, label]) => `<section id="${key}-section" class="personal-section" hidden><div class="section-heading"><div><span class="eyebrow">JUST FOR YOU</span><h2>${label}</h2>${key === "watchNext" ? `<p>Unwatched picks already on your server</p><div class="watch-next-filters" aria-label="What to watch next filters"><button type="button" data-watch-next-filter="watchNextAnimation"></button><button type="button" data-watch-next-filter="watchNextType"></button></div>` : key === "leavingSoon" ? `<p class="departure-note">Scheduled by Maintainerr. Dates show eligibility, not guaranteed removal.</p>` : ""}</div><button class="personal-collapse" data-collapse="${key}" aria-controls="${key}-content" aria-expanded="true" aria-label="Collapse ${label}" title="Collapse ${label}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><div id="${key}-content" class="poster-row"></div></section>`).join("");
   }
   applyPrefs();
   await Promise.all(Object.keys(personalLabels).map(key => {
@@ -1921,11 +1922,31 @@ function leavingLabel(item) {
   const date = new Date(item.leavingAt);
   return date <= new Date() ? "Eligible for removal" : `Eligible ${date.toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" })}`;
 }
+const watchNextModes = {watchNextAnimation: ["no","only","mixed"],watchNextType: ["movie","tv","both"]};
+const watchNextModeLabels = {no:"No animation",only:"Animation only",mixed:"Mixed",movie:"Movies only",tv:"TV only",both:"Both"};
+function updateWatchNextControls() {
+  for (const [key,modes] of Object.entries(watchNextModes)) {
+    const button = $(`[data-watch-next-filter="${key}"]`); if (!button) continue;
+    const mode = modes.includes(state.prefs[key]) ? state.prefs[key] : modes.at(-1);
+    button.textContent = watchNextModeLabels[mode];
+    button.setAttribute("aria-label", `${key === "watchNextAnimation" ? "Animation filter" : "Title type filter"}: ${watchNextModeLabels[mode]}. Click for ${watchNextModeLabels[modes[(modes.indexOf(mode)+1)%3]]}`);
+  }
+}
+function matchesWatchNextMode(item) {
+  const type = item.detail?.mediaType || item.type;
+  if (state.prefs.watchNextType !== "both" && type !== state.prefs.watchNextType) return false;
+  if (state.prefs.watchNextAnimation === "mixed") return true;
+  const genres = item.detail?.genres || [];
+  const animated = genres.some(genre => typeof genre === "string" && genre.trim().toLowerCase() === "animation");
+  return state.prefs.watchNextAnimation === "only" ? animated : genres.length > 0 && !animated;
+}
 function renderPersonalShelf(key, items) {
   updateShelfHtml($(`#${key}-content`), items.length ? items.map((item, index) => {
+    if (key === "watchNext" && !matchesWatchNextMode(item)) return "";
     const poster = item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`;
     return `<article class="poster-card"><button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}${key === "continueWatching" ? `<progress class="poster-progress" max="100" value="${Math.min(100, Math.max(0, Number(item.progress) || 0))}" aria-label="${escape(item.title)} watch progress"></progress>` : ""}</div><h3>${escape(item.title)}</h3></button><p>${escape(libraryShelfMetadata(item))}</p>${key === "leavingSoon" ? `<p class="leaving-date">${escape(leavingLabel(item))}</p>` : ""}${key === "continueWatching" ? `<p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-id="${escape(item.favoriteId)}" aria-label="Remove ${escape(item.title)} from Jellyfin favorites" title="Remove from Jellyfin favorites" aria-pressed="true">${heartIcon}</button>` : ""}</article>`;
   }).join("") : `<p class="empty">${key === "watchNext" ? "No unwatched library picks right now." : key === "leavingSoon" ? "No eligible scheduled departures in your Jellyfin library." : key === "watchlist" ? "Your Jellyfin movie and series favorites appear here. Use the heart in a title's popout to add one." : key === "continueWatching" ? "Nothing in progress. Start watching in Jellyfin and it appears here." : "No next episodes yet. Your Jellyfin viewing history fills this shelf."}</p>`);
+  if (key === "watchNext" && !$(`#${key}-content .poster-card`)) updateShelfHtml($(`#${key}-content`), '<p class="empty">No picks in this batch match your filters.</p>');
   fixBrokenPosters();
 }
 async function updateWatchlist(itemId, saved) {
@@ -1941,6 +1962,12 @@ $("#episode-save").addEventListener("click", async () => {
   finally { event.favoriteBusy = false; if (currentDetail === event) setDetailSave(event); }
 });
 $("#dashboard main").addEventListener("click", async event => {
+  const filter = event.target.closest("[data-watch-next-filter]");
+  if (filter) {
+    const key = filter.dataset.watchNextFilter, modes = watchNextModes[key];
+    state.prefs[key] = modes[(modes.indexOf(state.prefs[key])+1)%3];
+    persist(); renderPersonalShelf("watchNext", state.personalItems.watchNext || []); return;
+  }
   const collapse = event.target.closest("[data-collapse]");
   if (collapse) { const key = collapse.dataset.collapse; state.prefs[`${key}Collapsed`] = !state.prefs[`${key}Collapsed`]; collapse.setAttribute("aria-expanded", !state.prefs[`${key}Collapsed`]); collapse.setAttribute("aria-label", `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${personalLabels[key]}`); persist(); return; }
   const remove = event.target.closest("[data-remove-id]");

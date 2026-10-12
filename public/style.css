@@ -1699,3 +1699,6 @@ main > section:not([hidden]), .personal-section:not([hidden]) { padding-bottom:1
 .network-matches { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
 .network-matches:empty { display:none; }
 .network-matches button { font-size:12px; padding:6px 10px; }
+
+.watch-next-filters { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.watch-next-filters button { min-height:36px; padding:6px 12px; font-size:13px; color:var(--muted); }
