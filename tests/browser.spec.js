@@ -2391,6 +2391,11 @@ test("Home refreshes its active personal shelves without polling Discover", asyn
   await page.route("**/api/recent", route => { recent++; route.fulfill({ json: { items: [] } }); });
   for (const key of ["continueWatching", "nextUp"]) await page.route(`**/api/personal/${key}`, route => { personal++; route.fulfill({ json: { items: [] } }); });
   await view(page, "home"); await page.evaluate(() => document.activeElement.blur());
+  // Fake timers advance before network reads resolve. Settle the page-entry
+  // reads first, then advance a fresh full interval for the timer under test.
+  await expect.poll(() => page.evaluate(() => !shelfRefreshBusy && shelfRequests.size === 0)).toBe(true);
+  await page.clock.runFor(15000);
+  await expect.poll(() => page.evaluate(() => !shelfRefreshBusy && shelfRequests.size === 0)).toBe(true);
   await page.clock.runFor(75000);
   await expect.poll(() => personal).toBeGreaterThanOrEqual(2); expect(recent).toBe(0);
 });
