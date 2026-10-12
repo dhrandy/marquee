@@ -1678,3 +1678,20 @@ main > section:not([hidden]), .personal-section:not([hidden]) { padding-bottom:1
 
 #episode-certification-line { margin:8px 0 0; color:#e2e5ed; font-size:15px; line-height:1.35; }
 #episode-certification-line:not([hidden]) + #episode-subtitle { margin-top:6px; }
+
+/* Keep scores aligned, but place metadata directly below the actual title. */
+.popular-row .result-caption { position:relative; }
+.popular-row .caption-copy { position:absolute; inset:0 0 auto; }
+.popular-row .caption-copy h3 { height:auto; min-height:0; }
+.popular-row .caption-baseline { visibility:hidden; pointer-events:none; }
+
+.popular-row .caption-baseline { padding-top:12px; }
+.popular-row .caption-title-space { display:block; height:40.5px; margin-bottom:6px; }
+.popular-row .caption-meta-space { display:block; color:var(--muted); font-size:11px; margin-bottom:8px; }
+@media(max-width:600px) { .popular-row .caption-meta-space { font-size:13px; line-height:1.5; } }
+.result-caption .caption-baseline { display:none; }
+.popular-row .result-caption .caption-baseline { display:block; }
+/* Reserve two metadata lines for every Popular card so scores share a baseline. */
+.popular-row .caption-meta-space { height:24px; overflow:hidden; }
+.popular-row .caption-copy .result-meta { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+@media(max-width:600px) { .popular-row .caption-meta-space { height:39px; } }

@@ -3093,12 +3093,12 @@ for (const width of [1440, 834, 601, 393, 280]) {
 }
 
 for (const width of [393,1440]) {
- test(`recommendation metadata aligns for one and two line titles at ${width}px`, async ({page})=>{
+ test(`recommendation metadata follows title and scores align at ${width}px`, async ({page})=>{
   await page.setViewportSize({width,height:1000});await login(page);
   await page.getByRole("button",{name:"Settings",exact:true}).click();await page.locator('[data-pref="recommendations"]').check();await page.getByRole("button",{name:"Close settings"}).click();
   await page.evaluate(()=>{document.querySelector("#recommendations-content").innerHTML=["Law & Order: Special Victims Unit","Reacher","The Office"].map((title,i)=>resultCardHtml({id:800+i,title,mediaType:"tv",year:2026,contentRating:"TV-MA",poster:"north",rating:{value:8.1,source:"TMDB"}})).join("");});
-  const positions=await page.locator('#recommendations-content .result-card').evaluateAll(cards=>cards.map(card=>({title:card.querySelector('h3').getBoundingClientRect().height,meta:card.querySelector('.result-meta').getBoundingClientRect().y,score:card.querySelector('.media-rating').getBoundingClientRect().y})));
-  for(const value of positions){expect(value.title).toBeGreaterThanOrEqual(40);expect(Math.abs(value.meta-positions[0].meta)).toBeLessThan(1);expect(Math.abs(value.score-positions[0].score)).toBeLessThan(1);}
+  const positions=await page.locator('#recommendations-content .result-card').evaluateAll(cards=>cards.map(card=>({titleBottom:card.querySelector('.caption-copy h3').getBoundingClientRect().bottom,meta:card.querySelector('.caption-copy .result-meta').getBoundingClientRect().y,score:card.querySelector('.media-rating').getBoundingClientRect().y})));
+  for(const value of positions){expect(value.meta-value.titleBottom).toBeGreaterThanOrEqual(0);expect(value.meta-value.titleBottom).toBeLessThan(8);expect(Math.abs(value.score-positions[0].score)).toBeLessThan(1);}
   await page.locator('#recommendations-content').screenshot({path:`${shots}/marquee-title-alignment-${width}.png`});
  });
 }
@@ -3236,4 +3236,20 @@ test("calendar Requests and Leaving soon refresh only on the visible active page
   const before = { ...calls };
   await page.clock.runFor(150000);
   expect(calls).toEqual(before);
+});
+
+for (const width of [393,834,1440]) test(`Popular metadata follows title and scores align at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({width,height:1000}); await login(page);
+  for (const size of ["small","standard","large"]) {
+    const result = await page.evaluate(size => {
+      state.prefs.posterSize=size; applyPrefs();
+      const container=document.querySelector("#popular-tv"); container.replaceChildren();
+      updateShelfHtml(container,[{title:"Law & Order: Special Victims Unit",streamer:"TV",year:1999,contentRating:"TV-14"},{title:"Reacher",streamer:"Amazon",year:2022,contentRating:"TV-MA"},{title:"A very long show name here",streamer:"Long Network Name",year:2026,contentRating:"TV-MA"}].map((item,i)=>`<div class="ranked-poster">${resultCardHtml({...item,mediaType:"tv",id:i+1,poster:"signal",rating:{value:8.2,source:"TMDB"}})}</div>`).join(""));
+      return [...container.querySelectorAll(".result-card")].map(card => {
+        const title=card.querySelector(".caption-copy h3"),meta=card.querySelector(".caption-copy .result-meta");
+        return {score:card.querySelector(".media-rating").getBoundingClientRect().top,gap:meta.getBoundingClientRect().top-title.getBoundingClientRect().bottom,metaBottom:meta.getBoundingClientRect().bottom};
+      });
+    }, size);
+    for(const item of result) { expect(Math.abs(item.score-result[0].score),size).toBeLessThan(1); expect(item.gap,size).toBeGreaterThanOrEqual(0); expect(item.gap,size).toBeLessThan(8); expect(item.metaBottom,size).toBeLessThan(item.score); }
+  }
 });
