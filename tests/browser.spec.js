@@ -2397,7 +2397,12 @@ test("Home refreshes its active personal shelves without polling Discover", asyn
   await page.clock.runFor(15000);
   await expect.poll(() => page.evaluate(() => !shelfRefreshBusy && shelfRequests.size === 0)).toBe(true);
   await page.clock.runFor(75000);
-  await expect.poll(() => personal).toBeGreaterThanOrEqual(2); expect(recent).toBe(0);
+  try { await expect.poll(() => personal).toBeGreaterThanOrEqual(2); }
+  catch (error) {
+    const diagnostics = await page.evaluate(() => ({ page:dashboardPage,hidden:document.hidden,safe:safeShelfRefresh(),focus:document.activeElement?.outerHTML,busy:shelfRefreshBusy,now:Date.now(),interaction:shelfInteractionAt,loaded:{...shelfLastLoaded},prefs:[state.prefs.shelfRefreshMinutes,state.prefs.continueWatching,state.prefs.nextUp],timer:shelfTimer }));
+    throw new Error(`Home refresh state: ${JSON.stringify(diagnostics)}; calls: ${personal}. ${error.message}`);
+  }
+  expect(recent).toBe(0);
 });
 
 for (const width of [1440, 393, 280]) {
