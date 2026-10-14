@@ -1006,3 +1006,25 @@ export async function recommendations(user, seerrUserId) {
   const unowned = checked.filter(item => item.libraryOwned !== true);
   return { seed: seeds[0].title, seeds: seeds.map(seed => seed.title), items: await withShelfCertifications(unowned, seerrUserId) };
 }
+
+// One bounded root listing and count-only queries, all using this viewer's token.
+export async function jellyfinLibraryStats(user, kidsLibrary = "", kidsShowsLibrary = "") {
+  const headers = jellyfinHeaders(user.token, user.deviceId);
+  const rootQuery = new URLSearchParams({UserId:user.id,Recursive:"false",EnableImages:"false",EnableUserData:"false",Limit:"100"});
+  const root = await upstream(process.env.JELLYFIN_URL, `/Items?${rootQuery}`, {headers});
+  if (root.TotalRecordCount > 100) throw new Error("Too many libraries to count safely.");
+  const libraries = (root.Items || []).filter(item=>["movies","tvshows"].includes(item.CollectionType) && typeof item.Id === "string" && typeof item.Name === "string").map(item=>({id:item.Id,name:item.Name,type:item.CollectionType}));
+  const moviesLibraries=libraries.filter(lib=>lib.type === "movies"),showsLibraries=libraries.filter(lib=>lib.type === "tvshows");
+  const selected = kidsLibrary ? moviesLibraries.find(lib=>lib.id === kidsLibrary) : moviesLibraries.find(lib=>lib.name.trim().toLowerCase() === "kids movies");
+  const selectedShows = kidsShowsLibrary ? showsLibraries.find(lib=>lib.id === kidsShowsLibrary) : showsLibraries.find(lib=>lib.name.trim().toLowerCase() === "kids shows");
+  const count = async (type,parentId="")=>{
+    const query = new URLSearchParams({UserId:user.id,Recursive:"true",IncludeItemTypes:type,ExcludeLocationTypes:"Virtual",IsMissing:"false",IsPlaceHolder:"false",EnableImages:"false",EnableUserData:"false",EnableTotalRecordCount:"true",Limit:"0"});
+    if(parentId)query.set("ParentId",parentId);
+    const result = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`,{headers});
+    if(!Number.isSafeInteger(result.TotalRecordCount) || result.TotalRecordCount < 0)throw new Error("Jellyfin did not return a valid count.");
+    return result.TotalRecordCount;
+  };
+  const [movies,tvShows,episodes,kidsMovies,kidsShows,kidsEpisodes] = await Promise.all([count("Movie"),count("Series"),count("Episode"),selected ? count("Movie",selected.id) : null,selectedShows ? count("Series",selectedShows.id) : null,selectedShows ? count("Episode",selectedShows.id) : null]);
+  if(kidsMovies > movies || kidsShows > tvShows || kidsEpisodes > episodes)throw new Error("Jellyfin library counts disagree.");
+  return {libraries,kidsLibrary:selected?.id || "",kidsShowsLibrary:selectedShows?.id || "",selectionUnavailable:Boolean(kidsLibrary && !selected || kidsShowsLibrary && !selectedShows),counts:{movies:selected ? movies-kidsMovies : null,kidsMovies,tvShows:selectedShows ? tvShows-kidsShows : null,kidsShows,episodes:selectedShows ? episodes-kidsEpisodes : null,kidsEpisodes}};
+}

@@ -31,6 +31,7 @@ const defaults = {
   popular: true, inTheaters: true,
   ratings: true,
   requestedBy: true,
+  libraryStats: true, kidsMoviesLibrary: "", kidsShowsLibrary: "",
   colorblind: false,
   jellyfinLink: true,
   popularCollapsed: false,
@@ -80,7 +81,11 @@ function startOfWeek(date) {
 let accountGeneration = 0;
 function resetAccountState() {
   accountGeneration++;
-  lastRequests = null; requestsVersion++;
+  lastRequests = null; requestsVersion++; libraryStatsVersion++;
+  $("#libraryStats-content").replaceChildren();
+  $("#libraryStats-status").textContent="";
+  $("#library-stats-settings-status").textContent="";
+  for(const id of ["kids-movies-library","kids-shows-library"]) $("#"+id).innerHTML = '<option value="">Choose a library</option>';
   factsCache.clear(); certCache.clear(); shelfRequests.clear();
   for (const key of Object.keys(shelfLastLoaded)) delete shelfLastLoaded[key];
   personalLoad++; recentRequest++; calendarRequest++; factsRequest++; searchSeq++; reminderSearchVersion++;
@@ -136,7 +141,7 @@ $("#sync-display").addEventListener("change", async event => {
     state.prefs.syncDisplay = enabled;
     state.view = state.prefs.lastView || (state.prefs.defaultView === "auto" ? "agenda" : state.prefs.defaultView);
     persist(); buildSettings();
-    await Promise.all([loadPersonalShelves(), loadRecommendations(), loadRequests(), loadCalendar()]);
+    await Promise.all([loadPersonalShelves(), loadRecommendations(), loadRequests(), loadCalendar(),loadLibraryStats()]);
   } catch (error) { event.target.checked = false; $("#sync-display-status").textContent = error.message; }
 });
 let weatherWrites = Promise.resolve();
@@ -184,6 +189,7 @@ function applySectionOrder() {
     for (const el of desired) main.insertBefore(el, $("#nothing"));
   }
   $("#personal-shelves").hidden = true;
+  main.insertBefore($("#libraryStats-section"), $("#nothing"));
   applyDashboardPage();
 }
 let dashboardPage = "discover";
@@ -199,12 +205,13 @@ function applyDashboardPage() {
   $("#view-kicker").textContent = home ? "YOUR COLLECTION, YOUR PACE" : "FIND YOUR NEXT FAVORITE";
   $("#view-title").textContent = home ? "Right where you left off." : "Something good is waiting.";
   $("#view-description").textContent = home ? "Keep watching, save a favorite, and catch it before it's gone." : "Explore the latest arrivals, see what's next, and find your next watch.";
+  $("#libraryStats-section").classList.toggle("page-away", !home);
   const visible = pageSections[dashboardPage];
   for (const key of sectionOrder) {
     const element = sectionElement(key);
     if (element) element.classList.toggle("page-away", !visible.includes(key));
   }
-  $("#nothing").hidden = visible.some(key => sectionElement(key) && !sectionElement(key).hidden);
+  $("#nothing").hidden = (home && !$("#libraryStats-section").hidden) || visible.some(key => sectionElement(key) && !sectionElement(key).hidden);
   $("#nothing").textContent = home ? "Your On Jellyfin shelves are off. Turn on a personal shelf or Requests in Settings." : "Your Discover sections are off. Turn one on in Settings.";
   $("#page-nav").append(...(state.prefs.firstTab === "home" ? [$('button[data-page="home"]'), $('button[data-page="discover"]')] : [$('button[data-page="discover"]'), $('button[data-page="home"]')]));
   $("#tab-order").value = state.prefs.firstTab || "discover";
@@ -313,6 +320,7 @@ function applyPrefs() {
   $("#recommendations-section").hidden = !state.prefs.recommendations;
   $("#requests-filter").value = !$("#requests-filter").querySelector('[value="all"]') || state.prefs.myRequests ? "mine" : "all";
   $("#requests-section").hidden = !state.prefs.requests;
+  $("#libraryStats-section").hidden = !state.prefs.libraryStats;
   $("#legend").hidden = !state.prefs.legend;
   $(".recent-controls").hidden = !state.prefs.shelfNavigation;
   all(".shelf-controls").forEach((el) => {
@@ -359,6 +367,7 @@ function buildSettings() {
     inTheaters: "In theaters (US)",
     ratings: "Show ratings",
     requestedBy: "Requested by in title details",
+    libraryStats: "Jellyfin library counts",
     colorblind: "Colorblind-friendly status colors",
     jellyfinLink: "Jellyfin shortcut",
     legend: "Calendar status legend",
@@ -388,6 +397,7 @@ function buildSettings() {
       if (el.dataset.pref === "popular" && el.checked) loadPopular();
       if (el.dataset.pref === "inTheaters" && el.checked) loadInTheaters();
       if (el.dataset.pref === "requests" && el.checked) loadRequests();
+      if (el.dataset.pref === "libraryStats" && el.checked) loadLibraryStats();
       if (["watchlist", "watchLater", "continueWatching", "nextUp", "watchNext", "leavingSoon"].includes(el.dataset.pref)) loadPersonalShelves();
     }),
   );
@@ -482,6 +492,7 @@ async function enter(name) {
     loadPopular(),
     loadInTheaters(),
     loadPersonalShelves(),
+    loadLibraryStats(),
   ]);
 }
 function fixBrokenPosters() {
@@ -617,14 +628,14 @@ function scheduleShelfRefresh() {
 async function autoRefreshShelves() {
   if (shelfRefreshBusy || !shelfRefreshInterval() || !safeShelfRefresh()) return;
   const interval = shelfRefreshInterval() * 60000;
-  const keys = ["recent", "continueWatching", "nextUp", "watchNext", "watchLater", "leavingSoon", "requests", "calendar"].filter(key => pageSections[dashboardPage].includes(key) && state.prefs[key] && Date.now() - (shelfLastLoaded[key] || 0) >= interval);
+  const keys = ["recent", "continueWatching", "nextUp", "watchNext", "watchLater", "leavingSoon", "requests", "calendar", "libraryStats"].filter(key => (key === "libraryStats" ? dashboardPage === "home" : pageSections[dashboardPage].includes(key)) && state.prefs[key] && Date.now() - (shelfLastLoaded[key] || 0) >= interval);
   if (!keys.length) return;
   shelfRefreshBusy = true;
   try {
     // Failed reads also wait one interval instead of hammering an unavailable server.
     for (const key of keys) shelfLastLoaded[key] = Date.now();
     $("#shelf-refresh-status").textContent = "";
-    await Promise.all(keys.map(key => key === "recent" ? loadRecent({ quiet: true }) : key === "calendar" ? loadCalendar({ quiet: true }) : key === "requests" ? loadRequests({ quiet: true }) : loadPersonalShelf(key, { quiet: true })));
+    await Promise.all(keys.map(key => key === "recent" ? loadRecent({ quiet: true }) : key === "calendar" ? loadCalendar({ quiet: true }) : key === "requests" ? loadRequests({ quiet: true }) : key === "libraryStats" ? loadLibraryStats({quiet:true}) : loadPersonalShelf(key, { quiet: true })));
   } finally { shelfRefreshBusy = false; }
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) autoRefreshShelves(); });
@@ -2141,3 +2152,36 @@ $("#notify-test").addEventListener("click", async () => {
 });
 
 document.addEventListener("click",async event=>{const button=event.target.closest('[data-watch-key]');if(!button || !button.dataset.watchKey)return;event.preventDefault();event.stopPropagation();const key=button.dataset.watchKey,saved=!watchLaterKeys.has(key);button.disabled=true;try{await api('/api/watch-later',{method:'POST',body:JSON.stringify({key,saved})});await loadPersonalShelf('watchLater');}catch(error){report(error);}finally{button.disabled=false;}},true);
+
+let libraryStatsVersion = 0;
+async function loadLibraryStats({quiet=false}={}) {
+  if (!state.prefs.libraryStats) return;
+  const version = ++libraryStatsVersion;
+  try {
+    const query=new URLSearchParams();
+    if(state.prefs.kidsMoviesLibrary)query.set("kidsLibrary",state.prefs.kidsMoviesLibrary);
+    if(state.prefs.kidsShowsLibrary)query.set("kidsShowsLibrary",state.prefs.kidsShowsLibrary);
+    const data = await api(`/api/library-stats?${query}`);
+    if (version !== libraryStatsVersion || !state.prefs.libraryStats) return;
+    if(quiet && !safeShelfRefresh()) {delete shelfLastLoaded.libraryStats;return;}
+    shelfLastLoaded.libraryStats=Date.now();
+    const select = $("#kids-movies-library");
+    select.innerHTML = '<option value="">Choose a library</option>' + data.libraries.filter(lib=>lib.type === "movies").map(lib=>`<option value="${escape(lib.id)}">${escape(lib.name)}</option>`).join("");
+    select.value = data.kidsLibrary || "";
+    const showsSelect=$("#kids-shows-library");
+    showsSelect.innerHTML = '<option value="">Choose a library</option>' + data.libraries.filter(lib=>lib.type === "tvshows").map(lib=>`<option value="${escape(lib.id)}">${escape(lib.name)}</option>`).join("");
+    showsSelect.value=data.kidsShowsLibrary || "";
+    const markup = [["Movies",data.counts.movies],["Kids Movies",data.counts.kidsMovies],["TV Shows",data.counts.tvShows],["Kids Shows",data.counts.kidsShows],["Episodes",data.counts.episodes],["Kids Episodes",data.counts.kidsEpisodes]].map(([label,count])=>`<article class="library-stat"><h3>${label}</h3><strong>${Number.isSafeInteger(count) && count >= 0 ? count.toLocaleString("en-US") : "-"}</strong>${count == null ? "<small>Choose a library in Settings</small>" : ""}</article>`).join("");
+    if($("#libraryStats-content").innerHTML !== markup)$("#libraryStats-content").innerHTML=markup;
+    $("#libraryStats-status").textContent = "";
+    $("#library-stats-settings-status").textContent = data.selectionUnavailable ? "The selected library is no longer available to this account. Choose another library." : "";
+  } catch (error) {
+    if (version !== libraryStatsVersion) return;
+    if(quiet) {$("#shelf-refresh-status").textContent="Refresh unavailable. Keeping the last loaded counts.";return;}
+    $("#libraryStats-content").replaceChildren();
+    $("#libraryStats-status").textContent = "Library counts could not be loaded from Jellyfin.";
+  }
+}
+$("#kids-movies-library").addEventListener("change", event=>{state.prefs.kidsMoviesLibrary=event.target.value;persist();loadLibraryStats();});
+
+$("#kids-shows-library").addEventListener("change",event=>{state.prefs.kidsShowsLibrary=event.target.value;persist();loadLibraryStats();});

@@ -1727,3 +1727,10 @@ body { padding-top:var(--safe-top); }
 
 
 #episode-certification-line {overflow-wrap:anywhere;}
+
+.library-stats-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;}
+.library-stat {border:1px solid #303547;border-radius:18px;padding:24px;background:var(--panel);min-width:0;}
+.library-stat h3 {font-size:16px;font-weight:500;color:var(--muted);margin:0 0 20px;}
+.library-stat strong {display:block;font-size:clamp(28px,3vw,38px);font-weight:700;line-height:1.15;letter-spacing:-.04em;font-variant-numeric:tabular-nums;}
+.library-stat small {display:block;color:var(--muted);margin-top:12px;}
+@media(max-width:700px){.library-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}.library-stat{padding:20px 16px;}.library-stat h3{font-size:14px;margin-bottom:16px;}}

@@ -74,6 +74,15 @@ const service = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ Items: [{ Id: `episode-${user}`, SeriesId: `series-${user}`, SeriesName: `Personal ${user}`, Name: "The next episode", Type: "Episode", ParentIndexNumber: 1, IndexNumber: 2, RunTimeTicks: 24000000000, UserData: { LastPlayedDate: new Date().toISOString(), PlaybackPositionTicks: 12000000000 }, ImageTags: { Primary: "tag" } }, { Id: "great-series", Name: "The Great", Type: "Series", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2020 }, { Id: "landman-series", Name: "Landman", Type: "Series", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2024 }, { Id: "personal-movie", Name: "A film", Type: "Movie", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2026 }, { Id: "broken-series", Name: "Unresolved show", Type: "Series", UserData: {LastPlayedDate: new Date().toISOString()}, ProductionYear: 2022 }, ...(url.pathname !== "/Shows/NextUp" ? [{Id:"great-episode",Type:"Episode",SeriesId:"great-series",SeriesName:"The Great",Name:"The Wedding",ParentIndexNumber:2,IndexNumber:4,RunTimeTicks:24000000000,UserData:{LastPlayedDate:new Date().toISOString(),PlaybackPositionTicks:12000000000}}, {Id:"great-season",Type:"Season",SeriesId:"great-series",Name:"Season 2",UserData:{LastPlayedDate:new Date().toISOString()}}] : [])] }));
   }
   if (url.pathname === "/Items") {
+    if(url.searchParams.get("Recursive")==="false") {
+      const user=url.searchParams.get("UserId");assert.ok(req.headers.authorization?.includes(`token-${user}`));
+      return res.end(JSON.stringify({Items:user==="bob" ? [{Id:"regular",Name:"Movies",CollectionType:"movies"}] : [{Id:"regular",Name:"Movies",CollectionType:"movies"},{Id:"kids",Name:"Kids Movies",CollectionType:"movies"},{Id:"kids-shows",Name:"Kids Shows",CollectionType:"tvshows"}]}));
+    }
+    if(url.searchParams.get("Limit")==="0" && url.searchParams.get("EnableImages")==="false") {
+      const user=url.searchParams.get("UserId");assert.ok(req.headers.authorization?.includes(`token-${user}`));assert.equal(url.searchParams.get("EnableTotalRecordCount"),"true");assert.equal(url.searchParams.get("IsMissing"),"false");assert.equal(url.searchParams.get("IsPlaceHolder"),"false");assert.equal(url.searchParams.get("ExcludeLocationTypes"),"Virtual");
+      const type=url.searchParams.get("IncludeItemTypes"),parent=url.searchParams.get("ParentId");assert.ok(!parent || (user!=="bob" && ["kids","kids-shows"].includes(parent)));
+      return res.end(JSON.stringify({Items:[],TotalRecordCount:parent==="kids" ? 167 : parent==="kids-shows" ? (type==="Series" ? 38 : 1422) : ({Movie:user==="bob"?40:1168,Series:211,Episode:15834})[type]}));
+    }
     if (url.searchParams.get("UserId") === "revoked-viewer") { res.writeHead(401); return res.end("{}"); }
     const user = url.searchParams.get("UserId");
     if (!req.headers.authorization?.includes(`token-${user}`)) {
@@ -537,6 +546,14 @@ try {
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
+  await test("library counts are viewer-scoped, separate kids movies and reject inaccessible selected libraries",async()=>{
+    assert.equal((await fetch(`${base}/api/library-stats`)).status,401);
+    const alice=(await signin("alice")).headers.get("set-cookie"),bob=(await signin("bob")).headers.get("set-cookie");
+    const read=async(cookie,query="")=>(await fetch(`${base}/api/library-stats${query}`,{headers:{Cookie:cookie}})).json();
+    const a=await read(alice);assert.deepEqual(a.counts,{movies:1001,kidsMovies:167,tvShows:173,kidsShows:38,episodes:14412,kidsEpisodes:1422});assert.equal(a.kidsLibrary,"kids");assert.equal(a.libraries.length,3);
+    const b=await read(bob,"?kidsLibrary=kids");assert.equal(b.selectionUnavailable,true);assert.equal(b.kidsLibrary,"");assert.deepEqual(b.counts,{movies:null,kidsMovies:null,tvShows:null,kidsShows:null,episodes:null,kidsEpisodes:null});
+    assert.equal((await fetch(`${base}/api/library-stats?kidsLibrary=${"x".repeat(101)}`,{headers:{Cookie:alice}})).status,400);
+  });
   await test("live adapters preserve user identity and season counts without exposing credentials", async () => {
     const first = await signin("alice");
     assert.equal(first.status, 200);

@@ -143,6 +143,7 @@
           </div>
           <label class="request-filter">Show<select id="requests-filter"><option value="all">Everyone's requests</option><option value="mine">My requests</option></select></label><div id="requests" class="requests-list"></div>
         </section>
+        <section id="libraryStats-section" hidden aria-label="Jellyfin library counts"><div id="libraryStats-content" class="library-stats-grid"></div><p id="libraryStats-status" role="status"></p></section>
         <p id="nothing" hidden>Both sections are hidden. Open Settings to show them again.</p>
         <footer><span>Your Media. Your Server. Your Way.</span><span id="updated"></span></footer>
       </main>
@@ -176,6 +177,7 @@
         <div class="order-footer"><span id="section-order-status" role="status"></span></div>
       </div>
       <div id="feature-settings"></div>
+      <div class="settings-group" id="library-stats-settings"><h3>Library counts</h3><label class="setting">Kids Movies library<select id="kids-movies-library"><option value="">Choose a library</option></select></label><label class="setting">Kids Shows library<select id="kids-shows-library"><option value="">Choose a library</option></select></label><small>Movies excludes Kids Movies. TV Shows and Episodes exclude Kids Shows. Counts include only titles your Jellyfin account can access.</small><p id="library-stats-settings-status" role="status"></p></div>
       <label class="setting">Poster size<select id="poster-size"><option value="small">Small</option><option value="standard">Standard</option><option value="large">Large</option></select></label>
       <small>Applies to every poster shelf on this device. This choice stays on this device, even when display sync is on.</small>
       <label class="setting">Auto-refresh shelves<select id="shelf-refresh-minutes"><option value="0">Off</option><option value="1">Every minute</option><option value="2">Every 2 minutes</option><option value="5">Every 5 minutes</option><option value="10">Every 10 minutes</option><option value="15">Every 15 minutes</option></select></label>

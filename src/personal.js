@@ -2,7 +2,7 @@
 export const displayPreferenceDefaults = {
   recent: true, calendar: true, legend: true, addedDates: true,
   shelfNavigation: true, search: true, hideUnmonitored: false,
-  inTheaters: true, requests: false, requestedBy: true, popular: true, ratings: true, jellyfinLink: true,
+  inTheaters: true, requests: false, requestedBy: true, libraryStats: true, kidsMoviesLibrary: "", kidsShowsLibrary: "", popular: true, ratings: true, jellyfinLink: true,
   firstTab: "discover", popularCollapsed: false, defaultView: "auto", watchlist: false, watchLater: false, watchLaterCollapsed: false,
   leavingSoon: false, leavingSoonCollapsed: false, recommendations: false, myRequests: false, continueWatching: true, nextUp: true, watchNext: true, watchlistCollapsed: false,
   continueWatchingCollapsed: false, nextUpCollapsed: false, watchNextCollapsed: false, watchNextAnimation: "mixed", watchNextType: "both",
@@ -14,6 +14,7 @@ export function cleanDisplayPreferences(value) {
     if (!(key in value)) continue;
     if (typeof defaultValue === "boolean") {
       if (typeof value[key] !== "boolean") return null;
+    } else if (["kidsMoviesLibrary","kidsShowsLibrary"].includes(key)) { if (typeof value[key] !== "string" || value[key].length > 100) return null;
     } else if (key === "watchNextAnimation") { if (!["no", "only", "mixed"].includes(value[key])) return null;
     } else if (key === "watchNextType") { if (!["movie", "tv", "both"].includes(value[key])) return null;
     } else if (key === "firstTab") { if (!["discover", "home"].includes(value[key])) return null;

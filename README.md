@@ -412,3 +412,7 @@ Everyone requests requires the linked Seerr account to have View Requests, Manag
 Request status defaults off and can be enabled in Settings. Previously saved on/off choices are preserved.
 
 Next up uses the same 180-day activity window as Continue watching, through Jellyfin NextUpDateCutoff (series viewing activity, not the next episode air date). Both sections are hidden when they have no items, even when enabled; later successful refreshes can show them again.
+
+### Jellyfin library counts
+
+Six count cards sit at the bottom of On Jellyfin: Movies, Kids Movies, TV Shows, Kids Shows, Episodes and Kids Episodes. On by default and hideable in Settings. Choose the two kids libraries in Settings; exact names Kids Movies and Kids Shows are selected automatically when visible to your account. Standard counts exclude the selected kids library. Missing or inaccessible selections show a dash, not a guessed total. Counts follow your Jellyfin access, omit virtual/missing/placeholder media, and refresh with the active On Jellyfin page. No Seerr catalog totals, item crawl or admin API key.

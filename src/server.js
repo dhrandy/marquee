@@ -14,7 +14,7 @@ import {
   authenticate,
   jellyfinLink, recommendations, withWatched, favoriteItems, favoriteState, setFavorite,
   recentItems,
-  personalItems,
+  personalItems, jellyfinLibraryStats,
   calendar,
   jellyfinHeaders,
   seerrSearch,
@@ -1000,6 +1000,14 @@ app.get("/api/seerr/image", requireUser, async (req, res) => {
   } catch {
     res.sendStatus(502);
   }
+});
+app.get("/api/library-stats", requireUser, async (req,res)=>{
+  const kidsLibrary = req.query.kidsLibrary || "", kidsShowsLibrary = req.query.kidsShowsLibrary || "";
+  if([kidsLibrary,kidsShowsLibrary].some(value=>typeof value !== "string" || value.length > 100))return res.status(400).json({error:"Invalid library selection."});
+  try {
+    if(demo)return res.json({libraries:[],kidsLibrary:"",kidsShowsLibrary:"",selectionUnavailable:Boolean(kidsLibrary || kidsShowsLibrary),counts:{movies:null,kidsMovies:null,tvShows:null,kidsShows:null,episodes:null,kidsEpisodes:null}});
+    res.json(await jellyfinLibraryStats(req.user,kidsLibrary,kidsShowsLibrary));
+  } catch {res.status(502).json({error:"Library counts could not be loaded from Jellyfin."});}
 });
 app.get("/api/personal/:kind", requireUser, async (req, res) => {
   if (!["continueWatching", "nextUp", "watchNext"].includes(req.params.kind)) return res.sendStatus(404);
