@@ -640,7 +640,7 @@ app.get("/api/library/:id/facts", requireUser, async (req, res) => {
     if (access.error) return res.json({ facts: null });
     const detail = await seerrDetails(tmdb.type, tmdb.id, access.id);
     const [marked] = await withWatched(req.user, [detail]);
-    res.json({ facts: detail.facts, network: tmdb.type === "tv" ? detail.network : null, mediaType: tmdb.type, mediaId: tmdb.id, watched: marked.watched, favoriteId: marked.favoriteId, favorite: marked.favorite });
+    res.json({ facts: detail.facts, contentRating: detail.contentRating, network: tmdb.type === "tv" ? detail.network : null, mediaType: tmdb.type, mediaId: tmdb.id, watched: marked.watched, favoriteId: marked.favoriteId, favorite: marked.favorite });
   } catch {
     res.json({ facts: null });
   }
@@ -835,7 +835,7 @@ app.get("/api/seerr/requests", requireUser, async (req, res) => {
   try {
     const access = await requestAccess(req.user);
     if (access.error) return res.status(403).json({ error: access.error });
-    res.json({ requests: await seerrRequests(access.id, req.query.mine === "true") });
+    res.json({ requests: await seerrRequests(access.id, req.query.mine === "true" || !access.viewAllRequests), viewAllRequests: access.viewAllRequests });
   } catch (error) {
     seerrFailure(res, error);
   }

@@ -1718,3 +1718,12 @@ main > section:not([hidden]), .personal-section:not([hidden]) { padding-bottom:1
 
 .episode-toolbar #episode-star {position:static; padding:9px;}
 .episode-toolbar #episode-star.starred {color:#e5c778;}
+
+/* Keep standalone iPad/iPhone content and sticky navigation below the status bar. */
+:root { --safe-top: env(safe-area-inset-top, 0px); }
+body { padding-top:var(--safe-top); }
+.page-nav { padding-top:calc(13px + var(--safe-top)); background:var(--bg); }
+@media (max-width:700px) { .page-nav { padding-top:calc(10px + var(--safe-top)); } }
+
+
+#episode-certification-line {overflow-wrap:anywhere;}

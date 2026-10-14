@@ -34,7 +34,7 @@ Marquee runs from source using the official Node image. There is no published Ma
 
 - Discover and On Jellyfin pages with hideable, collapsible shelves. Reorder shelves separately for each page in Settings.
 - Recently added movies and TV seasons, with added dates, episode details and watched status from your Jellyfin account.
-- Optional Continue watching, Next up and Favorites shelves. Favorites uses Jellyfin favorites; the filled heart removes a favorite. Episode favorites apply to the parent series.
+- Continue watching, Next up and What to watch next shelves are on by default and hideable in Settings; saved choices are preserved. Favorites is optional. Favorites uses Jellyfin favorites; the filled heart removes a favorite. Episode favorites apply to the parent series.
 - Optional Recommendations based on up to five latest distinct watched movies/shows, with related titles from Seerr/TMDB.
 - Seerr search, popular movies/shows and requests, using your linked Seerr permissions and quotas. Requests can show Everyone or My requests when your Seerr permissions allow it.
 - Shared Sonarr/Radarr release calendar with month, week, day, agenda and list views. Agenda is the default. Sunday-first layout, release filters, cinema/home releases and a status legend.
@@ -404,3 +404,11 @@ What to watch next has cycling Animation (No animation, Animation only, Mixed) a
 ### Watchlist (stars)
 
 Watchlist is separate from Jellyfin Favorites (hearts). Star accessible movies and shows on your Jellyfin server to save them for later. Seerr/catalog-only titles have no star; Seerr availability alone is not proof of library ownership. Saved per Jellyfin viewer in the persistent settings volume, up to500titles, with no Seerr sync. Enable its shelf on On Jellyfin in Settings. Stars use Jellyfin IDs. Adding rechecks library access; the saved shelf rechecks all IDs in one bounded query and hides unavailable items. Old catalog-only saves are hidden, not deleted. Saved titles do not automatically request media, mark it watched or remove on completion.
+
+Title details show a bold certification followed by Requested by on the certification line when Seerr exposes requesters for that title. Names are taken only from that viewer's Seerr detail response, duplicate users are combined, and titles with no named requesters have no row. Toggle Requested by in title details in Settings (on by default); it follows optional display-settings sync. No additional requests or user-directory lookup.
+
+Everyone requests requires the linked Seerr account to have View Requests, Manage Requests or admin permission. Restricted accounts show My requests only; Everyone is absent. Marquee never bypasses Seerr access with the service API key.
+
+Request status defaults off and can be enabled in Settings. Previously saved on/off choices are preserved.
+
+Next up uses the same 180-day activity window as Continue watching, through Jellyfin NextUpDateCutoff (series viewing activity, not the next episode air date). Both sections are hidden when they have no items, even when enabled; later successful refreshes can show them again.

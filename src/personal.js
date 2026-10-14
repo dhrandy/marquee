@@ -2,9 +2,9 @@
 export const displayPreferenceDefaults = {
   recent: true, calendar: true, legend: true, addedDates: true,
   shelfNavigation: true, search: true, hideUnmonitored: false,
-  inTheaters: true, requests: true, popular: true, ratings: true, jellyfinLink: true,
+  inTheaters: true, requests: false, requestedBy: true, popular: true, ratings: true, jellyfinLink: true,
   firstTab: "discover", popularCollapsed: false, defaultView: "auto", watchlist: false, watchLater: false, watchLaterCollapsed: false,
-  leavingSoon: false, leavingSoonCollapsed: false, recommendations: false, myRequests: false, continueWatching: false, nextUp: false, watchNext: true, watchlistCollapsed: false,
+  leavingSoon: false, leavingSoonCollapsed: false, recommendations: false, myRequests: false, continueWatching: true, nextUp: true, watchNext: true, watchlistCollapsed: false,
   continueWatchingCollapsed: false, nextUpCollapsed: false, watchNextCollapsed: false, watchNextAnimation: "mixed", watchNextType: "both",
 };
 export function cleanDisplayPreferences(value) {

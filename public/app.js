@@ -27,14 +27,15 @@ const defaults = {
   weatherUnits: "fahrenheit",
   search: true,
   hideUnmonitored: false,
-  requests: true,
+  requests: false,
   popular: true, inTheaters: true,
   ratings: true,
+  requestedBy: true,
   colorblind: false,
   jellyfinLink: true,
   popularCollapsed: false,
   defaultView: "auto",
-  watchlist: false, watchLater: false, watchLaterCollapsed: false, continueWatching: false, nextUp: false, watchNext: true,
+  watchlist: false, watchLater: false, watchLaterCollapsed: false, continueWatching: true, nextUp: true, watchNext: true,
   watchlistCollapsed: false, continueWatchingCollapsed: false, nextUpCollapsed: false, watchNextCollapsed: false, watchNextAnimation: "mixed", watchNextType: "both",
   posterSize: "standard", firstTab: "discover", leavingSoon: false, leavingSoonCollapsed: false, recommendations: false, myRequests: false,
   syncDisplay: false,
@@ -84,6 +85,7 @@ function resetAccountState() {
   for (const key of Object.keys(shelfLastLoaded)) delete shelfLastLoaded[key];
   personalLoad++; recentRequest++; calendarRequest++; factsRequest++; searchSeq++; reminderSearchVersion++;
   searchController?.abort(); clearTimeout(searchTimer); clearTimeout(reminderSearchTimer);
+  $("#requests-filter").innerHTML = '<option value="all">Everyone\'s requests</option><option value="mine">My requests</option>';
   currentDetail = null; state.recentItems = []; state.watchlistItems = []; state.personalItems = {}; watchLaterKeys = new Set(); state.events = [];
   notificationShows = []; notificationEnabled = false;
   all("dialog[open]").forEach(dialog => dialog.close());
@@ -309,7 +311,7 @@ function applyPrefs() {
   );
   $("#inTheaters-section").hidden = !state.prefs.inTheaters;
   $("#recommendations-section").hidden = !state.prefs.recommendations;
-  $("#requests-filter").value = state.prefs.myRequests ? "mine" : "all";
+  $("#requests-filter").value = !$("#requests-filter").querySelector('[value="all"]') || state.prefs.myRequests ? "mine" : "all";
   $("#requests-section").hidden = !state.prefs.requests;
   $("#legend").hidden = !state.prefs.legend;
   $(".recent-controls").hidden = !state.prefs.shelfNavigation;
@@ -321,7 +323,7 @@ function applyPrefs() {
   });
   for (const key of ["watchlist", "watchLater", "continueWatching", "nextUp", "watchNext", "leavingSoon"]) {
     const section = $(`#${key}-section`);
-    if (section) section.hidden = !state.prefs[key];
+    if (section) section.hidden = !state.prefs[key] || (["continueWatching","nextUp"].includes(key) && (!Array.isArray(state.personalItems[key]) || !state.personalItems[key].length));
     const content = $(`#${key}-content`);
     if (content) content.hidden = Boolean(state.prefs[`${key}Collapsed`]);
     const collapse = $(`[data-collapse="${key}"]`);
@@ -346,16 +348,17 @@ function buildSettings() {
     watchLater: "Watchlist - starred for later (off by default)",
     leavingSoon: "Leaving soon (Maintainerr, off by default)",
     recommendations: "Recommendations (off by default)",
-    continueWatching: "Continue watching (off by default)",
-    nextUp: "Next up (off by default)",
+    continueWatching: "Continue watching",
+    nextUp: "Next up",
     watchNext: "What to watch next - unwatched on Jellyfin",
     recent: "Recently added",
     calendar: "Release calendar",
     search: "Search and requests",
-    requests: "Request status list",
+    requests: "Request status list (off by default)",
     popular: "Top 10 movies and TV",
     inTheaters: "In theaters (US)",
     ratings: "Show ratings",
+    requestedBy: "Requested by in title details",
     colorblind: "Colorblind-friendly status colors",
     jellyfinLink: "Jellyfin shortcut",
     legend: "Calendar status legend",
@@ -373,6 +376,7 @@ function buildSettings() {
     el.addEventListener("change", () => {
       state.prefs[el.dataset.pref] = el.checked;
       persist(); buildSectionOrder();
+      if (el.dataset.pref === "requestedBy" && currentDetail) setDetailCertification(currentDetail);
       if (el.dataset.pref === "colorblind")
         api("/api/accessibility-settings", {
           method: "POST",
@@ -831,6 +835,9 @@ async function loadMissingFacts(event) {
     if (data.network) { event.network = data.network; setDetailNetwork(event); }
     if (!facts) { factsCache.delete(source); return; }
     if (event.watched == null && data.watched === true) { event.watched = true; $("#episode-poster-status").innerHTML = statusBadgeHtml(event) + watchedBadgeHtml(event); }
+    event.facts = facts;
+    if (data.contentRating) event.contentRating = data.contentRating;
+    setDetailCertification(event);
     renderDetailFacts(facts);
     $("#episode-rating").hidden = ratingHidden(event.rating, facts);
   } catch {
@@ -870,6 +877,23 @@ function setDetailPlay(resume = false) {
   const label = resume ? "Resume in Jellyfin" : "Play in Jellyfin";
   $("#episode-play").setAttribute("aria-label", label); $("#episode-play").title = label;
 }
+function setDetailCertification(event) {
+  const certification = typeof event.contentRating === "string" ? event.contentRating.trim() : "";
+  const requesters = state.prefs.requestedBy && Array.isArray(event.facts?.requestedBy) ? event.facts.requestedBy.filter(name=>typeof name === "string" && name.trim()) : [];
+  const movie = event.mediaType === "movie" || /(?:^| · )Movie(?: · |$)/i.test(event.subtitle || "");
+  const subtitleParts = (event.subtitle || "").split(" · ").filter(part => movie || part.trim() !== certification);
+  let placedRating = false;
+  const detailSubtitle = subtitleParts.map(part => {
+    if (movie && /^movie$/i.test(part.trim())) { placedRating = true; return requesters.length ? "" : certification; }
+    return part;
+  }).filter(Boolean);
+  if (movie && !requesters.length && certification && !placedRating && !detailSubtitle.includes(certification)) detailSubtitle.push(certification);
+  const certificationLine = $("#episode-certification-line");
+  certificationLine.innerHTML = requesters.length ? `${certification ? `<strong>${escape(certification)}</strong> · ` : ""}Requested by ${requesters.map(escape).join(", ")}` : movie ? "" : `<strong>${escape(certification)}</strong>`;
+  certificationLine.hidden = !certificationLine.textContent;
+  $("#episode-subtitle").textContent = detailSubtitle.join(" · ");
+  return detailSubtitle;
+}
 function showDetail(event) {
   currentDetail = event;
   setDetailSave(event); setDetailStar(event);
@@ -877,19 +901,7 @@ function showDetail(event) {
   renderDetailFacts(event.facts);
   $("#episode-title").textContent =
     `${event.title}${event.year && !new RegExp(`(?:\\(\\s*${String(event.year).replace(/[^0-9]/g, "")}\\s*\\)|\\b${String(event.year).replace(/[^0-9]/g, "")}\\b)\\s*$`).test(event.title) ? ` (${event.year})` : ""}`;
-  const certification = typeof event.contentRating === "string" ? event.contentRating.trim() : "";
-  const movie = event.mediaType === "movie" || /(?:^| · )Movie(?: · |$)/i.test(event.subtitle || "");
-  const subtitleParts = (event.subtitle || "").split(" · ").filter(part => movie || part.trim() !== certification);
-  let placedRating = false;
-  const detailSubtitle = subtitleParts.map(part => {
-    if (movie && /^movie$/i.test(part.trim())) { placedRating = true; return certification; }
-    return part;
-  }).filter(Boolean);
-  if (movie && certification && !placedRating && !detailSubtitle.includes(certification)) detailSubtitle.push(certification);
-  const certificationLine = $("#episode-certification-line");
-  certificationLine.textContent = movie ? "" : certification;
-  certificationLine.hidden = movie || !certification;
-  $("#episode-subtitle").textContent = detailSubtitle.join(" · ");
+  const detailSubtitle = setDetailCertification(event);
   const requestButton = $("#episode-request");
   const actionLabel = mediaActionLabel(event);
   $("#episode-poster-status").innerHTML = statusBadgeHtml(event) + watchedBadgeHtml(event);
@@ -1346,9 +1358,13 @@ async function loadRequests({ quiet = false } = {}) {
   const version = ++requestsVersion;
   if (!state.prefs.requests) return;
   try {
-    const { requests } = await api(`/api/seerr/requests${state.prefs.myRequests ? "?mine=true" : ""}`);
+    const { requests, viewAllRequests } = await api(`/api/seerr/requests${state.prefs.myRequests ? "?mine=true" : ""}`);
     if (version !== requestsVersion) return;
     if (quiet && !safeShelfRefresh()) { delete shelfLastLoaded.requests; return; }
+    const restricted = viewAllRequests === false, filter = $("#requests-filter");
+    if (restricted) filter.querySelector('[value="all"]')?.remove();
+    else if (!filter.querySelector('[value="all"]')) filter.insertAdjacentHTML("afterbegin", '<option value="all">Everyone&#39;s requests</option>');
+    filter.value = restricted ? "mine" : state.prefs.myRequests ? "mine" : "all";
     shelfLastLoaded.requests = Date.now();
     if (JSON.stringify(lastRequests) !== JSON.stringify(requests) || !$("#requests").childElementCount) renderRequests(requests);
     lastRequests = requests;
@@ -1911,6 +1927,7 @@ async function loadPersonalShelf(key, { quiet = false, seq = personalLoad } = {}
     if (quiet && !safeShelfRefresh()) { delete shelfLastLoaded[key]; return; }
     shelfLastLoaded[key] = Date.now();
     if(key === "watchLater") { watchLaterKeys = new Set(items.map(item=>item.key)); refreshStars(); }
+    if (["continueWatching","nextUp"].includes(key)) $(`#${key}-section`).hidden = !state.prefs[key] || !items.length;
     const previous = key === "watchlist" ? state.watchlistItems : state.personalItems[key];
     if (JSON.stringify(previous) === JSON.stringify(items) && $(`#${key}-content .poster-card`)) return;
     if (key === "watchlist") state.watchlistItems = items;

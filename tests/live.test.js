@@ -67,6 +67,7 @@ const service = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ Items: [] }));
     }
     if (url.pathname === "/Shows/NextUp") {
+      const cutoff=Date.parse(url.searchParams.get("NextUpDateCutoff"));assert.ok(Math.abs(cutoff-(Date.now()-180*86400000))<5000);
       assert.equal(url.searchParams.get("EnableResumable"), "false");
       assert.equal(url.searchParams.get("EnableRewatching"), "false");
     }
@@ -281,7 +282,7 @@ const service = http.createServer(async (req, res) => {
       JSON.stringify({
         pageInfo: { results: 3 },
         results: [
-          { id: 4, jellyfinUserId: "alice", permissions: 32 },
+          { id: 4, jellyfinUserId: "alice", permissions: 32 | 16384 },
           { id: 5, jellyfinUserId: "bob", permissions: 262144 },
           { id: 6, jellyfinUserId: "tvonly", permissions: 524288 },
         ],
@@ -380,7 +381,7 @@ const service = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ results: [{id:9003,title:"Unwatched owned",name:"Unwatched owned",releaseDate:"2024-01-01",firstAirDate:"2024-01-01"}, ...[4,5].flatMap(status => ["status","status4k"].map(key => ({id:50000 + status*10 + (key === "status4k" ? 1 : 0),title:"Owned excluded",name:"Owned excluded",releaseDate:"2024-01-01",firstAirDate:"2024-01-01",mediaInfo:{[key]:status}}))), { id, name: "Seed excluded", title: "Seed excluded" }, { id: 9001, name: "A recommendation", title: "A recommendation", firstAirDate: "2024-01-01", releaseDate: "2024-01-01" }, { id: 10000 + id, name: `Suggestion ${id}`, title: `Suggestion ${id}`, firstAirDate: "2023-01-01", releaseDate: "2023-01-01" }] }));
   }
   if (url.pathname === "/api/v1/request" && req.method === "GET") {
-    if (url.searchParams.has("requestedBy")) { assert.equal(url.searchParams.get("requestedBy"), "4"); return res.end(JSON.stringify({ results: [{ id: 99, type: "movie", requestedBy: { id: 4, displayName: "Sample viewer" }, media: { mediaType: "movie", tmdbId: 9001 } }] })); }
+    if (url.searchParams.has("requestedBy")) { assert.ok(["4","5","6"].includes(url.searchParams.get("requestedBy"))); return res.end(JSON.stringify({ results: [{ id: 99, type: "movie", requestedBy: { id: Number(url.searchParams.get("requestedBy")), displayName: "Sample viewer" }, media: { mediaType: "movie", tmdbId: 9001 } }] })); }
     assert.equal(req.headers["x-api-user"], "4");
     return res.end(
       JSON.stringify({
@@ -426,11 +427,11 @@ const service = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({rt:{criticsScore:90,audienceScore:97},imdb:{criticsScore:8}}));
   }
   if (url.pathname === "/api/v1/movie/9001") {
-    assert.equal(req.headers["x-api-user"], "4");
+    assert.ok(["4","5"].includes(req.headers["x-api-user"]));
     assert.equal(req.headers["x-api-key"], "seerr-mock");
     return res.end(
       JSON.stringify({
-        title: "Requested Film",
+        mediaInfo:{status:2,requests:[{requestedBy:{id:1,displayName:"Alex Sample"}},{requestedBy:{id:1,displayName:"Alex Sample"}},{requestedBy:{id:2,username:"Morgan Example"}}]},title: "Requested Film",
         status:"Released", originalLanguage:"en",
         productionCountries:[{iso_3166_1:"US",name:"United States"}],
         releases: {
@@ -675,6 +676,8 @@ try {
     ).json();
     assert.equal(requests.requests[0].title, "Requested Film");
     assert.equal(requests.requests[0].status, 2);
+    assert.equal(requests.viewAllRequests,true);
+    const restrictedRequests=await (await fetch(`${base}/api/seerr/requests`,{headers:{Cookie:(await signin("bob")).headers.get("set-cookie")}})).json();assert.equal(restrictedRequests.viewAllRequests,false);assert.equal(restrictedRequests.requests.length,1);
     assert.equal(requests.requests[0].requestedBy, "Sample viewer");
     assert.equal(requests.requests[1].requestedBy, "Another viewer");
     assert.equal(
@@ -1136,6 +1139,7 @@ try {
     assert.equal(data.facts.productionCountries[0].name,"United States");
     assert.equal(data.facts.releases[0].date,"2026-07-31");
     assert.equal(data.contentRating, "PG-13");
+    assert.deepEqual(data.facts.requestedBy,["Alex Sample","Morgan Example"]);
     assert.deepEqual(data.cast, ["Alex Sample", "Morgan Example"]);
     assert.deepEqual(data.rating, { value: 8.4, source: "TMDB" });
     assert.deepEqual(data.genres, ["Drama"]);
@@ -1146,7 +1150,7 @@ try {
     const cookie=(await signin("alice")).headers.get("set-cookie").split(";")[0];
     const get=async path=>{const response=await fetch(`${base}/api/seerr/details/${path}`,{headers:{Cookie:cookie}});assert.equal(response.status,200);return response.json();};
     const movie=await get("movie/9002");
-    assert.equal(movie.title,"Fallback Film");
+    assert.equal(movie.title,"Fallback Film");assert.deepEqual(movie.facts.requestedBy,[]);
     assert.deepEqual(movie.facts.scores,{critics:null,audience:null,imdb:null,tmdb:null});
     const tv=await get("tv/9003");
     assert.deepEqual(tv.facts.scores,{critics:81,audience:72,imdb:null,tmdb:null});

@@ -413,6 +413,7 @@ export async function seerrIdentity(jellyfinId) {
     // Seerr lets only admins, request managers and users with the "advanced
     // request" permission pick a server, quality profile or root folder.
     advanced: user.id === 1 || Boolean(user.permissions & (2 | 16 | 8192)),
+    viewAllRequests: user.id === 1 || Boolean(user.permissions & (2 | 16 | 16384)),
     movie: permitted(262144) && !quota.movie.restricted,
     tv: permitted(524288) && !quota.tv.restricted,
     movieReason: quota.movie.restricted
@@ -505,6 +506,18 @@ export async function seerrPersonCredits(query, userId) {
   return normalizeSeerrResults({ results: unique });
 }
 
+// Only requester names exposed by this viewer's Seerr detail response.
+export function seerrRequesterNames(data) {
+  const names = [], seen = new Set();
+  for (const request of Array.isArray(data.mediaInfo?.requests) ? data.mediaInfo.requests.slice(0,100) : []) {
+    const user = request?.requestedBy;
+    const name = [user?.displayName,user?.username,user?.jellyfinUsername,user?.plexUsername].find(value=>typeof value === "string" && value.trim() && !value.includes("@"));
+    if (!name) continue;
+    const clean = name.trim().slice(0,150), key = user.id != null ? `id:${user.id}` : `name:${clean.toLowerCase()}`;
+    if (!seen.has(key)) {seen.add(key);names.push(clean);}
+  }
+  return names;
+}
 export async function seerrDetails(type, id, userId) {
   const headers = { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) };
   const [data, ratings] = await Promise.all([
@@ -519,7 +532,7 @@ export async function seerrDetails(type, id, userId) {
   return {
     mediaType: type,
     mediaId: id,
-    facts: seerrFacts(data, type, ratings),
+    facts: {...seerrFacts(data, type, ratings), requestedBy: seerrRequesterNames(data)},
     availability: Number.isInteger(data.mediaInfo?.status)
       ? data.mediaInfo.status
       : null,
@@ -828,10 +841,11 @@ export function personalItemSubtitle(item) {
   const season = item.Type === "Season" && item.IndexNumber != null ? `Season ${item.IndexNumber}` : label;
   return [item.ProductionYear, season].filter(Boolean).join(" · ");
 }
+export const PERSONAL_ACTIVITY_DAYS = 180;
 export function isRecentResume(item, now = Date.now()) {
   const value = item.UserData?.LastPlayedDate;
   const played = typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) ? Date.parse(value) : NaN;
-  return Number.isFinite(played) && played >= now - 180 * 86400000 && played <= now;
+  return Number.isFinite(played) && played >= now - PERSONAL_ACTIVITY_DAYS * 86400000 && played <= now;
 }
 export function uniquePlaybackItems(items) {
   const seen = new Set();
@@ -843,7 +857,7 @@ export async function personalItems(user, kind) {
   if (kind === "watchNext") {
     for (const [key,value] of Object.entries({Recursive:"true",IncludeItemTypes:"Movie,Series",IsPlayed:"false",SortBy:"Random",ExcludeLocationTypes:"Virtual",IsMissing:"false",IsPlaceHolder:"false"})) query.set(key,value);
   }
-  if (kind === "nextUp") { query.set("EnableResumable", "false"); query.set("EnableRewatching", "false"); }
+  if (kind === "nextUp") { query.set("NextUpDateCutoff",new Date(Date.now() - PERSONAL_ACTIVITY_DAYS * 86400000).toISOString()); query.set("EnableResumable", "false"); query.set("EnableRewatching", "false"); }
   const data = await upstream(process.env.JELLYFIN_URL, `${endpoint}?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
   const visible = (data.Items || []).filter(item => !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual" && (kind !== "watchNext" || ["Movie","Series"].includes(item.Type) && item.UserData?.Played === false && !(item.UserData?.PlaybackPositionTicks > 0) && !(item.Type === "Series" && item.UserData?.PlayedPercentage > 0))).slice(0, 18);
   const resolved = await Promise.all(visible.map(async item => {
