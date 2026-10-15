@@ -520,9 +520,13 @@ export function seerrRequesterNames(data) {
 }
 export async function seerrDetails(type, id, userId) {
   const headers = { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) };
-  const [data, ratings] = await Promise.all([
+  // Requester names come from an admin-key read so every account sees them; Seerr
+  // would otherwise hide other users' requests from accounts without View Requests.
+  const adminHeaders = { "X-Api-Key": process.env.SEERR_API_KEY };
+  const [data, ratings, adminData] = await Promise.all([
     upstream(process.env.SEERR_URL, `/api/v1/${type}/${id}`, { headers }),
     upstream(process.env.SEERR_URL, `/api/v1/${type}/${id}/${type === "movie" ? "ratingscombined" : "ratings"}`, { headers }).then(r => type === "tv" ? { rt: r } : r).catch(() => ({})),
+    upstream(process.env.SEERR_URL, `/api/v1/${type}/${id}`, { headers: adminHeaders }).catch(() => null),
   ]);
   const safeArt = (value) =>
     typeof value === "string" &&
@@ -532,7 +536,7 @@ export async function seerrDetails(type, id, userId) {
   return {
     mediaType: type,
     mediaId: id,
-    facts: {...seerrFacts(data, type, ratings), requestedBy: seerrRequesterNames(data)},
+    facts: {...seerrFacts(data, type, ratings), requestedBy: seerrRequesterNames(adminData || data)},
     availability: Number.isInteger(data.mediaInfo?.status)
       ? data.mediaInfo.status
       : null,
@@ -699,15 +703,13 @@ export async function seerrRequestOptions(type, id, userId, advanced) {
 }
 
 export async function seerrRequests(userId, mine = false) {
+  // Everyone's list uses the admin key with no acting user, so every account sees the
+  // same requests. Only "mine" acts as the viewer.
+  const headers = { "X-Api-Key": process.env.SEERR_API_KEY, ...(mine ? { "X-API-User": String(userId) } : {}) };
   const data = await upstream(
     process.env.SEERR_URL,
     `/api/v1/request?take=10&skip=0&sort=added&filter=all${mine ? `&requestedBy=${encodeURIComponent(userId)}` : ""}`,
-    {
-      headers: {
-        "X-Api-Key": process.env.SEERR_API_KEY,
-        "X-API-User": String(userId),
-      },
-    },
+    { headers },
   );
   // Seerr request records carry media IDs/status, not TMDB titles. Resolve the
   // ten visible rows through Seerr's own metadata API as the linked user.
@@ -725,12 +727,7 @@ export async function seerrRequests(userId, mine = false) {
         const details = await upstream(
           process.env.SEERR_URL,
           `/api/v1/${type}/${id}`,
-          {
-            headers: {
-              "X-Api-Key": process.env.SEERR_API_KEY,
-              "X-API-User": String(userId),
-            },
-          },
+          { headers },
         );
         request.media = {
           ...request.media,

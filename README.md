@@ -405,11 +405,11 @@ What to watch next has cycling Animation (No animation, Animation only, Mixed) a
 
 Watchlist is separate from Jellyfin Favorites (hearts). Star accessible movies and shows on your Jellyfin server to save them for later. Seerr/catalog-only titles have no star; Seerr availability alone is not proof of library ownership. Saved per Jellyfin viewer in the persistent settings volume, up to500titles, with no Seerr sync. Enable its shelf on On Jellyfin in Settings. Stars use Jellyfin IDs. Adding rechecks library access; the saved shelf rechecks all IDs in one bounded query and hides unavailable items. Old catalog-only saves are hidden, not deleted. Saved titles do not automatically request media, mark it watched or remove on completion.
 
-Title details show a bold certification followed by Requested by on the certification line when Seerr exposes requesters for that title. Names are taken only from that viewer's Seerr detail response, duplicate users are combined, and titles with no named requesters have no row. Toggle Requested by in title details in Settings (on by default); it follows optional display-settings sync. No additional requests or user-directory lookup.
+Title details show a bold certification followed by Requested by on the certification line when Seerr exposes requesters for that title. Names are taken from Seerr's admin-key detail response, duplicate users are combined, and titles with no named requesters have no row. Toggle Requested by in title details in Settings (on by default); it follows optional display-settings sync. No additional requests or user-directory lookup.
 
-Everyone requests requires the linked Seerr account to have View Requests, Manage Requests or admin permission. Restricted accounts show My requests only; Everyone is absent. Marquee never bypasses Seerr access with the service API key.
+The Requests list shows everyone's requests to every signed-in account, restricted accounts included, and My requests filters it to your own. Everyone's requests are read with the Seerr admin key and send the browser only titles, display names, status and dates. The requested-by line in title details uses the same admin read. My requests still needs your linked Seerr account.
 
-Request status defaults off and can be enabled in Settings. Previously saved on/off choices are preserved.
+Request status defaults on and can be hidden in Settings. Saved on/off choices are preserved, except that Continue watching and Next up are turned on once per browser (then stay hideable).
 
 Next up uses the same 180-day activity window as Continue watching, through Jellyfin NextUpDateCutoff (series viewing activity, not the next episode air date). Both sections are hidden when they have no items, even when enabled; later successful refreshes can show them again.
 

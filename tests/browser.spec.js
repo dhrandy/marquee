@@ -9,7 +9,7 @@ async function login(page) {
   // Existing-user fixture: most tests exercise the search-enabled home page.
   await page.addInitScript(() => {
     const key = "marquee:Demo viewer:preferences";
-    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ search: true, watchNext: false, continueWatching:false,nextUp:false,requests:true,libraryStats:false }));
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ search: true, watchNext: false, personalShelvesReset:true,continueWatching:false,nextUp:false,requests:true,libraryStats:false }));
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();
@@ -934,7 +934,7 @@ for (const width of [1440, 1660, 393, 280]) {
       }));
       await route.fulfill({ json: data });
     });
-    await page.addInitScript(() => localStorage.setItem("marquee:Demo viewer:preferences", JSON.stringify({ search: true, watchNext: false, continueWatching:false,nextUp:false,requests:true,libraryStats:false })));
+    await page.addInitScript(() => localStorage.setItem("marquee:Demo viewer:preferences", JSON.stringify({ search: true, watchNext: false, personalShelvesReset:true,continueWatching:false,nextUp:false,requests:true,libraryStats:false })));
     await page.goto("/");
     await page.getByRole("button", { name: "Explore demo" }).click();
     await expect(page.locator(".poster-card")).toHaveCount(18);
@@ -3351,7 +3351,7 @@ for (const width of [393,1440]) test(`requested by certification line uses reque
 for (const width of [393,1440]) test(`request filter hides Everyone for Seerr restricted accounts and recovers at ${width}px`,async({page})=>{
  await page.setViewportSize({width,height:1000});let restricted=true;
  await page.route('**/api/seerr/requests*',route=>route.fulfill({json:{viewAllRequests:!restricted,requests:[{id:1,title:'Sample request',mediaType:'tv',requestedBy:'Alex Sample',status:2}]}}));
- await page.addInitScript(()=>localStorage.setItem('marquee:Demo viewer:preferences',JSON.stringify({search:true,requests:true,watchNext:false,continueWatching:false,nextUp:false})));await login(page);await view(page,'home');await page.locator('#requests-section').scrollIntoViewIfNeeded();await expect(page.locator('#requests-filter')).toHaveValue('mine');await expect(page.locator('#requests-filter option[value="all"]')).toHaveCount(0);
+ await page.addInitScript(()=>localStorage.setItem('marquee:Demo viewer:preferences',JSON.stringify({search:true,requests:true,watchNext:false,personalShelvesReset:true,continueWatching:false,nextUp:false})));await login(page);await view(page,'home');await page.locator('#requests-section').scrollIntoViewIfNeeded();await expect(page.locator('#requests-filter')).toHaveValue('mine');await expect(page.locator('#requests-filter option[value="all"]')).toHaveCount(0);
  await page.locator('#requests-section').screenshot({path:`${shots}/requests-restricted-${width}.png`});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  restricted=false;await page.reload();await view(page,'home');await expect(page.locator('#requests-filter option[value="all"]')).toBeEnabled();await expect(page.locator('#requests-filter')).toHaveValue('all');
 });
@@ -3365,10 +3365,10 @@ for (const size of [{width:834,height:1194},{width:1194,height:834},{width:768,h
 });
 
 for (const saved of [false,true]) test(`personal section defaults are enabled unless saved off: ${saved}`,async({page})=>{
- if(saved)await page.addInitScript(()=>localStorage.setItem('marquee:Demo viewer:preferences',JSON.stringify({continueWatching:false,nextUp:false,watchNext:false})));
+ if(saved)await page.addInitScript(()=>localStorage.setItem('marquee:Demo viewer:preferences',JSON.stringify({personalShelvesReset:true,continueWatching:false,nextUp:false,watchNext:false})));
  await page.goto('/');await page.getByRole('button',{name:'Explore demo'}).click();await view(page,'home');await page.getByRole('button',{name:'Settings',exact:true}).click();
  for(const key of ['continueWatching','nextUp','watchNext']){if(saved)await expect(page.locator(`[data-pref="${key}"]`)).not.toBeChecked();else await expect(page.locator(`[data-pref="${key}"]`)).toBeChecked();}
- await expect(page.locator('[data-pref="requests"]')).not.toBeChecked();await page.getByRole('button',{name:'Close settings'}).click();for(const key of ['continueWatching','nextUp','watchNext']){if(saved)await expect(page.locator(`#${key}-section`)).toBeHidden();else await expect(page.locator(`#${key}-section`)).toBeVisible();}
+ await expect(page.locator('[data-pref="requests"]')).toBeChecked();await page.getByRole('button',{name:'Close settings'}).click();for(const key of ['continueWatching','nextUp','watchNext']){if(saved)await expect(page.locator(`#${key}-section`)).toBeHidden();else await expect(page.locator(`#${key}-section`)).toBeVisible();}
 });
 
 test('empty next up and continue watching hide and return when refreshed with items',async({page})=>{
@@ -3383,7 +3383,7 @@ test('empty next up and continue watching hide and return when refreshed with it
 for(const width of [280,393,834,1440]) test(`library count cards at bottom of Jellyfin, hideable and selectable at ${width}px`,async({page})=>{
  await page.setViewportSize({width,height:1000});
  await page.route('**/api/library-stats*',route=>{const selected=new URL(route.request().url()).searchParams.get('kidsLibrary') || 'kids';return route.fulfill({json:{libraries:[{id:'kids',name:'Kids Movies',type:'movies'},{id:'family',name:'Family Films',type:'movies'},{id:'kids-shows',name:'Kids Shows',type:'tvshows'}],kidsLibrary:selected,kidsShowsLibrary:'kids-shows',counts:{movies:selected==='kids'?1001:987,kidsMovies:selected==='kids'?167:181,tvShows:211,kidsShows:38,episodes:15834,kidsEpisodes:1422}}});});
- await page.addInitScript(()=>{const key='marquee:Demo viewer:preferences';if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify({search:true,requests:true,watchNext:false,continueWatching:false,nextUp:false,libraryStats:true}));});
+ await page.addInitScript(()=>{const key='marquee:Demo viewer:preferences';if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify({search:true,requests:true,watchNext:false,personalShelvesReset:true,continueWatching:false,nextUp:false,libraryStats:true}));});
  await login(page);await view(page,'home');await expect(page.locator('#libraryStats-content article')).toHaveCount(6);await expect(page.locator('#libraryStats-content')).toContainText('15,834');await expect(page.locator('#libraryStats-section')).not.toContainText('catalog');await expect(page.locator('#dashboard main > section').last()).toHaveAttribute('id','libraryStats-section');
  await page.locator('#libraryStats-section').scrollIntoViewIfNeeded();await page.locator('#libraryStats-section').screenshot({path:`${shots}/library-counts-${width}.png`});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await view(page,'discover');await expect(page.locator('#libraryStats-section')).toBeHidden();await view(page,'home');await page.getByRole('button',{name:'Settings',exact:true}).click();await page.locator('#kids-movies-library').selectOption('family');await expect(page.locator('#libraryStats-content')).toContainText('987');await page.locator('[data-pref="libraryStats"]').uncheck();await page.getByRole('button',{name:'Close settings'}).click();await expect(page.locator('#libraryStats-section')).toBeHidden();await page.reload();await view(page,'home');await expect(page.locator('#libraryStats-section')).toBeHidden();await page.getByRole('button',{name:'Settings',exact:true}).click();await page.locator('[data-pref="libraryStats"]').check();await expect(page.locator('#kids-movies-library')).toHaveValue('family');await page.getByRole('button',{name:'Close settings'}).click();await expect(page.locator('#libraryStats-section')).toBeVisible();
@@ -3396,4 +3396,18 @@ test('library counts reject stale responses, report errors without invented zero
  await page.evaluate(()=>window.firstStat=document.querySelector('.library-stat'));await page.evaluate(()=>loadLibraryStats());expect(await page.evaluate(()=>window.firstStat===document.querySelector('.library-stat'))).toBe(true);
  mode='error';await page.evaluate(()=>loadLibraryStats());await expect(page.locator('#libraryStats-content article')).toHaveCount(0);await expect(page.locator('#libraryStats-status')).toContainText('could not be loaded');
  mode='slow';await page.evaluate(()=>{void loadLibraryStats();});await expect.poll(()=>Boolean(release)).toBe(true);await page.evaluate(()=>resetAccountState());release();await expect(page.locator('#libraryStats-content article')).toHaveCount(0);
+});
+
+test("old saved off Next up and Continue watching are turned on once, then choices stick", async ({ page }) => {
+  await page.addInitScript(() => { if (!localStorage.getItem("marquee:Demo viewer:preferences")) localStorage.setItem("marquee:Demo viewer:preferences", JSON.stringify({ search: true, continueWatching: false, nextUp: false })); });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.locator('[data-pref="continueWatching"]')).toBeChecked();
+  await expect(page.locator('[data-pref="nextUp"]')).toBeChecked();
+  await page.locator('[data-pref="nextUp"]').uncheck();
+  await page.reload();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.locator('[data-pref="nextUp"]')).not.toBeChecked();
+  await expect(page.locator('[data-pref="continueWatching"]')).toBeChecked();
 });

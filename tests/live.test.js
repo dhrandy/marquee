@@ -391,7 +391,7 @@ const service = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/v1/request" && req.method === "GET") {
     if (url.searchParams.has("requestedBy")) { assert.ok(["4","5","6"].includes(url.searchParams.get("requestedBy"))); return res.end(JSON.stringify({ results: [{ id: 99, type: "movie", requestedBy: { id: Number(url.searchParams.get("requestedBy")), displayName: "Sample viewer" }, media: { mediaType: "movie", tmdbId: 9001 } }] })); }
-    assert.equal(req.headers["x-api-user"], "4");
+    if (req.headers["x-api-user"]) assert.equal(req.headers["x-api-user"], "4");
     return res.end(
       JSON.stringify({
         results: [
@@ -427,7 +427,7 @@ const service = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({criticsScore:81,audienceScore:72}));
   }
   if (["/api/v1/movie/9002","/api/v1/tv/9003"].includes(url.pathname)) {
-    assert.equal(req.headers["x-api-user"], "4");
+    if (req.headers["x-api-user"]) assert.equal(req.headers["x-api-user"], "4");
     return res.end(JSON.stringify({title:"Fallback Film",name:"Sample Show",status:"Returning Series",firstAirDate:"2025-02-17",originalLanguage:"en"}));
   }
   if (url.pathname === "/api/v1/movie/9001/ratingscombined") {
@@ -436,7 +436,7 @@ const service = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({rt:{criticsScore:90,audienceScore:97},imdb:{criticsScore:8}}));
   }
   if (url.pathname === "/api/v1/movie/9001") {
-    assert.ok(["4","5"].includes(req.headers["x-api-user"]));
+    assert.ok(!req.headers["x-api-user"] || ["4","5"].includes(req.headers["x-api-user"]));
     assert.equal(req.headers["x-api-key"], "seerr-mock");
     return res.end(
       JSON.stringify({
@@ -694,7 +694,7 @@ try {
     assert.equal(requests.requests[0].title, "Requested Film");
     assert.equal(requests.requests[0].status, 2);
     assert.equal(requests.viewAllRequests,true);
-    const restrictedRequests=await (await fetch(`${base}/api/seerr/requests`,{headers:{Cookie:(await signin("bob")).headers.get("set-cookie")}})).json();assert.equal(restrictedRequests.viewAllRequests,false);assert.equal(restrictedRequests.requests.length,1);
+    const restrictedRequests=await (await fetch(`${base}/api/seerr/requests`,{headers:{Cookie:(await signin("bob")).headers.get("set-cookie")}})).json();assert.equal(restrictedRequests.viewAllRequests,true);assert.deepEqual(restrictedRequests.requests.map(r=>r.requestedBy),["Sample viewer","Another viewer"]);assert.ok(!JSON.stringify(restrictedRequests).includes("private@example.test"));
     assert.equal(requests.requests[0].requestedBy, "Sample viewer");
     assert.equal(requests.requests[1].requestedBy, "Another viewer");
     assert.equal(

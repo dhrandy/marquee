@@ -833,9 +833,11 @@ app.get("/api/seerr/requests", requireUser, async (req, res) => {
       .status(503)
       .json({ error: "Connect Seerr in the server settings to see requests." });
   try {
-    const access = await requestAccess(req.user);
+    const mine = req.query.mine === "true";
+    // Everyone's requests need no Seerr link; "mine" needs the viewer's linked account.
+    const access = mine ? await requestAccess(req.user) : { id: null };
     if (access.error) return res.status(403).json({ error: access.error });
-    res.json({ requests: await seerrRequests(access.id, req.query.mine === "true" || !access.viewAllRequests), viewAllRequests: access.viewAllRequests });
+    res.json({ requests: await seerrRequests(access.id, mine), viewAllRequests: true });
   } catch (error) {
     seerrFailure(res, error);
   }

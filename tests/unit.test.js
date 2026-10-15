@@ -511,6 +511,13 @@ test("resolved resume playback IDs dedupe without merging different episodes or 
 
 test("requester names come only from Seerr request users, dedupe and never invent or expose emails",async()=>{const {seerrRequesterNames}=await import("../src/adapters.js");assert.deepEqual(seerrRequesterNames({mediaInfo:{status:5}}),[]);assert.deepEqual(seerrRequesterNames({mediaInfo:{requests:[{requestedBy:{id:1,displayName:" Alex Sample "}},{requestedBy:{id:1,displayName:"Alex Sample"}},{requestedBy:{id:2,username:"Morgan Example"}},{requestedBy:{email:"private@example.test"}},{}]}}),["Alex Sample","Morgan Example"]);});
 
-test("personal defaults enable next up, continue watching and watch next while honoring saved off choices",async()=>{const {displayPreferenceDefaults,cleanDisplayPreferences}=await import("../src/personal.js");for(const key of ["continueWatching","nextUp","watchNext"])assert.equal(displayPreferenceDefaults[key],true);assert.equal(displayPreferenceDefaults.requests,false);assert.equal(cleanDisplayPreferences({requests:true}).requests,true);assert.deepEqual(cleanDisplayPreferences({continueWatching:false,nextUp:false,watchNext:false}),{continueWatching:false,nextUp:false,watchNext:false});});
+test("personal defaults enable next up, continue watching and watch next while honoring saved off choices",async()=>{const {displayPreferenceDefaults,cleanDisplayPreferences}=await import("../src/personal.js");for(const key of ["continueWatching","nextUp","watchNext"])assert.equal(displayPreferenceDefaults[key],true);assert.equal(displayPreferenceDefaults.requests,true);assert.equal(cleanDisplayPreferences({requests:false}).requests,false);assert.deepEqual(cleanDisplayPreferences({continueWatching:false,nextUp:false,watchNext:false}),{continueWatching:false,nextUp:false,watchNext:false});});
 
 test("library stat preference selection is bounded and syncable",async()=>{const {cleanDisplayPreferences}=await import("../src/personal.js");assert.deepEqual(cleanDisplayPreferences({libraryStats:false,kidsMoviesLibrary:"kids"}),{libraryStats:false,kidsMoviesLibrary:"kids"});assert.equal(cleanDisplayPreferences({kidsMoviesLibrary:"x".repeat(101)}),null);assert.equal(cleanDisplayPreferences({kidsMoviesLibrary:[]}),null);});
+
+test("one-time personal shelves reset flag is a syncable boolean", async () => {
+  const { displayPreferenceDefaults, cleanDisplayPreferences } = await import("../src/personal.js");
+  assert.equal(displayPreferenceDefaults.personalShelvesReset, false);
+  assert.equal(cleanDisplayPreferences({ personalShelvesReset: true }).personalShelvesReset, true);
+  assert.equal(cleanDisplayPreferences({ personalShelvesReset: "yes" }), null);
+});

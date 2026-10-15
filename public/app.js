@@ -27,7 +27,7 @@ const defaults = {
   weatherUnits: "fahrenheit",
   search: true,
   hideUnmonitored: false,
-  requests: false,
+  requests: true,
   popular: true, inTheaters: true,
   ratings: true,
   requestedBy: true,
@@ -38,6 +38,7 @@ const defaults = {
   defaultView: "auto",
   watchlist: false, watchLater: false, watchLaterCollapsed: false, continueWatching: true, nextUp: true, watchNext: true,
   watchlistCollapsed: false, continueWatchingCollapsed: false, nextUpCollapsed: false, watchNextCollapsed: false, watchNextAnimation: "mixed", watchNextType: "both",
+  personalShelvesReset: false,
   posterSize: "standard", firstTab: "discover", leavingSoon: false, leavingSoonCollapsed: false, recommendations: false, myRequests: false,
   syncDisplay: false,
   shelfRefreshMinutes: 5,
@@ -362,7 +363,7 @@ function buildSettings() {
     recent: "Recently added",
     calendar: "Release calendar",
     search: "Search and requests",
-    requests: "Request status list (off by default)",
+    requests: "Request status list",
     popular: "Top 10 movies and TV",
     inTheaters: "In theaters (US)",
     ratings: "Show ratings",
@@ -431,6 +432,14 @@ async function enter(name) {
   if (state.prefs.syncDisplay) {
     try { const { preferences } = await api("/api/display-preferences"); if (preferences) Object.assign(state.prefs, preferences); }
     catch { /* Offline sync keeps this device's saved choices. */ }
+  }
+  // One-time reset (0.2.0-beta.2): Next up and Continue watching were meant to be on for
+  // everyone. Saved "off" values from before that default are turned on once, then the
+  // flag keeps later choices alone.
+  if (!state.prefs.personalShelvesReset) {
+    state.prefs.continueWatching = true; state.prefs.nextUp = true; state.prefs.personalShelvesReset = true;
+    try { const { weather, weatherCity, weatherUnits, colorblind, ...devicePrefs } = state.prefs; localStorage.setItem(state.key, JSON.stringify(devicePrefs)); } catch { /* storage full or blocked */ }
+    if (state.prefs.syncDisplay) syncDisplayWrite();
   }
   pageInitialized = false;
   sectionOrder = [...defaultSectionOrder];
