@@ -1012,10 +1012,10 @@ app.get("/api/library-stats", requireUser, async (req,res)=>{
   } catch {res.status(502).json({error:"Library counts could not be loaded from Jellyfin."});}
 });
 app.get("/api/personal/:kind", requireUser, async (req, res) => {
-  if (!["continueWatching", "nextUp", "watchNext"].includes(req.params.kind)) return res.sendStatus(404);
+  if (!["continueWatching", "nextUp", "watchNext", "topUnwatched"].includes(req.params.kind)) return res.sendStatus(404);
   try {
     const items = demo ? (req.params.kind === "nextUp" ? titles.filter(item => item.type === "tv") : titles).slice(0, 3).map((item, index) => ({ ...item, favoriteId: item.id, favorite: false, progress: req.params.kind === "continueWatching" ? 30 + index * 20 : 0, remaining: 25 + index * 8 })) : await personalItems(req.user, req.params.kind);
-    if (demo && req.params.kind === "watchNext") for (const item of items) { item.watched = false; item.subtitle = [item.detail?.year || "2026", item.type === "movie" ? "Movie" : "Series"].join(" · "); item.progress = 0; }
+    if (demo && ["watchNext", "topUnwatched"].includes(req.params.kind)) for (const item of items) { item.watched = false; item.subtitle = [item.detail?.year || "2026", item.type === "movie" ? "Movie" : "Series"].join(" · "); item.progress = 0; }
     for (const item of items) {
       req.user.state.allowedImages.add(item.id);
       if (item.backdropId) req.user.state.allowedImages.add(item.backdropId);

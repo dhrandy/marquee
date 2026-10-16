@@ -850,15 +850,19 @@ export function uniquePlaybackItems(items) {
 }
 export async function personalItems(user, kind) {
   const query = new URLSearchParams({ UserId: user.id, Limit: "18", Fields: "PremiereDate,Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People,ProviderIds", EnableUserData: "true", EnableImages: "true" });
-  const endpoint = kind === "watchNext" ? "/Items" : kind === "continueWatching" ? `/Users/${encodeURIComponent(user.id)}/Items/Resume` : "/Shows/NextUp";
+  const endpoint = kind === "watchNext" || kind === "topUnwatched" ? "/Items" : kind === "continueWatching" ? `/Users/${encodeURIComponent(user.id)}/Items/Resume` : "/Shows/NextUp";
+  if (kind === "topUnwatched") {
+    query.set("Limit", "60");
+    for (const [key,value] of Object.entries({Recursive:"true",IncludeItemTypes:"Movie",IsPlayed:"false",MinCommunityRating:"7",SortBy:"PremiereDate,SortName",SortOrder:"Descending",ExcludeLocationTypes:"Virtual",IsMissing:"false",IsPlaceHolder:"false"})) query.set(key,value);
+  }
   if (kind === "watchNext") {
     for (const [key,value] of Object.entries({Recursive:"true",IncludeItemTypes:"Movie,Series",IsPlayed:"false",SortBy:"Random",ExcludeLocationTypes:"Virtual",IsMissing:"false",IsPlaceHolder:"false"})) query.set(key,value);
   }
   if (kind === "nextUp") { query.set("NextUpDateCutoff",new Date(Date.now() - PERSONAL_ACTIVITY_DAYS * 86400000).toISOString()); query.set("EnableResumable", "false"); query.set("EnableRewatching", "false"); }
   const data = await upstream(process.env.JELLYFIN_URL, `${endpoint}?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
-  const visible = (data.Items || []).filter(item => !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual" && (kind !== "watchNext" || ["Movie","Series"].includes(item.Type) && item.UserData?.Played === false && !(item.UserData?.PlaybackPositionTicks > 0) && !(item.Type === "Series" && item.UserData?.PlayedPercentage > 0))).slice(0, 18);
+  const visible = (data.Items || []).filter(item => !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual" && (kind === "topUnwatched" ? item.Type === "Movie" && item.UserData?.Played === false && !(item.UserData?.PlaybackPositionTicks > 0) && Number(item.CommunityRating) >= 7 : kind !== "watchNext" || ["Movie","Series"].includes(item.Type) && item.UserData?.Played === false && !(item.UserData?.PlaybackPositionTicks > 0) && !(item.Type === "Series" && item.UserData?.PlayedPercentage > 0))).slice(0, kind === "topUnwatched" ? 10 : 18);
   const resolved = await Promise.all(visible.map(async item => {
-    if (kind === "watchNext" || !["Series", "Season"].includes(item.Type)) return item;
+    if (kind === "watchNext" || kind === "topUnwatched" || !["Series", "Season"].includes(item.Type)) return item;
     const seriesId = item.SeriesId || (item.Type === "Series" ? item.Id : null);
     try {
       if (kind === "continueWatching") {
@@ -915,10 +919,11 @@ export async function withWatched(user, items) {
         const matches = (data.Items || []).filter(candidate => Number(candidate.ProviderIds?.Tmdb) === id && candidate.Type === (type === "movie" ? "Movie" : "Series") && !candidate.IsMissing && !candidate.IsPlaceHolder && candidate.LocationType !== "Virtual");
         const played = matches.length && matches.every(candidate => typeof candidate.UserData?.Played === "boolean") ? matches.every(candidate => candidate.UserData.Played) : null;
         item.libraryOwned = matches.length > 0;
+        item.playLink = matches.length ? jellyfinLink(matches[0].Id) : null;
         item.favoriteId = matches.length === 1 ? matches[0].Id : null; item.favorite = matches.length === 1 ? matches[0].UserData?.IsFavorite === true : null;
         item.watched = played; item.watchedScope = type === "tv" ? "series" : "movie";
         if (watchedCache.size > 500) watchedCache.clear();
-        watchedCache.set(key, { value: { watched: played, libraryOwned: item.libraryOwned, favoriteId: item.favoriteId, favorite: item.favorite, watchedScope: item.watchedScope }, until: Date.now() + 60000 });
+        watchedCache.set(key, { value: { watched: played, libraryOwned: item.libraryOwned, playLink: item.playLink, favoriteId: item.favoriteId, favorite: item.favorite, watchedScope: item.watchedScope }, until: Date.now() + 60000 });
       } catch { /* Watched is optional; unknown never becomes unwatched or watched. */ }
     }
   }));

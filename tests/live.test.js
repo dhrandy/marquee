@@ -90,6 +90,11 @@ const service = http.createServer(async (req, res) => {
       return res.end("{}");
     }
     if (url.searchParams.has("Ids")) return res.end(JSON.stringify({Items:url.searchParams.get("Ids").split(",").map(Id=>({Id,Type:"Series"}))}));
+    if (url.searchParams.get("SortBy") === "PremiereDate,SortName") {
+      assert.equal(url.searchParams.get("IncludeItemTypes"),"Movie");assert.equal(url.searchParams.get("IsPlayed"),"false");assert.equal(url.searchParams.get("MinCommunityRating"),"7");assert.equal(url.searchParams.get("SortOrder"),"Descending");
+      const movie=(n,extra={})=>({Id:`top-${user}-${n}`,Name:`Top ${n}`,Type:"Movie",CommunityRating:8,UserData:{Played:false},...extra});
+      return res.end(JSON.stringify({Items:[...Array.from({length:12},(_,n)=>movie(n)),movie("low",{CommunityRating:6.5}),movie("resumed",{UserData:{Played:false,PlaybackPositionTicks:50}}),movie("seen",{UserData:{Played:true}}),movie("gone",{IsMissing:true})]}));
+    }
     if (url.searchParams.get("IsPlayed") === "false") {
       assert.equal(url.searchParams.get("SortBy"),"Random");assert.equal(url.searchParams.get("IncludeItemTypes"),"Movie,Series");assert.equal(url.searchParams.get("Limit"),"18");
       assert.equal(url.searchParams.get("ExcludeLocationTypes"),"Virtual");assert.equal(url.searchParams.get("IsMissing"),"false");assert.equal(url.searchParams.get("IsPlaceHolder"),"false");
@@ -1271,6 +1276,8 @@ try {
       const titles = [{ title: "Film", mediaType: "movie", id: 9001 }, { title: "Series", mediaType: "tv", id: 7 }, { title: "Same title", mediaType: "movie", id: 100001 }];
       assert.deepEqual((await withWatched({ id: "alice", token: "token-alice" }, titles)).map(t => t.watched), [true, true, null]);
       assert.deepEqual((await withWatched({ id: "bob", token: "token-bob" }, titles)).map(t => t.watched), [false, false, null]);
+      const owned = await withWatched({ id: "alice", token: "token-alice" }, titles);
+      assert.match(owned[0].playLink, /details\?id=/); assert.equal(owned[2].playLink, null);
     } finally { if (oldUrl === undefined) delete process.env.JELLYFIN_URL; else process.env.JELLYFIN_URL = oldUrl; }
     const callStart = calls.length;
     const watchNext = await get("/api/personal/watchNext",alice);
@@ -1279,6 +1286,10 @@ try {
     assert.ok(!calls.slice(callStart).some(c=>c.path.startsWith("/api/v1") || c.path === "/Shows/NextUp"));
     assert.deepEqual((await get("/api/personal/watchNext",bob)).items.map(i=>i.id),["pick-bob","show-bob"]);
     assert.equal((await fetch(`${base}/api/personal/watchNext`)).status,401);
+    const top = await get("/api/personal/topUnwatched", alice);
+    assert.deepEqual(top.items.map(i=>i.id), Array.from({length:10},(_,n)=>`top-alice-${n}`));
+    assert.ok(top.items.every(i=>i.watched === false && i.detail.mediaType === "movie"));
+    assert.equal((await fetch(`${base}/api/personal/topUnwatched`)).status,401);
     const suggestions = await get("/api/recommendations", alice);
     assert.equal(suggestions.seed, "Favorite title");
     assert.deepEqual(suggestions.seeds, ["Favorite title", "Watched 8", "Watched 9", "Watched 10", "Watched 11"]);
@@ -1308,7 +1319,7 @@ try {
     assert.equal((await post("/api/watch-later",alice,{key:"tmdb:movie:99999999",saved:true})).status,404);
     assert.equal((await post("/api/watch-later",alice,{key:catalog.watchKey,saved:false})).status,200);
     assert.equal((await get("/api/watch-later",alice)).items.length,0);
-    const order = ["watchNext", "calendar", "search", "weather", "watchlist", "watchLater", "continueWatching", "nextUp", "recent", "leavingSoon", "recommendations", "popular", "inTheaters", "requests"];
+    const order = ["watchNext", "calendar", "search", "weather", "watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "recent", "leavingSoon", "recommendations", "popular", "inTheaters", "requests"];
     assert.equal((await post("/api/section-order", alice, { order })).status, 200);
     assert.deepEqual((await get("/api/section-order", alice)).order, order);
     assert.notDeepEqual((await get("/api/section-order", bob)).order, order);

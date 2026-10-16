@@ -1734,3 +1734,13 @@ body { padding-top:var(--safe-top); }
 .library-stat strong {display:block;font-size:clamp(28px,3vw,38px);font-weight:700;line-height:1.15;letter-spacing:-.04em;font-variant-numeric:tabular-nums;}
 .library-stat small {display:block;color:var(--muted);margin-top:12px;}
 @media(max-width:700px){.library-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}.library-stat{padding:20px 16px;}.library-stat h3{font-size:14px;margin-bottom:16px;}}
+
+/* Compact headers (0.2.0-beta.3): less dead space above the first shelf. */
+#popular-section .popular-heading { margin-bottom: 0; }
+#popular-section .popular-heading p { margin: 3px 0 0; }
+#popular-status:empty { display: none; }
+#popular-section .shelf-heading h3 { margin: 16px 0 12px; }
+#dashboard[data-page="home"] .view-intro { padding: 6px 0 22px; }
+#dashboard[data-page="home"] .view-intro h1 { margin: 8px 0 6px; font-size: clamp(26px, 2.4vw, 32px); letter-spacing: -1px; }
+#dashboard[data-page="home"] .view-intro p { font-size: 14px; line-height: 1.45; }
+@media (max-width: 700px) { #dashboard[data-page="home"] .view-intro { padding: 4px 0 18px; } #dashboard[data-page="home"] .view-intro h1 { font-size: 26px; max-width: none; } #dashboard[data-page="home"] .view-intro p { font-size: 13px; max-width: none; } }

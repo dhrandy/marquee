@@ -36,12 +36,13 @@ const defaults = {
   jellyfinLink: true,
   popularCollapsed: false,
   defaultView: "auto",
-  watchlist: false, watchLater: false, watchLaterCollapsed: false, continueWatching: true, nextUp: true, watchNext: true,
+  watchlist: true, watchLater: true, watchLaterCollapsed: false, topUnwatched: true, topUnwatchedCollapsed: false, continueWatching: true, nextUp: true, watchNext: true,
   watchlistCollapsed: false, continueWatchingCollapsed: false, nextUpCollapsed: false, watchNextCollapsed: false, watchNextAnimation: "mixed", watchNextType: "both",
   personalShelvesReset: false,
-  posterSize: "standard", firstTab: "discover", leavingSoon: false, leavingSoonCollapsed: false, recommendations: false, myRequests: false,
+  posterSize: "standard", firstTab: "discover", leavingSoon: true, leavingSoonCollapsed: false, recommendations: true, myRequests: false, shelvesDefaultsV3: false,
   syncDisplay: false,
   shelfRefreshMinutes: 5,
+  liveShelfMinutes: 1,
 };
 const statusLabel = {
   available: "Available",
@@ -167,8 +168,8 @@ function saveWeather() {
     });
   return weatherWrites;
 }
-const sectionLabels = { search: "Search and request", weather: "Weather", watchlist: "Favorites", watchLater: "Watchlist", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", leavingSoon: "Leaving soon", recommendations: "Recommendations", popular: "Popular right now", inTheaters: "In theaters", requests: "Request status" };
-const defaultSectionOrder = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "leavingSoon", "requests"];
+const sectionLabels = { search: "Search and request", weather: "Weather", watchlist: "Favorites", watchLater: "Watchlist", topUnwatched: "Top unwatched movies", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", leavingSoon: "Leaving soon", recommendations: "Recommendations", popular: "Popular right now", inTheaters: "In theaters", requests: "Request status" };
+const defaultSectionOrder = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "topUnwatched", "leavingSoon", "requests"];
 let sectionOrder = [...defaultSectionOrder], orderWrites = Promise.resolve();
 const sectionElement = key => $(key === "weather" ? "#weather" : key === "popular" ? "#popular-wrap" : `#${key}-section`);
 function applySectionOrder() {
@@ -194,7 +195,7 @@ function applySectionOrder() {
   applyDashboardPage();
 }
 let dashboardPage = "discover";
-const pageSections = { home: ["watchlist", "watchLater", "continueWatching", "nextUp", "watchNext", "leavingSoon", "requests"], discover: ["weather", "search", "recent", "popular", "inTheaters", "calendar", "recommendations"] };
+const pageSections = { home: ["watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "watchNext", "leavingSoon", "requests"], discover: ["weather", "search", "recent", "popular", "inTheaters", "calendar", "recommendations"] };
 let pageInitialized = false;
 function applyDashboardPage() {
   if (!pageInitialized) { dashboardPage = state.prefs.firstTab === "home" ? "home" : "discover"; pageInitialized = true; }
@@ -318,7 +319,7 @@ function applyPrefs() {
     String(!state.prefs.popularCollapsed),
   );
   $("#inTheaters-section").hidden = !state.prefs.inTheaters;
-  $("#recommendations-section").hidden = !state.prefs.recommendations;
+  $("#recommendations-section").hidden = !state.prefs.recommendations || state.recommendationsEmpty === true;
   $("#requests-filter").value = !$("#requests-filter").querySelector('[value="all"]') || state.prefs.myRequests ? "mine" : "all";
   $("#requests-section").hidden = !state.prefs.requests;
   $("#libraryStats-section").hidden = !state.prefs.libraryStats;
@@ -330,20 +331,20 @@ function applyPrefs() {
   all(".poster-card time").forEach((el) => {
     el.hidden = !state.prefs.addedDates;
   });
-  for (const key of ["watchlist", "watchLater", "continueWatching", "nextUp", "watchNext", "leavingSoon"]) {
+  for (const key of ["watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "watchNext", "leavingSoon"]) {
     const section = $(`#${key}-section`);
-    if (section) section.hidden = !state.prefs[key] || (["continueWatching","nextUp"].includes(key) && (!Array.isArray(state.personalItems[key]) || !state.personalItems[key].length));
+    if (section) section.hidden = !state.prefs[key] || shelfIsEmpty(key);
     const content = $(`#${key}-content`);
     if (content) content.hidden = Boolean(state.prefs[`${key}Collapsed`]);
     const collapse = $(`[data-collapse="${key}"]`);
     if (collapse) {
       collapse.setAttribute("aria-expanded", !state.prefs[`${key}Collapsed`]);
       collapse.title = `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${sectionLabels[key]}`;
-      collapse.setAttribute("aria-label", `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${{ watchlist: "Favorites", watchLater: "Watchlist", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", leavingSoon: "Leaving soon" }[key]}`);
+      collapse.setAttribute("aria-label", `${state.prefs[`${key}Collapsed`] ? "Expand" : "Collapse"} ${{ watchlist: "Favorites", watchLater: "Watchlist", topUnwatched: "Top unwatched movies", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", leavingSoon: "Leaving soon" }[key]}`);
     }
   }
-  $("#personal-shelves").hidden = !["watchlist", "watchLater", "continueWatching", "nextUp", "watchNext", "leavingSoon"].some(key => state.prefs[key]);
-  $("#nothing").hidden = state.prefs.recent || state.prefs.calendar || state.prefs.watchlist || state.prefs.watchLater || state.prefs.continueWatching || state.prefs.nextUp || state.prefs.watchNext || state.prefs.leavingSoon || state.prefs.recommendations;
+  $("#personal-shelves").hidden = !["watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "watchNext", "leavingSoon"].some(key => state.prefs[key]);
+  $("#nothing").hidden = state.prefs.recent || state.prefs.calendar || state.prefs.watchlist || state.prefs.watchLater || state.prefs.topUnwatched || state.prefs.continueWatching || state.prefs.nextUp || state.prefs.watchNext || state.prefs.leavingSoon || state.prefs.recommendations;
   $("#weather").hidden = !state.prefs.weather;
   if (state.prefs.weather) loadWeather();
   scheduleWeather();
@@ -351,14 +352,22 @@ function applyPrefs() {
   updateWatchNextControls();
   scheduleShelfRefresh();
 }
+// Shelves that only make sense with something in them stay out of the page when empty.
+const hideWhenEmpty = ["watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "leavingSoon"];
+function shelfIsEmpty(key) {
+  if (!hideWhenEmpty.includes(key)) return false;
+  const items = key === "watchlist" ? state.watchlistItems : state.personalItems[key];
+  return !Array.isArray(items) || !items.length;
+}
 function buildSettings() {
   const labels = {
-    watchlist: "Favorites - Jellyfin favorites (off by default)",
-    watchLater: "Watchlist - starred for later (off by default)",
-    leavingSoon: "Leaving soon (Maintainerr, off by default)",
-    recommendations: "Recommendations (off by default)",
+    watchlist: "Favorites - Jellyfin favorites",
+    watchLater: "Watchlist - starred for later",
+    leavingSoon: "Leaving soon (Maintainerr)",
+    recommendations: "Recommendations",
     continueWatching: "Continue watching",
     nextUp: "Next up",
+    topUnwatched: "Top unwatched movies - newest, rated 7+",
     watchNext: "What to watch next - unwatched on Jellyfin",
     recent: "Recently added",
     calendar: "Release calendar",
@@ -399,12 +408,13 @@ function buildSettings() {
       if (el.dataset.pref === "inTheaters" && el.checked) loadInTheaters();
       if (el.dataset.pref === "requests" && el.checked) loadRequests();
       if (el.dataset.pref === "libraryStats" && el.checked) loadLibraryStats();
-      if (["watchlist", "watchLater", "continueWatching", "nextUp", "watchNext", "leavingSoon"].includes(el.dataset.pref)) loadPersonalShelves();
+      if (["watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "watchNext", "leavingSoon"].includes(el.dataset.pref)) loadPersonalShelves();
     }),
   );
   buildSectionOrder();
   $("#sync-display").checked = Boolean(state.prefs.syncDisplay);
   $("#shelf-refresh-minutes").value = shelfRefreshInterval();
+  $("#live-shelf-minutes").value = liveShelfInterval();
   $("#default-view").value = state.prefs.defaultView;
   $("#poster-size").value = state.prefs.posterSize || "standard";
   $("#weather-units").value = state.prefs.weatherUnits;
@@ -441,6 +451,13 @@ async function enter(name) {
     try { const { weather, weatherCity, weatherUnits, colorblind, ...devicePrefs } = state.prefs; localStorage.setItem(state.key, JSON.stringify(devicePrefs)); } catch { /* storage full or blocked */ }
     if (state.prefs.syncDisplay) syncDisplayWrite();
   }
+  // One-time reset (0.2.0-beta.3): Favorites, Watchlist, Leaving soon and Recommendations are on by
+  // default now (and hide themselves when empty). Saved "off" values from before are turned on once.
+  if (!state.prefs.shelvesDefaultsV3) {
+    Object.assign(state.prefs, { watchlist: true, watchLater: true, leavingSoon: true, recommendations: true, shelvesDefaultsV3: true });
+    try { const { weather, weatherCity, weatherUnits, colorblind, ...devicePrefs } = state.prefs; localStorage.setItem(state.key, JSON.stringify(devicePrefs)); } catch { /* storage full or blocked */ }
+    if (state.prefs.syncDisplay) syncDisplayWrite();
+  }
   pageInitialized = false;
   sectionOrder = [...defaultSectionOrder];
   try {
@@ -449,6 +466,7 @@ async function enter(name) {
     if (Array.isArray(order) && order.length === 11 && !order.includes("inTheaters")) { order = [...order]; order.splice(order.indexOf("popular") + 1, 0, "inTheaters"); }
     if (Array.isArray(order) && !order.includes("watchNext") && order.includes("continueWatching")) { order = [...order]; order.splice(order.indexOf("continueWatching")+1, 0, "watchNext"); }
     if(Array.isArray(order) && !order.includes("watchLater") && order.includes("watchlist")) {order=[...order];order.splice(order.indexOf("watchlist")+1,0,"watchLater");}
+    if (Array.isArray(order) && !order.includes("topUnwatched") && order.includes("watchLater")) { order = [...order]; order.splice(order.indexOf("watchLater") + 1, 0, "topUnwatched"); }
     if (Array.isArray(order) && order.length === defaultSectionOrder.length && new Set(order).size === order.length && order.every(key => defaultSectionOrder.includes(key))) sectionOrder = order;
   } catch (error) { $("#section-order-status").textContent = error.message; }
   const [weatherSettings, accessibilitySettings] = await Promise.all([
@@ -628,26 +646,33 @@ for (const name of ["pointerdown", "pointermove", "keydown", "wheel", "touchstar
 function shelfRefreshInterval() {
   return [0, 1, 2, 5, 10, 15].includes(state.prefs.shelfRefreshMinutes) ? state.prefs.shelfRefreshMinutes : 5;
 }
+// Next up and Continue watching change as people watch, so they poll faster than the rest.
+// Polling only runs while the tab is visible (safeShelfRefresh), so idle tabs cost nothing.
+const liveShelfKeys = ["continueWatching", "nextUp"];
+function liveShelfInterval() {
+  return [0, 1, 2, 5].includes(state.prefs.liveShelfMinutes) ? state.prefs.liveShelfMinutes : 1;
+}
+function intervalFor(key) { return liveShelfKeys.includes(key) ? liveShelfInterval() : shelfRefreshInterval(); }
 function scheduleShelfRefresh() {
   if (shelfTimer) clearInterval(shelfTimer);
   shelfTimer = null;
-  if (!shelfRefreshInterval() || $("#dashboard").hidden) return;
+  if ((!shelfRefreshInterval() && !liveShelfInterval()) || $("#dashboard").hidden) return;
   shelfTimer = setInterval(autoRefreshShelves, 15000);
 }
 async function autoRefreshShelves() {
-  if (shelfRefreshBusy || !shelfRefreshInterval() || !safeShelfRefresh()) return;
-  const interval = shelfRefreshInterval() * 60000;
-  const keys = ["recent", "continueWatching", "nextUp", "watchNext", "watchLater", "leavingSoon", "requests", "calendar", "libraryStats"].filter(key => (key === "libraryStats" ? dashboardPage === "home" : pageSections[dashboardPage].includes(key)) && state.prefs[key] && Date.now() - (shelfLastLoaded[key] || 0) >= interval);
+  if (shelfRefreshBusy || (!shelfRefreshInterval() && !liveShelfInterval()) || !safeShelfRefresh()) return;
+  const keys = ["recent", "continueWatching", "nextUp", "watchNext", "watchLater", "topUnwatched", "leavingSoon", "requests", "calendar", "libraryStats", "inTheaters"].filter(key => (key === "libraryStats" ? dashboardPage === "home" : pageSections[dashboardPage].includes(key)) && state.prefs[key] && intervalFor(key) && Date.now() - (shelfLastLoaded[key] || 0) >= intervalFor(key) * 60000);
   if (!keys.length) return;
   shelfRefreshBusy = true;
   try {
     // Failed reads also wait one interval instead of hammering an unavailable server.
     for (const key of keys) shelfLastLoaded[key] = Date.now();
     $("#shelf-refresh-status").textContent = "";
-    await Promise.all(keys.map(key => key === "recent" ? loadRecent({ quiet: true }) : key === "calendar" ? loadCalendar({ quiet: true }) : key === "requests" ? loadRequests({ quiet: true }) : key === "libraryStats" ? loadLibraryStats({quiet:true}) : loadPersonalShelf(key, { quiet: true })));
+    await Promise.all(keys.map(key => key === "recent" ? loadRecent({ quiet: true }) : key === "calendar" ? loadCalendar({ quiet: true }) : key === "requests" ? loadRequests({ quiet: true }) : key === "libraryStats" ? loadLibraryStats({quiet:true}) : key === "inTheaters" ? loadInTheaters({ quiet: true }) : loadPersonalShelf(key, { quiet: true })));
   } finally { shelfRefreshBusy = false; }
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) autoRefreshShelves(); });
+$("#live-shelf-minutes").addEventListener("change", event => { state.prefs.liveShelfMinutes = Number(event.target.value); persist(); scheduleShelfRefresh(); });
 $("#shelf-refresh-minutes").addEventListener("change", event => { state.prefs.shelfRefreshMinutes = Number(event.target.value); persist(); scheduleShelfRefresh(); });
 $("#recent").addEventListener("click", (event) => {
   const button = event.target.closest("[data-recent-index]");
@@ -1337,14 +1362,19 @@ async function loadPopular() {
     $("#popular-status").textContent = error.message;
   }
 }
-async function loadInTheaters() {
+async function loadInTheaters({ quiet = false } = {}) {
   if (!state.prefs.inTheaters) return;
   try {
     const data = await api("/api/in-theaters");
+    if (quiet && !safeShelfRefresh()) { delete shelfLastLoaded.inTheaters; return; }
+    shelfLastLoaded.inTheaters = Date.now();
     updateShelfHtml($("#inTheaters-content"), data.items.length ? data.items.slice(0,25).map(item => resultCardHtml(item)).join("") : '<p class="empty">No theater titles returned for the US.</p>');
     $("#inTheaters-status").textContent = "";
     fixBrokenPosters();
-  } catch (error) { $("#inTheaters-content").replaceChildren(); $("#inTheaters-status").textContent = error.message; }
+  } catch (error) {
+    if (quiet) { $("#shelf-refresh-status").textContent = "Refresh unavailable. Keeping the last loaded shelves."; return; }
+    $("#inTheaters-content").replaceChildren(); $("#inTheaters-status").textContent = error.message;
+  }
 }
 async function loadRecommendations() {
   if (!state.prefs.recommendations) return;
@@ -1352,6 +1382,8 @@ async function loadRecommendations() {
     const { seed, seeds, items } = await api("/api/recommendations");
     const titles = seeds?.length ? seeds : seed ? [seed] : [];
     $("#recommendation-seed").textContent = titles.length ? `Recent picks · Because you watched ${titles.join(", ")}` : "Watch a movie or show in Jellyfin to get suggestions.";
+    state.recommendationsEmpty = !items.length;
+    $("#recommendations-section").hidden = !state.prefs.recommendations || state.recommendationsEmpty;
     updateShelfHtml($("#recommendations-content"), items.length ? items.map(r => resultCardHtml(r)).join("") : '<p class="empty">No recent suggestions from your watched titles yet.</p>');
     $("#recommendations-status").textContent = ""; fixBrokenPosters();
   } catch (error) { $("#recommendations-status").textContent = error.message; }
@@ -1925,7 +1957,7 @@ document.addEventListener("error", (event) => {
     img.replaceWith(Object.assign(document.createElement("span"), { className: "flag-code", textContent: img.dataset.code || "" }));
 }, true);
 
-const personalLabels = { leavingSoon: "Leaving soon", watchlist: "Favorites", watchLater: "Watchlist", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up" };
+const personalLabels = { leavingSoon: "Leaving soon", watchlist: "Favorites", watchLater: "Watchlist", topUnwatched: "Top unwatched movies", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up" };
 let personalLoad = 0;
 async function loadPersonalShelves() {
   const seq = ++personalLoad;
@@ -1947,7 +1979,7 @@ async function loadPersonalShelf(key, { quiet = false, seq = personalLoad } = {}
     if (quiet && !safeShelfRefresh()) { delete shelfLastLoaded[key]; return; }
     shelfLastLoaded[key] = Date.now();
     if(key === "watchLater") { watchLaterKeys = new Set(items.map(item=>item.key)); refreshStars(); }
-    if (["continueWatching","nextUp"].includes(key)) $(`#${key}-section`).hidden = !state.prefs[key] || !items.length;
+    if (hideWhenEmpty.includes(key)) $(`#${key}-section`).hidden = !state.prefs[key] || !items.length;
     const previous = key === "watchlist" ? state.watchlistItems : state.personalItems[key];
     if (JSON.stringify(previous) === JSON.stringify(items) && $(`#${key}-content .poster-card`)) return;
     if (key === "watchlist") state.watchlistItems = items;
@@ -1993,7 +2025,7 @@ function renderPersonalShelf(key, items) {
     if (key === "watchNext" && !matchesWatchNextMode(item)) return "";
     const poster = item.image ? `/api/image/${encodeURIComponent(item.id)}` : `/art/${item.art || "placeholder"}.svg`;
     return `<article class="poster-card watch-later-card">${starHtml(item.watchKey,item.title)}<button class="poster-link" data-personal="${key}" data-index="${index}"><div class="poster-art"><img src="${escape(poster || "/art/placeholder.svg")}" alt="" loading="lazy">${watchedBadgeHtml(item)}${key === "continueWatching" ? `<progress class="poster-progress" max="100" value="${Math.min(100, Math.max(0, Number(item.progress) || 0))}" aria-label="${escape(item.title)} watch progress"></progress>` : ""}</div><h3>${escape(item.title)}</h3></button><p>${escape(libraryShelfMetadata(item))}</p>${key === "leavingSoon" ? `<p class="leaving-date">${escape(leavingLabel(item))}</p>` : ""}${key === "continueWatching" ? `<p>${item.remaining ? `${item.remaining} min left` : "In progress"}</p>` : ""}${key === "watchlist" ? `<button class="watchlist-remove" data-remove-id="${escape(item.favoriteId)}" aria-label="Remove ${escape(item.title)} from Jellyfin favorites" title="Remove from Jellyfin favorites" aria-pressed="true">${heartIcon}</button>` : ""}</article>`;
-  }).join("") : `<p class="empty">${key === "watchNext" ? "No unwatched library picks right now." : key === "leavingSoon" ? "No eligible scheduled departures in your Jellyfin library." : key === "watchlist" ? "Your Jellyfin movie and series favorites appear here. Use the heart in a title's popout to add one." : key === "continueWatching" ? "Nothing in progress. Start watching in Jellyfin and it appears here." : "No next episodes yet. Your Jellyfin viewing history fills this shelf."}</p>`);
+  }).join("") : `<p class="empty">${key === "watchNext" ? "No unwatched library picks right now." : key === "topUnwatched" ? "No unwatched movies rated 7 or higher right now." : key === "leavingSoon" ? "No eligible scheduled departures in your Jellyfin library." : key === "watchlist" ? "Your Jellyfin movie and series favorites appear here. Use the heart in a title's popout to add one." : key === "continueWatching" ? "Nothing in progress. Start watching in Jellyfin and it appears here." : "No next episodes yet. Your Jellyfin viewing history fills this shelf."}</p>`);
   if (key === "watchNext" && !$(`#${key}-content .poster-card`)) updateShelfHtml($(`#${key}-content`), '<p class="empty">No picks in this batch match your filters.</p>');
   fixBrokenPosters();
 }

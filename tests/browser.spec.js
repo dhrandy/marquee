@@ -9,7 +9,7 @@ async function login(page) {
   // Existing-user fixture: most tests exercise the search-enabled home page.
   await page.addInitScript(() => {
     const key = "marquee:Demo viewer:preferences";
-    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ search: true, watchNext: false, personalShelvesReset:true,continueWatching:false,nextUp:false,requests:true,libraryStats:false }));
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ search: true, watchNext: false, personalShelvesReset:true,shelvesDefaultsV3:true,continueWatching:false,nextUp:false,requests:true,libraryStats:false }));
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();
@@ -934,7 +934,7 @@ for (const width of [1440, 1660, 393, 280]) {
       }));
       await route.fulfill({ json: data });
     });
-    await page.addInitScript(() => localStorage.setItem("marquee:Demo viewer:preferences", JSON.stringify({ search: true, watchNext: false, personalShelvesReset:true,continueWatching:false,nextUp:false,requests:true,libraryStats:false })));
+    await page.addInitScript(() => localStorage.setItem("marquee:Demo viewer:preferences", JSON.stringify({ search: true, watchNext: false, personalShelvesReset:true,shelvesDefaultsV3:true,continueWatching:false,nextUp:false,requests:true,libraryStats:false, shelvesDefaultsV3:true, watchlist:false, watchLater:false, leavingSoon:false, recommendations:false, topUnwatched:false })));
     await page.goto("/");
     await page.getByRole("button", { name: "Explore demo" }).click();
     await expect(page.locator(".poster-card")).toHaveCount(18);
@@ -1961,7 +1961,7 @@ for (const width of [1440, 393]) {
     await page.setViewportSize({ width, height: 950 });
     await login(page);
     await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await expect(page.locator("#section-order-list li")).toHaveCount(14);
+    await expect(page.locator("#section-order-list li")).toHaveCount(15);
     const handle = page.getByRole("button", { name: "Drag Release calendar", exact: true });
     const target = page.locator('#section-order-list li[data-order-key="search"]');
     await handle.scrollIntoViewIfNeeded();
@@ -1985,6 +1985,7 @@ for (const width of [1440, 393]) {
     await page.locator('[data-pref="watchlist"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
     await view(page, "home");
+    await page.evaluate(() => { state.watchlistItems = [{ id: "x" }]; applyPrefs(); });
     await expect(page.locator("#watchlist-section")).toBeVisible();
     await expect(page.locator("#watchlist-section").getByRole("button", { name: "Collapse Favorites" })).toBeVisible();
   await view(page, "home");
@@ -2068,6 +2069,7 @@ for (const width of [1440, 393, 280]) {
     for (const key of ["watchlist", "continueWatching", "nextUp"]) await page.locator(`[data-pref="${key}"]`).check();
     await page.getByRole("button", { name: "Close settings" }).click();
     await view(page, "home");
+    await expect(page.locator("#nextUp-section, #continueWatching-section").first()).toBeVisible(); await page.evaluate(() => { state.watchlistItems = [{ id: "x" }]; applyPrefs(); });
     for (const key of ["watchlist", "continueWatching", "nextUp"]) {
       const header = page.locator(`#${key}-section .section-heading`), button = header.locator("button");
       const heading = await header.locator("h2").boundingBox(), arrow = await button.boundingBox();
@@ -2366,7 +2368,7 @@ test("tab startup sync, empty states and shelf order stay independent", async ({
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.locator("#sync-display").check();
   await page.locator("#tab-order").selectOption("home");
-  for (const key of ["watchlist", "continueWatching", "nextUp", "leavingSoon", "requests"]) await page.locator(`[data-pref="${key}"]`).uncheck();
+  for (const key of ["watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "leavingSoon", "requests"]) await page.locator(`[data-pref="${key}"]`).uncheck();
   await page.getByRole("button", { name: "Close settings" }).click();
   await view(page, "home");
   await expect(page.locator("#nothing")).toBeVisible();
@@ -2413,7 +2415,7 @@ for (const width of [1440, 393, 280]) {
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     const keys = pageName => page.locator(`[data-order-page="${pageName}"] li`).evaluateAll(rows => rows.map(row => row.dataset.orderKey));
     const discover = await keys("discover"), home = await keys("home");
-    expect(discover).toHaveLength(7); expect(home).toHaveLength(7);
+    expect(discover).toHaveLength(7); expect(home).toHaveLength(8);
     await page.getByRole("button", { name: "Move Continue watching up", exact: true }).click();
     expect(await keys("discover")).toEqual(discover);
     expect((await keys("home"))[0]).toBe("continueWatching");
@@ -2587,6 +2589,7 @@ for (const width of [1440,393]) {
     await page.setViewportSize({ width, height: 1000 }); await login(page);
     await page.getByRole("button", { name: "Settings", exact: true }).click(); await page.locator('[data-pref="watchlist"]').check();
     await page.getByRole("button", { name: "Close settings" }).click(); await view(page,"home");
+    await page.evaluate(() => { state.watchlistItems = [{ id: "x" }]; applyPrefs(); });
     await page.evaluate(() => renderPersonalShelf("watchlist", Array.from({ length: 12 }, (_, i) => ({ id: `preview-${i}`, favoriteId: `preview-${i}`, favorite: true, title: ["The Last Signal","North of Nowhere","After Hours"][i%3], subtitle: "2026 · Series", art: ["signal","north","orbit"][i%3], watched: i%2===0, watchedScope: "series" }))));
     for (const size of ["small","standard","large"]) {
       await page.getByRole("button", { name: "Settings", exact: true }).click(); await page.locator("#poster-size").selectOption(size); await page.getByRole("button", { name: "Close settings" }).click();
@@ -2686,7 +2689,7 @@ for (const width of [393, 1440]) {
       await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
     }
     const keys = page.locator("#section-order-list li");
-    expect(await keys.evaluateAll(rows => rows.map(row => row.dataset.orderKey))).toEqual(["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "leavingSoon", "requests"]);
+    expect(await keys.evaluateAll(rows => rows.map(row => row.dataset.orderKey))).toEqual(["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "topUnwatched", "leavingSoon", "requests"]);
     await page.getByRole("button", { name: "Move Next up down", exact: true }).click();
     await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
     const beforeHome = await page.locator('[data-order-page="home"] li').evaluateAll(rows => rows.map(row => row.dataset.orderKey));
@@ -3351,7 +3354,7 @@ for (const width of [393,1440]) test(`requested by certification line uses reque
 for (const width of [393,1440]) test(`request filter hides Everyone for Seerr restricted accounts and recovers at ${width}px`,async({page})=>{
  await page.setViewportSize({width,height:1000});let restricted=true;
  await page.route('**/api/seerr/requests*',route=>route.fulfill({json:{viewAllRequests:!restricted,requests:[{id:1,title:'Sample request',mediaType:'tv',requestedBy:'Alex Sample',status:2}]}}));
- await page.addInitScript(()=>localStorage.setItem('marquee:Demo viewer:preferences',JSON.stringify({search:true,requests:true,watchNext:false,personalShelvesReset:true,continueWatching:false,nextUp:false})));await login(page);await view(page,'home');await page.locator('#requests-section').scrollIntoViewIfNeeded();await expect(page.locator('#requests-filter')).toHaveValue('mine');await expect(page.locator('#requests-filter option[value="all"]')).toHaveCount(0);
+ await page.addInitScript(()=>localStorage.setItem('marquee:Demo viewer:preferences',JSON.stringify({search:true,requests:true,watchNext:false,personalShelvesReset:true,shelvesDefaultsV3:true,continueWatching:false,nextUp:false})));await login(page);await view(page,'home');await page.locator('#requests-section').scrollIntoViewIfNeeded();await expect(page.locator('#requests-filter')).toHaveValue('mine');await expect(page.locator('#requests-filter option[value="all"]')).toHaveCount(0);
  await page.locator('#requests-section').screenshot({path:`${shots}/requests-restricted-${width}.png`});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  restricted=false;await page.reload();await view(page,'home');await expect(page.locator('#requests-filter option[value="all"]')).toBeEnabled();await expect(page.locator('#requests-filter')).toHaveValue('all');
 });
@@ -3365,7 +3368,7 @@ for (const size of [{width:834,height:1194},{width:1194,height:834},{width:768,h
 });
 
 for (const saved of [false,true]) test(`personal section defaults are enabled unless saved off: ${saved}`,async({page})=>{
- if(saved)await page.addInitScript(()=>localStorage.setItem('marquee:Demo viewer:preferences',JSON.stringify({personalShelvesReset:true,continueWatching:false,nextUp:false,watchNext:false})));
+ if(saved)await page.addInitScript(()=>localStorage.setItem('marquee:Demo viewer:preferences',JSON.stringify({personalShelvesReset:true,shelvesDefaultsV3:true,continueWatching:false,nextUp:false,watchNext:false})));
  await page.goto('/');await page.getByRole('button',{name:'Explore demo'}).click();await view(page,'home');await page.getByRole('button',{name:'Settings',exact:true}).click();
  for(const key of ['continueWatching','nextUp','watchNext']){if(saved)await expect(page.locator(`[data-pref="${key}"]`)).not.toBeChecked();else await expect(page.locator(`[data-pref="${key}"]`)).toBeChecked();}
  await expect(page.locator('[data-pref="requests"]')).toBeChecked();await page.getByRole('button',{name:'Close settings'}).click();for(const key of ['continueWatching','nextUp','watchNext']){if(saved)await expect(page.locator(`#${key}-section`)).toBeHidden();else await expect(page.locator(`#${key}-section`)).toBeVisible();}
@@ -3383,7 +3386,7 @@ test('empty next up and continue watching hide and return when refreshed with it
 for(const width of [280,393,834,1440]) test(`library count cards at bottom of Jellyfin, hideable and selectable at ${width}px`,async({page})=>{
  await page.setViewportSize({width,height:1000});
  await page.route('**/api/library-stats*',route=>{const selected=new URL(route.request().url()).searchParams.get('kidsLibrary') || 'kids';return route.fulfill({json:{libraries:[{id:'kids',name:'Kids Movies',type:'movies'},{id:'family',name:'Family Films',type:'movies'},{id:'kids-shows',name:'Kids Shows',type:'tvshows'}],kidsLibrary:selected,kidsShowsLibrary:'kids-shows',counts:{movies:selected==='kids'?1001:987,kidsMovies:selected==='kids'?167:181,tvShows:211,kidsShows:38,episodes:15834,kidsEpisodes:1422}}});});
- await page.addInitScript(()=>{const key='marquee:Demo viewer:preferences';if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify({search:true,requests:true,watchNext:false,personalShelvesReset:true,continueWatching:false,nextUp:false,libraryStats:true}));});
+ await page.addInitScript(()=>{const key='marquee:Demo viewer:preferences';if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify({search:true,requests:true,watchNext:false,personalShelvesReset:true,shelvesDefaultsV3:true,continueWatching:false,nextUp:false,libraryStats:true}));});
  await login(page);await view(page,'home');await expect(page.locator('#libraryStats-content article')).toHaveCount(6);await expect(page.locator('#libraryStats-content')).toContainText('15,834');await expect(page.locator('#libraryStats-section')).not.toContainText('catalog');await expect(page.locator('#dashboard main > section').last()).toHaveAttribute('id','libraryStats-section');
  await page.locator('#libraryStats-section').scrollIntoViewIfNeeded();await page.locator('#libraryStats-section').screenshot({path:`${shots}/library-counts-${width}.png`});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await view(page,'discover');await expect(page.locator('#libraryStats-section')).toBeHidden();await view(page,'home');await page.getByRole('button',{name:'Settings',exact:true}).click();await page.locator('#kids-movies-library').selectOption('family');await expect(page.locator('#libraryStats-content')).toContainText('987');await page.locator('[data-pref="libraryStats"]').uncheck();await page.getByRole('button',{name:'Close settings'}).click();await expect(page.locator('#libraryStats-section')).toBeHidden();await page.reload();await view(page,'home');await expect(page.locator('#libraryStats-section')).toBeHidden();await page.getByRole('button',{name:'Settings',exact:true}).click();await page.locator('[data-pref="libraryStats"]').check();await expect(page.locator('#kids-movies-library')).toHaveValue('family');await page.getByRole('button',{name:'Close settings'}).click();await expect(page.locator('#libraryStats-section')).toBeVisible();
@@ -3410,4 +3413,70 @@ test("old saved off Next up and Continue watching are turned on once, then choic
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.locator('[data-pref="nextUp"]')).not.toBeChecked();
   await expect(page.locator('[data-pref="continueWatching"]')).toBeChecked();
+});
+
+test("new defaults: four shelves on, empty shelves hidden, Next up and Continue watching poll every minute", async ({ page }) => {
+  await page.route("**/api/watchlist", route => route.fulfill({ json: { items: [] } }));
+  await page.route("**/api/watch-later", route => route.fulfill({ json: { items: [] } }));
+  await page.route("**/api/leaving-soon", route => route.fulfill({ json: { items: [] } }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  await expect(page.locator("#recent .poster-card")).toHaveCount(6);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  for (const key of ["watchlist", "watchLater", "leavingSoon", "recommendations"]) await expect(page.locator(`[data-pref="${key}"]`)).toBeChecked();
+  await expect(page.locator("#live-shelf-minutes")).toHaveValue("1");
+  await expect(page.locator("#shelf-refresh-minutes")).toHaveValue("5");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await view(page, "home");
+  for (const key of ["watchlist", "watchLater", "leavingSoon"]) await expect(page.locator(`#${key}-section`)).toBeHidden();
+});
+
+test("In theaters is part of auto-refresh and live shelves use their own interval", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  await expect(page.locator("#recent .poster-card")).toHaveCount(6);
+  const result = await page.evaluate(() => {
+    state.prefs.shelfRefreshMinutes = 10; state.prefs.liveShelfMinutes = 1;
+    return { live: intervalFor("nextUp"), other: intervalFor("inTheaters"), cw: intervalFor("continueWatching") };
+  });
+  expect(result).toEqual({ live: 1, other: 10, cw: 1 });
+  expect(await page.evaluate(() => autoRefreshShelves.toString().includes("inTheaters"))).toBe(true);
+});
+
+for (const width of [1440, 393]) {
+  test(`library titles opened from search, Top 10 and In theaters get Play in Jellyfin at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    let opened = 0;
+    await page.route("**/api/seerr/details/**", async route => {
+      const data = await (await route.fetch()).json();
+      await route.fulfill({ json: { ...data, playLink: opened++ === 0 ? "https://jellyfin.invalid/web/index.html#!/details?id=abc" : null } });
+    });
+    await login(page);
+    await page.locator("#popular-movies .result-card [data-detail-id]").first().click();
+    await expect(page.locator("#episode-play")).toBeVisible();
+    await expect(page.locator("#episode-play")).toHaveAttribute("href", /details\?id=abc/);
+    await page.screenshot({ path: `${shots}/marquee-play-library-${width}.png` });
+    await page.getByRole("button", { name: "Close episode details" }).click();
+    await page.locator("#popular-movies .result-card [data-detail-id]").nth(1).click();
+    await expect(page.locator("#episode-play")).toBeHidden();
+  });
+}
+
+test("Top unwatched movies shelf is on by default, hideable and uses the shared card style", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  await expect(page.locator("#recent .poster-card")).toHaveCount(6);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.locator('[data-pref="topUnwatched"]')).toBeChecked();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await view(page, "home");
+  await expect(page.locator("#topUnwatched-section h2")).toHaveText("Top unwatched movies");
+  await expect(page.locator("#topUnwatched-content .poster-card").first()).toBeVisible();
+  const same = await page.evaluate(() => { const a = document.querySelector("#topUnwatched-content .poster-card"), b = document.querySelector("#continueWatching-content .poster-card"); return a.className === b.className && getComputedStyle(a).width === getComputedStyle(b).width; });
+  expect(same).toBe(true);
+  await page.screenshot({ path: `${shots}/marquee-top-unwatched.png`, fullPage: true });
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator('[data-pref="topUnwatched"]').uncheck();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(page.locator("#topUnwatched-section")).toBeHidden();
 });
