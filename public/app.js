@@ -523,15 +523,25 @@ async function enter(name) {
   ]);
 }
 function fixBrokenPosters() {
-  all(".poster-art img").forEach((image) =>
-    image.addEventListener(
-      "error",
-      () => {
-        image.src = "/art/placeholder.svg";
-      },
-      { once: true },
-    ),
-  );
+  // One guarded listener per img: a failed poster swaps in the placeholder but
+  // remembers its URL, so the next shelf refresh can retry it. Posters are
+  // replaced and fixed on Jellyfin after the card first renders.
+  all(".poster-art img:not([data-poster-guard])").forEach((image) => {
+    image.dataset.posterGuard = "1";
+    image.addEventListener("error", () => {
+      const src = image.getAttribute("src");
+      if (!src || src === "/art/placeholder.svg") return;
+      image.dataset.broken = src;
+      image.src = "/art/placeholder.svg";
+    });
+  });
+}
+function retryBrokenPosters(selector) {
+  for (const image of all(`${selector} img[data-broken]`)) {
+    const src = image.dataset.broken;
+    delete image.dataset.broken;
+    image.src = src;
+  }
 }
 function ratingText(rating, showSource = true) {
   return rating &&
@@ -628,7 +638,7 @@ async function loadRecent({ quiet = false } = {}) {
     if (request !== recentRequest) return;
     if (quiet && !safeShelfRefresh()) { delete shelfLastLoaded.recent; return; }
     shelfLastLoaded.recent = Date.now();
-    if (JSON.stringify(state.recentItems) === JSON.stringify(items) && $("#recent .poster-card")) return;
+    if (JSON.stringify(state.recentItems) === JSON.stringify(items) && $("#recent .poster-card")) { retryBrokenPosters("#recent"); return; }
     state.recentItems = items;
     replaceShelfContent($("#recent"), () => renderRecent(items));
   } catch (error) {
@@ -1981,7 +1991,7 @@ async function loadPersonalShelf(key, { quiet = false, seq = personalLoad } = {}
     if(key === "watchLater") { watchLaterKeys = new Set(items.map(item=>item.key)); refreshStars(); }
     if (hideWhenEmpty.includes(key)) $(`#${key}-section`).hidden = !state.prefs[key] || !items.length;
     const previous = key === "watchlist" ? state.watchlistItems : state.personalItems[key];
-    if (JSON.stringify(previous) === JSON.stringify(items) && $(`#${key}-content .poster-card`)) return;
+    if (JSON.stringify(previous) === JSON.stringify(items) && $(`#${key}-content .poster-card`)) { retryBrokenPosters(`#${key}-content`); return; }
     if (key === "watchlist") state.watchlistItems = items;
     else state.personalItems[key] = items;
     replaceShelfContent($(`#${key}-content`), () => renderPersonalShelf(key, items));

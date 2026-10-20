@@ -604,12 +604,14 @@ app.post("/api/section-order", requireUser, async (req, res) => {
 app.get("/api/watch-later", requireUser, async (req,res) => {
   const items = (savedSettings.watchLaterByUser?.[personalKey(req.user)] || []).filter(item=>item.libraryId).map(item=>({...item,key:`library:${item.type}:${item.libraryId}`}));
   const libraryIds=items.map(item=>item.libraryId).filter(Boolean);
-  const accessible=new Set();
+  const accessible=new Map();
   if(libraryIds.length && !demo) {
-    try {const params=new URLSearchParams({UserId:req.user.id,Ids:libraryIds.join(","),Recursive:"true",Fields:"ProviderIds",Limit:String(libraryIds.length)});const data=await upstream(process.env.JELLYFIN_URL,`/Items?${params}`,{headers:jellyfinHeaders(req.user.token,req.user.deviceId)});for(const item of data.Items || [])if(["Movie","Series"].includes(item.Type) && !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual")accessible.add(item.Id);}
+    try {const params=new URLSearchParams({UserId:req.user.id,Ids:libraryIds.join(","),Recursive:"true",Fields:"ProviderIds",Limit:String(libraryIds.length)});const data=await upstream(process.env.JELLYFIN_URL,`/Items?${params}`,{headers:jellyfinHeaders(req.user.token,req.user.deviceId)});for(const item of data.Items || [])if(["Movie","Series"].includes(item.Type) && !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual")accessible.set(item.Id,Boolean(item.ImageTags?.Primary));}
     catch {return res.status(502).json({error:"Could not verify saved Jellyfin titles. Your Watchlist is unchanged."});}
   }
-  const visible=items.filter(item=>demo || accessible.has(item.libraryId)).map(item=>{if(demo)return item;req.user.state.allowedImages.add(item.libraryId);return {...item,link:jellyfinLink(item.libraryId)};});
+  // The saved snapshot's image flag froze when the title was starred; posters
+  // arrive and change on Jellyfin afterwards, so take the flag fresh on every load.
+  const visible=items.filter(item=>demo || accessible.has(item.libraryId)).map(item=>{if(demo)return item;req.user.state.allowedImages.add(item.libraryId);return {...item,image:accessible.get(item.libraryId) === true,link:jellyfinLink(item.libraryId)};});
   res.json({items:visible});
 });
 app.post("/api/watch-later", requireUser, async (req,res) => {

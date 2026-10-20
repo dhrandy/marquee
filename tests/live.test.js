@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 const calls = [];
 const authDeviceIds = [];
 let maliciousArtwork = null;
+let watchLaterImageTags = false;
 const service = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   calls.push({
@@ -89,7 +90,7 @@ const service = http.createServer(async (req, res) => {
       res.writeHead(403);
       return res.end("{}");
     }
-    if (url.searchParams.has("Ids")) return res.end(JSON.stringify({Items:url.searchParams.get("Ids").split(",").map(Id=>({Id,Type:"Series"}))}));
+    if (url.searchParams.has("Ids")) return res.end(JSON.stringify({Items:url.searchParams.get("Ids").split(",").map(Id=>({Id,Type:"Series",...(watchLaterImageTags?{ImageTags:{Primary:"tag"}}:{})}))}));
     if (url.searchParams.get("SortBy") === "PremiereDate,SortName") {
       assert.equal(url.searchParams.get("IncludeItemTypes"),"Movie");assert.equal(url.searchParams.get("IsPlayed"),"false");assert.equal(url.searchParams.get("MinCommunityRating"),"7");assert.equal(url.searchParams.get("SortOrder"),"Descending");
       const movie=(n,extra={})=>({Id:`top-${user}-${n}`,Name:`Top ${n}`,Type:"Movie",CommunityRating:8,UserData:{Played:false},...extra});
@@ -1315,6 +1316,12 @@ try {
     assert.equal((await post("/api/watch-later",alice,{key:catalog.watchKey,saved:true})).status,200);
     assert.equal((await get("/api/watch-later",alice)).items.length,1);assert.equal((await get("/api/watch-later",bob)).items.length,0);
     assert.equal((await get("/api/watch-later",(await signin("alice")).headers.get("set-cookie"))).items.length,1);
+    // A poster added or replaced on Jellyfin after starring still reaches the Watchlist:
+    // the saved snapshot's image flag is refreshed from Jellyfin on every load.
+    assert.equal((await get("/api/watch-later",alice)).items[0].image,false);
+    watchLaterImageTags=true;
+    assert.equal((await get("/api/watch-later",alice)).items[0].image,true);
+    watchLaterImageTags=false;
     assert.equal((await post("/api/watch-later",bob,{key:catalog.watchKey,saved:true})).status,404);
     assert.equal((await post("/api/watch-later",alice,{key:"tmdb:movie:99999999",saved:true})).status,404);
     assert.equal((await post("/api/watch-later",alice,{key:catalog.watchKey,saved:false})).status,200);

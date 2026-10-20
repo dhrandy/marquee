@@ -3480,3 +3480,24 @@ test("Top unwatched movies shelf is on by default, hideable and uses the shared 
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(page.locator("#topUnwatched-section")).toBeHidden();
 });
+test("a failed poster retries on the next shelf refresh instead of keeping the placeholder", async ({ browser }) => {
+  // Service workers bypass page.route and would serve cached art, so block the SW here.
+  const context = await browser.newContext({ serviceWorkers: "block", baseURL: "http://127.0.0.1:8739" });
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  // The poster request fails while Jellyfin is mid-replacement: placeholder shows.
+  await page.route("**/art/*.svg", (route) => route.fulfill({ status: 502, body: "" }));
+  await login(page);
+  const poster = page.locator("#recent .poster-card img").first();
+  await expect(poster).toHaveAttribute("src", "/art/placeholder.svg");
+  const original = await poster.evaluate((img) => img.dataset.broken);
+  expect(original).toMatch(/^\/art\/.+\.svg$/);
+  // Jellyfin serves the poster again; the next refresh retries rather than sticking on the placeholder.
+  await page.unroute("**/art/*.svg");
+  await page.evaluate(() => loadRecent());
+  await expect(poster).toHaveAttribute("src", original);
+  await expect(async () => {
+    expect(await poster.evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
+  }).toPass();
+  await context.close();
+});
