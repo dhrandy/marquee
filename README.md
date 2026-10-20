@@ -416,3 +416,12 @@ Next up uses the same 180-day activity window as Continue watching, through Jell
 ### Jellyfin library counts
 
 Six count cards sit at the bottom of On Jellyfin: Movies, Kids Movies, TV Shows, Kids Shows, Episodes and Kids Episodes. On by default and hideable in Settings. Choose the two kids libraries in Settings; exact names Kids Movies and Kids Shows are selected automatically when visible to your account. Standard counts exclude the selected kids library. Missing or inaccessible selections show a dash, not a guessed total. Counts follow your Jellyfin access, omit virtual/missing/placeholder media, and refresh with the active On Jellyfin page. No Seerr catalog totals, item crawl or admin API key.
+
+## API tokens
+
+Optional. A Jellyfin admin turns on **Settings > API access > Allow API tokens**. Each user can then make their own tokens there (name, read-only or read and request, and their Jellyfin password once). A token acts as the user who made it: it reads what that user sees and, if allowed, requests titles through Seerr as that user, so Seerr permissions and quotas still apply.
+
+- Send `Authorization: Bearer <token>`. The token is shown once. Only a hash is stored, and the token's Jellyfin login is encrypted in the settings folder. Deleting `session-secret` from the settings folder ends every token.
+- Tokens cannot open Settings, notifications, sign-in or token routes. Revoking a token ends its Jellyfin login.
+- Limits: 120 requests per minute and 10 writes per minute per token. The endpoint list is at `/api/docs` when signed in.
+- Keep tokens in your assistant's secret store, never in chat or a file you share.

@@ -35,6 +35,7 @@ import { demoEvents, demoRequests, demoSearch, titles, demoFacts } from "./demo.
 import { validateRange } from "./model.js";
 import { compress } from "./compress.js";
 import { createSessions } from "./sessions.js";
+import { createApiTokens, tokenAllowed, tokenLimit, scopes } from "./api-tokens.js";
 import { createNotifications, cleanNotifications } from "./notifications.js";
 import { notificationSnapshot, reminderShows, matchReminderShows } from "./notification-sources.js";
 import { upstream } from "./adapters.js";
@@ -114,6 +115,12 @@ const sessions = createSessions({
   ttl,
 });
 
+const apiTokens = createApiTokens({ dataDir: path.dirname(settingsPath) });
+const tokenState = new Map();
+const tokenWrites = new Map();
+const badBearers = new Map();
+const isTokenRequest = req => /^Bearer mq_/i.test(req.headers.authorization || "");
+
 const notifications = await createNotifications({
   dataDir: path.dirname(settingsPath), sessions,
   snapshot: demo ? async () => ({ episodes: [], requests: [], airings: [] }) : notificationSnapshot,
@@ -134,7 +141,7 @@ app.use((req, res, next) => {
   });
   if (secure) res.set("Strict-Transport-Security", "max-age=31536000");
   if (req.path.startsWith("/api/")) res.set("Cache-Control", "no-store");
-  if (req.method !== "GET" && req.method !== "HEAD") {
+  if (req.method !== "GET" && req.method !== "HEAD" && !(isTokenRequest(req) && req.path !== "/api/login")) {
     // Browser writes must be same-origin. Non-browser clients can use a same-origin header.
     const origin = req.headers.origin;
     if (!allowedOrigin(origin, req.headers.host, secure)) {
@@ -169,9 +176,36 @@ async function verifiedAccount(user, fresh) {
   }
 }
 async function requireUser(req, res, next) {
-  req.user = session(req);
+  let tokenRow = null;
+  if (req.headers.authorization) {
+    const bad = badBearers.get(req.ip);
+    if (bad && bad.until > Date.now() && bad.count >= 30) return res.status(429).json({ error: "Too many invalid tokens. Try again in a minute." });
+    // A bearer header is the only credential considered; cookies are ignored.
+    const found = savedSettings.apiTokens === true && isTokenRequest(req) ? apiTokens.find(req.headers.authorization.slice(7).trim()) : null;
+    if (!found) {
+      const old = badBearers.get(req.ip);
+      const entry = old && old.until > Date.now() ? old : { count: 0, until: Date.now() + 60000 };
+      entry.count++; badBearers.set(req.ip, entry);
+      if (badBearers.size > 5000) badBearers.delete(badBearers.keys().next().value);
+      return res.status(401).json({ error: "Invalid or revoked API token." });
+    }
+    tokenRow = found.row;
+    if (!tokenAllowed(found.user.scope, req.method, req.path))
+      return res.status(403).json({ error: found.user.scope === "read" && req.method !== "GET" ? "This token is read-only." : "API tokens cannot use this route." });
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      const w = tokenWrites.get(tokenRow.id);
+      const entry = w && w.until > Date.now() ? w : { count: 0, until: Date.now() + 60000 };
+      entry.count++; tokenWrites.set(tokenRow.id, entry);
+      if (entry.count > 10) return res.status(429).json({ error: "Too many requests for this token. Try again in a minute." });
+    }
+    if (!tokenState.has(tokenRow.id)) tokenState.set(tokenRow.id, { allowedImages: new Set(), calendarImages: undefined, exp: Infinity });
+    req.user = { ...found.user, state: tokenState.get(tokenRow.id) };
+    req.tokenRow = tokenRow;
+  } else {
+    req.user = session(req);
+  }
   if (!req.user) return res.status(401).json({ error: "Please sign in." });
-  const key = demo ? req.user.sid : req.user.id;
+  const key = tokenRow ? req.user.sid : demo ? req.user.sid : req.user.id;
   const old = apiAttempts.get(key);
   const entry =
     old && old.until > Date.now()
@@ -179,7 +213,7 @@ async function requireUser(req, res, next) {
       : { count: 0, until: Date.now() + 60000 };
   entry.count++;
   apiAttempts.set(key, entry);
-  if (entry.count > 240)
+  if (entry.count > (tokenRow ? 120 : 240))
     return res
       .status(429)
       .json({ error: "Too many requests. Try again in a minute." });
@@ -189,6 +223,7 @@ async function requireUser(req, res, next) {
       req.user.isAdmin = account.Policy?.IsAdministrator === true;
     } catch (error) {
       if (/HTTP (401|403)\b/.test(error.message)) {
+        if (tokenRow) { apiTokens.removeRow(tokenRow, demo); tokenState.delete(tokenRow.id); return res.status(401).json({ error: "Jellyfin ended this token's login. Create a new token." }); }
         try { sessions.revoke(req.user.sid, req.user.expires); } catch { /* Memory revocation remains effective; persistence failure is logged. */ }
         cookie(res, "", 0);
         return res.status(401).json({ error: "Jellyfin ended this sign-in. Please sign in again." });
@@ -196,6 +231,7 @@ async function requireUser(req, res, next) {
       return res.status(503).json({ error: "Could not verify your Jellyfin sign-in. Try again when Jellyfin is available." });
     }
   }
+  if (tokenRow) apiTokens.touch(tokenRow, demo);
   const originalJson = res.json.bind(res);
   res.json = body => {
     req.user.state.watchCandidates ||= new Map();
@@ -239,6 +275,22 @@ function cookie(res, value, maxAge) {
   });
 }
 
+const apiDocs = `Marquee API
+Authorization: Bearer <token>. A token acts as the Jellyfin user who made it and can read what that user sees.
+Read-only tokens: GET only. Request tokens may also POST /api/seerr/request.
+Limits: 120 requests per minute per token, 10 writes per minute.
+GET  /api/me                      account, request access
+GET  /api/recent                  recently added
+GET  /api/calendar?start=&end=    Sonarr/Radarr calendar
+GET  /api/personal/:kind          continue watching, next up, favorites and similar shelves
+GET  /api/watchlist, /api/watch-later, /api/favorite/:id
+GET  /api/recommendations, /api/leaving-soon, /api/in-theaters, /api/library-stats, /api/networks
+GET  /api/library/:id/facts
+GET  /api/seerr/search?q=, /api/seerr/popular, /api/seerr/requests, /api/seerr/details/:type/:id
+GET  /api/seerr/request-options, /api/seerr/content-ratings
+POST /api/seerr/request           {"mediaType":"movie|tv","mediaId":123,"seasons":[1]} (request tokens)
+Settings, notifications, sign-in and token routes are not available to tokens.
+`;
 const notificationUser = user => demo ? { ...user, id: user.sid } : user;
 app.get("/api/notifications", requireUser, (req, res) => res.json(notifications.status(notificationUser(req.user))));
 app.post("/api/notifications", requireUser, async (req, res) => {
@@ -282,6 +334,70 @@ setInterval(() => notifications.tick().catch(() => {}), 5 * 60000).unref();
 // Baselines resume after restarts without sending old arrivals again.
 notifications.tick().catch(() => {});
 
+
+// API tokens. Managed only from a signed-in browser session, never with a token.
+async function endJellyfinLogin(login) {
+  if (demo || !login?.token) return;
+  try { await upstream(process.env.JELLYFIN_URL, "/Sessions/Logout", { method: "POST", headers: jellyfinHeaders(login.token, login.deviceId) }); } catch {}
+}
+const sessionOnly = (req, res, next) =>
+  req.headers.authorization ? res.status(403).json({ error: "API tokens cannot manage tokens." }) : requireUser(req, res, next);
+app.get("/api/tokens", sessionOnly, (req, res) => {
+  res.json({ enabled: savedSettings.apiTokens === true, isAdmin: req.user.isAdmin === true, tokens: apiTokens.list(demo ? req.user.id : req.user.id) });
+});
+app.post("/api/tokens/enabled", sessionOnly, async (req, res) => {
+  if (req.user.isAdmin !== true) return res.status(403).json({ error: "Only a Jellyfin admin can change this." });
+  if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "Invalid request." });
+  try { await saveSettings(current => ({ ...current, apiTokens: req.body.enabled })); }
+  catch { return res.status(503).json({ error: "Could not save this setting. Check the settings volume is writable." }); }
+  if (!req.body.enabled) {
+    // Turning the feature off ends every token and its Jellyfin login, so turning it back on does not revive any.
+    try {
+      for (const login of apiTokens.removeAll(demo)) await endJellyfinLogin(login);
+      tokenState.clear();
+    } catch (error) { return res.status(503).json({ error: "Tokens are off, but some could not be removed. Check the settings storage and turn this off again." }); }
+  }
+  res.json({ enabled: req.body.enabled });
+});
+app.post("/api/tokens", sessionOnly, async (req, res) => {
+  if (savedSettings.apiTokens !== true) return res.status(403).json({ error: "API tokens are turned off." });
+  const { name, scope, password } = req.body || {};
+  if (typeof name !== "string" || !name.trim() || name.trim().length > 40 || /[<>\x00-\x1f]/.test(name) || !scopes.includes(scope) || typeof password !== "string" || (!demo && (!password || password.length > 1000)))
+    return res.status(400).json({ error: "Enter a name (up to 40 characters), a type and your Jellyfin password." });
+  const bucket = "tok:" + req.ip;
+  const current = attempts.get(bucket) || { count: 0, until: Date.now() + 15 * 60 * 1000 };
+  if (current.until < Date.now()) { current.count = 0; current.until = Date.now() + 15 * 60 * 1000; }
+  if (current.count >= 10) return res.status(429).json({ error: "Too many attempts. Try again in 15 minutes." });
+  current.count++; attempts.set(bucket, current);
+  try {
+    // A fresh Jellyfin login for this token, so signing out of the browser does not end it.
+    if (apiTokens.list(req.user.id).length >= tokenLimit) throw new Error(`You can have up to ${tokenLimit} tokens. Revoke one first.`);
+    let login = req.user;
+    if (!demo) {
+      login = await authenticate(req.user.name, password);
+      if (login.id !== req.user.id) { await endJellyfinLogin(login); throw new Error("That password belongs to a different account."); }
+    }
+    let made;
+    try { made = apiTokens.create({ user: login, name: name.trim(), scope, demo }); }
+    catch (error) { await endJellyfinLogin(login); throw error; }
+    attempts.delete(bucket);
+    res.json(made);
+  } catch (error) {
+    res.status(/different account|up to \d+ tokens|Could not save/.test(error.message) ? 400 : 401).json({ error: `Could not create the token. ${error.message}` });
+  }
+});
+app.delete("/api/tokens/:id", sessionOnly, async (req, res) => {
+  try {
+    const login = apiTokens.remove(req.params.id, req.user.id, demo);
+    if (!login) return res.status(404).json({ error: "Token not found." });
+    tokenState.delete(req.params.id);
+    await endJellyfinLogin(login);
+    res.json({ ok: true });
+  } catch (error) { res.status(503).json({ error: error.message }); }
+});
+app.get("/api/docs", requireUser, (req, res) => {
+  res.type("text/plain").send(apiDocs);
+});
 app.get("/api/config", (req, res) => res.json({ demo, name: displayName }));
 app.post("/api/login", async (req, res) => {
   const ip = req.ip;

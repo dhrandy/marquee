@@ -1744,3 +1744,9 @@ body { padding-top:var(--safe-top); }
 #dashboard[data-page="home"] .view-intro h1 { margin: 8px 0 6px; font-size: clamp(26px, 2.4vw, 32px); letter-spacing: -1px; }
 #dashboard[data-page="home"] .view-intro p { font-size: 14px; line-height: 1.45; }
 @media (max-width: 700px) { #dashboard[data-page="home"] .view-intro { padding: 4px 0 18px; } #dashboard[data-page="home"] .view-intro h1 { font-size: 26px; max-width: none; } #dashboard[data-page="home"] .view-intro p { font-size: 13px; max-width: none; } }
+
+#settings-api-panel .settings-group { margin-top: 0; }
+#api-settings input, #api-settings select { background: var(--bg); color: var(--text); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.api-new { margin: 14px 0; padding: 12px; border: 1px solid #ab91ed; border-radius: 10px; display: grid; gap: 8px; }
+.api-new code { word-break: break-all; font-size: 13px; user-select: all; }
+.api-meta { display: block; font-size: 12px; opacity: .7; }

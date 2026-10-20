@@ -166,6 +166,7 @@
       <div id="settings-tabs" class="settings-tabs" role="tablist" aria-label="Settings categories">
         <button type="button" id="settings-general-tab" role="tab" aria-selected="true" aria-controls="settings-general-panel" data-settings-tab="general">General</button>
         <button type="button" id="settings-notifications-tab" role="tab" aria-selected="false" aria-controls="settings-notifications-panel" data-settings-tab="notifications" tabindex="-1">Notifications</button>
+        <button type="button" id="settings-api-tab" role="tab" aria-selected="false" aria-controls="settings-api-panel" data-settings-tab="api" tabindex="-1">API access</button>
       </div>
       <div id="settings-general-panel" role="tabpanel" aria-labelledby="settings-general-tab">
       <p>Display preferences are saved on this device, for this Jellyfin account.</p>
@@ -255,6 +256,26 @@
         <div id="notify-show-results"></div><div id="notify-show-list" class="reminder-list"></div>
         <small>New episode alerts wait until you can play it on Jellyfin. Show choices follow your account; enable each device separately. Sonarr supplies air dates. Browser push services receive encrypted alerts; titles may appear on your lock screen.</small>
         <p id="notify-save-status" role="status"></p>
+      </section>
+      </div>
+      <div id="settings-api-panel" role="tabpanel" aria-labelledby="settings-api-tab" hidden>
+      <section id="api-settings" class="settings-group">
+        <span class="eyebrow">FOR YOUR AI AND SCRIPTS</span><h3>API access</h3>
+        <p>A token lets an assistant or script use Marquee as you. It sees what you see and can request only if you allow it. It can never open Settings.</p>
+        <div id="api-admin" hidden><label class="setting">Allow API tokens on this server<input type="checkbox" id="api-enabled"></label><small>Only Jellyfin admins can change this. Turning it off deletes every token and ends their Jellyfin logins.</small></div>
+        <p id="api-off" hidden>API tokens are turned off on this server. A Jellyfin admin can turn them on here.</p>
+        <div id="api-body" hidden>
+          <label class="setting">Token name<input id="api-name" maxlength="40" placeholder="Name this token" autocomplete="off"></label>
+          <label class="setting">What it can do<select id="api-scope"><option value="read">Read only</option><option value="request">Read and request titles</option></select></label>
+          <label class="setting">Your Jellyfin password<input id="api-password" type="password" autocomplete="current-password"></label>
+          <small>Your password is used once to give the token its own Jellyfin login. It is not saved. Requests go to Seerr as you, so your Seerr permissions and quotas still apply.</small>
+          <div class="notification-device"><button id="api-create" class="primary">Create token</button></div>
+          <div id="api-new" class="api-new" hidden><strong>Copy this token now. It is shown once.</strong><code id="api-new-token"></code><div class="notification-device"><button id="api-copy">Copy</button></div></div>
+          <p id="api-status" role="status"></p>
+          <h4>Your tokens</h4>
+          <div id="api-list" class="reminder-list"></div>
+          <small>Keep tokens in your assistant's secret store, never in chat or a README. Revoking a token ends its Jellyfin login. Limit: 120 reads and 10 writes a minute per token. The endpoint list is at /api/docs when signed in.</small>
+        </div>
       </section>
       </div>
     </dialog>

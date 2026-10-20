@@ -2226,3 +2226,39 @@ async function loadLibraryStats({quiet=false}={}) {
 $("#kids-movies-library").addEventListener("change", event=>{state.prefs.kidsMoviesLibrary=event.target.value;persist();loadLibraryStats();});
 
 $("#kids-shows-library").addEventListener("change",event=>{state.prefs.kidsShowsLibrary=event.target.value;persist();loadLibraryStats();});
+
+function apiWhen(ms) { return ms ? new Date(ms).toLocaleString() : "never"; }
+async function loadApiTokens() {
+  try {
+    const data = await api("/api/tokens");
+    $("#api-admin").hidden = !data.isAdmin;
+    $("#api-enabled").checked = data.enabled;
+    $("#api-off").hidden = data.enabled;
+    $("#api-body").hidden = !data.enabled;
+    $("#api-list").innerHTML = data.tokens.length ? data.tokens.map(t => `<article class="reminder-row"><strong class="reminder-title">${escape(t.name)}</strong><span class="api-meta">${t.scope === "request" ? "Read and request" : "Read only"} · made ${escape(apiWhen(t.created))} · last used ${escape(apiWhen(t.lastUsed))}</span><button class="utility-icon" data-token-revoke="${escape(t.id)}" aria-label="Revoke ${escape(t.name)}" title="Revoke token"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/></svg></button></article>`).join("") : "<small>No tokens yet.</small>";
+  } catch (error) { $("#api-status").textContent = error.message; }
+}
+$("#settings-api-tab").addEventListener("click", loadApiTokens);
+$("#api-enabled").addEventListener("change", async event => {
+  try { await api("/api/tokens/enabled", { method: "POST", body: JSON.stringify({ enabled: event.target.checked }) }); } catch (error) { $("#api-status").textContent = error.message; }
+  loadApiTokens();
+});
+$("#api-create").addEventListener("click", async () => {
+  $("#api-status").textContent = "Creating…";
+  try {
+    const made = await api("/api/tokens", { method: "POST", body: JSON.stringify({ name: $("#api-name").value, scope: $("#api-scope").value, password: $("#api-password").value }) });
+    $("#api-password").value = ""; $("#api-name").value = "";
+    $("#api-new-token").textContent = made.token; $("#api-new").hidden = false;
+    $("#api-status").textContent = "Token created.";
+    loadApiTokens();
+  } catch (error) { $("#api-password").value = ""; $("#api-status").textContent = error.message; }
+});
+$("#api-copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("#api-new-token").textContent); $("#api-status").textContent = "Copied."; } catch { $("#api-status").textContent = "Select the token and copy it."; }
+});
+$("#api-list").addEventListener("click", async event => {
+  const button = event.target.closest("[data-token-revoke]");
+  if (!button) return;
+  try { await api("/api/tokens/" + encodeURIComponent(button.dataset.tokenRevoke), { method: "DELETE" }); $("#api-new").hidden = true; $("#api-new-token").textContent = ""; $("#api-status").textContent = "Token revoked."; } catch (error) { $("#api-status").textContent = error.message; }
+  loadApiTokens();
+});
