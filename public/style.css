@@ -100,6 +100,10 @@ main {
   margin: auto;
   padding: 30px 36px 18px;
 }
+/* The search/weather row measures itself: side by side only while the row is wide enough for both halves. */
+#dashboard main {
+  container-type: inline-size;
+}
 .section-heading {
   display: flex;
   align-items: end;
@@ -1337,23 +1341,24 @@ main > section:not([hidden]), .personal-section:not([hidden]) {
 #popular-wrap .popular-section { border-top: 0; padding-top: 0; }
 #popular-wrap, #requests-section { margin-top: 0; }
 .calendar-heading { margin-top: 0; }
-.home-top-row { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+.home-top-row { display: flex; flex-direction: column; gap: 28px; border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
 .home-top-row:has(#search-section[hidden]):has(#weather[hidden]) { display: none; }
 .home-top-row #search-section { margin-bottom: 0; }
 .home-top-row .weather { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
-.home-top-row #search-section:not([hidden]) + .weather:not([hidden]) { margin-top: 28px; }
+/* Divider between the two halves when stacked, whichever order they were dragged into. */
+.home-top-row > section:not([hidden]):has(+ section:not([hidden])) { border-bottom: 1px solid var(--line); padding-bottom: 28px; }
 .forecast-icon { width: 24px; height: 24px; color: #d7c6ff; flex: 0 0 auto; }
-@media (min-width: 1100px) {
+@container (min-width: 1024px) {
   .home-top-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; padding-bottom: 32px; margin-bottom: 32px; }
-  .home-top-row #search-section { max-width: none; }
+  .home-top-row #search-section { order: 1; max-width: none; }
   .home-top-row #search-section .search-bar { max-width: 560px; }
   .home-top-row #search-section .section-heading { margin-bottom: 24px; }
-  .home-top-row .weather { flex-direction: column; align-items: center; text-align: center; justify-content: center; gap: 0; }
+  .home-top-row .weather { order: 2; flex-direction: column; align-items: center; text-align: center; justify-content: center; gap: 0; }
   .home-top-row .weather h2 { font-size: 31px; margin: 8px 0 16px; }
   .home-top-row .weather-forecast { justify-content: center; gap: 24px; margin-top: 0; font-size: 14px; min-height: 40px; align-items: center; }
   .home-top-row .forecast-day { display: grid; grid-template-columns: auto; justify-items: center; gap: 4px; }
   .home-top-row .weather a { margin-top: 8px; }
-  .home-top-row #search-section:not([hidden]) + .weather:not([hidden]) { margin-top: 0; }
+  .home-top-row > section:not([hidden]):has(+ section:not([hidden])) { border-bottom: 0; padding-bottom: 0; }
   .home-top-row:has(#search-section[hidden]), .home-top-row:has(#weather[hidden]) { grid-template-columns: minmax(0, 1fr); }
   .home-top-row:has(#search-section[hidden]) .weather { align-items: flex-start; text-align: left; }
   .home-top-row:has(#search-section[hidden]) .weather-forecast { justify-content: flex-start; }
@@ -1376,10 +1381,6 @@ body.colorblind .jellyfin-status[data-status="offline"] { background: #ffb45b; }
 .header-status[hidden] { display: none; }
 .watchlist-remove { margin-top: 10px; }
 #personal-shelves:empty, #sync-display-status:empty { display: none; }
-
-@media (max-width: 1099px) {
-  .home-top-row:has(#weather:not([hidden])) #search-section:not([hidden]) { border-bottom: 1px solid var(--line); padding-bottom: 28px; }
-}
 
 /* Section order controls work with mouse, touch and keyboard. */
 #section-order-list { list-style: none; padding: 0; margin: 18px 0; }

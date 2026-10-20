@@ -175,15 +175,18 @@ const sectionElement = key => $(key === "weather" ? "#weather" : key === "popula
 function applySectionOrder() {
   const main = $("#dashboard main"), row = $(".home-top-row");
   const visible = sectionOrder.filter(key => pageSections.discover.includes(key) && sectionElement(key) && !sectionElement(key).hidden);
-  const paired = visible.includes("search") && visible[visible.indexOf("search") + 1] === "weather";
+  const searchAt = visible.indexOf("search"), weatherAt = visible.indexOf("weather");
+  const paired = searchAt >= 0 && weatherAt >= 0 && Math.abs(searchAt - weatherAt) === 1;
   row.hidden = !paired;
   const desired = [];
+  let rowPlaced = false;
   for (const key of sectionOrder) {
     const element = sectionElement(key);
     if (!element) continue;
     if (paired && ["search", "weather"].includes(key)) {
-      if (element.parentElement !== row) row.append(element);
-      if (key === "search") desired.push(row);
+      // Always re-append: the row keeps the saved order even when the halves never left it.
+      row.append(element);
+      if (!rowPlaced) { desired.push(row); rowPlaced = true; }
     } else desired.push(element);
   }
   const actual = [...main.children].filter(el => desired.includes(el));

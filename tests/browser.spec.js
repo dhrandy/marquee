@@ -2030,6 +2030,35 @@ test("section ordering keeps separated search/weather and saves touch drag", asy
   await context.close();
 });
 
+test("weather dragged above search still shares the desktop row", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const page = await context.newPage(); await login(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByPlaceholder("City name").fill("Sample");
+  await page.getByRole("button", { name: "Find city", exact: true }).click();
+  await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
+  await page.locator('[data-pref="weather"]').check();
+  await page.locator('[data-order-key="weather"] [data-order-move="-1"]').click();
+  await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  const row = page.locator(".home-top-row");
+  await expect(row).toBeVisible();
+  // The saved order stays in the DOM; the wide layout places search left and weather right regardless.
+  expect(await row.evaluate(el => [...el.children].map(child => child.id))).toEqual(["weather", "search-section"]);
+  const wide = await row.evaluate(el => { const search = el.querySelector("#search-section").getBoundingClientRect(), weather = el.querySelector("#weather").getBoundingClientRect(); return { searchLeft: search.left, searchTop: search.top, weatherLeft: weather.left, weatherTop: weather.top }; });
+  expect(Math.abs(wide.searchTop - wide.weatherTop)).toBeLessThan(40);
+  expect(wide.searchLeft).toBeLessThan(wide.weatherLeft);
+  // Narrow: they stack in the saved order, weather above search.
+  await page.setViewportSize({ width: 500, height: 900 });
+  const stacked = await row.evaluate(el => { const search = el.querySelector("#search-section").getBoundingClientRect(), weather = el.querySelector("#weather").getBoundingClientRect(); return { gap: search.top - weather.top, divider: getComputedStyle(el.querySelector("#weather")).borderBottomWidth }; });
+  expect(stacked.gap).toBeGreaterThan(100);
+  expect(stacked.divider).toBe("1px");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Reset Discover order", exact: true }).click();
+  await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
+  await context.close();
+});
+
 test("continue watching renders series, movies and episode labels without changing playback", async ({ page }) => {
   await page.setViewportSize({ width: 532, height: 900 });
   await page.route("**/api/library/great/facts", route => route.fulfill({ json: { facts: { scores: { imdb: 7.5 } }, mediaType: "tv", mediaId: 111 } }));
