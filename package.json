@@ -1,13 +1,13 @@
 {
   "name": "marquee",
-  "version": "0.2.0-beta.4",
+  "version": "0.2.1-beta.1",
   "private": true,
   "type": "module",
   "description": "A small self-hosted media shelf and release calendar",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test tests/unit.test.js tests/maintainerr.test.js tests/live.test.js tests/security.test.js tests/proxy.test.js tests/compress.test.js tests/sessions.test.js tests/notifications.test.js tests/notification-sources.test.js tests/in-theaters.test.js tests/api-tokens.test.js && playwright test",
-    "test:unit": "node --test tests/unit.test.js tests/maintainerr.test.js tests/live.test.js tests/security.test.js tests/proxy.test.js tests/compress.test.js tests/sessions.test.js tests/notifications.test.js tests/notification-sources.test.js tests/in-theaters.test.js tests/api-tokens.test.js"
+    "test": "node --test tests/provider-lookup.test.js tests/unit.test.js tests/maintainerr.test.js tests/live.test.js tests/security.test.js tests/proxy.test.js tests/compress.test.js tests/sessions.test.js tests/notifications.test.js tests/notification-sources.test.js tests/in-theaters.test.js tests/api-tokens.test.js && playwright test",
+    "test:unit": "node --test tests/provider-lookup.test.js tests/unit.test.js tests/maintainerr.test.js tests/live.test.js tests/security.test.js tests/proxy.test.js tests/compress.test.js tests/sessions.test.js tests/notifications.test.js tests/notification-sources.test.js tests/in-theaters.test.js tests/api-tokens.test.js"
   },
   "dependencies": {
     "express": "^5.1.0",

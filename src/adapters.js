@@ -901,6 +901,39 @@ export async function personalItems(user, kind) {
 
 // Match Seerr/TMDB titles to this viewer's Jellyfin items by verified provider ID,
 // never by title similarity or library availability alone.
+// A title can differ between TMDB/Seerr and Jellyfin. On a title-search miss,
+// index this viewer's accessible items by provider ID, never by name similarity.
+// Share in-flight work across shelves; short-lived, session-scoped, bounded cache.
+const providerIndexes = new Map();
+async function providerMatches(user, type, id) {
+  const key = `${user.id}:${user.token}:${type}`;
+  let entry = providerIndexes.get(key);
+  if (!entry || entry.until <= Date.now()) {
+    if (providerIndexes.size >= 100) providerIndexes.clear();
+    entry = { until: Date.now() + 60000 };
+    entry.promise = (async () => {
+      const index = new Map(), seen = new Set();
+      const pageSize = 500, maxItems = 10000;
+      for (let start = 0; start < maxItems; start += pageSize) {
+        const query = new URLSearchParams({ UserId: user.id, Recursive: "true", IncludeItemTypes: type === "movie" ? "Movie" : "Series", Fields: "ProviderIds", EnableUserData: "true", Limit: String(pageSize), StartIndex: String(start) });
+        const data = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+        const items = data.Items || [];
+        for (const item of items) {
+          if (seen.has(item.Id)) continue;
+          seen.add(item.Id);
+          const providerId = Number(item.ProviderIds?.Tmdb);
+          if (!Number.isSafeInteger(providerId) || providerId <= 0 || item.Type !== (type === "movie" ? "Movie" : "Series") || item.IsMissing || item.IsPlaceHolder || item.LocationType === "Virtual") continue;
+          if (!index.has(providerId)) index.set(providerId, []);
+          index.get(providerId).push(item);
+        }
+        if (items.length < pageSize || Number.isSafeInteger(data.TotalRecordCount) && start + items.length >= data.TotalRecordCount) return index;
+      }
+      throw new Error("Jellyfin provider lookup exceeded its safe page limit.");
+    })().catch(error => { if (providerIndexes.get(key) === entry) providerIndexes.delete(key); throw error; });
+    providerIndexes.set(key, entry);
+  }
+  return (await entry.promise).get(id) || [];
+}
 const watchedCache = new Map();
 export async function withWatched(user, items) {
   const result = items.map(item => ({ ...item, watched: null }));
@@ -916,7 +949,8 @@ export async function withWatched(user, items) {
       try {
         const query = new URLSearchParams({ UserId: user.id, SearchTerm: item.title, Recursive: "true", IncludeItemTypes: type === "movie" ? "Movie" : "Series", Fields: "ProviderIds", EnableUserData: "true", Limit: "50" });
         const data = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
-        const matches = (data.Items || []).filter(candidate => Number(candidate.ProviderIds?.Tmdb) === id && candidate.Type === (type === "movie" ? "Movie" : "Series") && !candidate.IsMissing && !candidate.IsPlaceHolder && candidate.LocationType !== "Virtual");
+        let matches = (data.Items || []).filter(candidate => Number(candidate.ProviderIds?.Tmdb) === id && candidate.Type === (type === "movie" ? "Movie" : "Series") && !candidate.IsMissing && !candidate.IsPlaceHolder && candidate.LocationType !== "Virtual");
+        if (!matches.length) matches = await providerMatches(user, type, id);
         const played = matches.length && matches.every(candidate => typeof candidate.UserData?.Played === "boolean") ? matches.every(candidate => candidate.UserData.Played) : null;
         item.libraryOwned = matches.length > 0;
         item.playLink = matches.length ? jellyfinLink(matches[0].Id) : null;
