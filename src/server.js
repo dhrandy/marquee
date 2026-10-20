@@ -15,6 +15,7 @@ import {
   jellyfinLink, recommendations, withWatched, favoriteItems, favoriteState, setFavorite,
   recentItems,
   personalItems, jellyfinLibraryStats,
+  watchHistory, jellyfinLibraries, libraryItems,
   calendar,
   jellyfinHeaders,
   seerrSearch,
@@ -282,10 +283,16 @@ Limits: 120 requests per minute per token, 10 writes per minute.
 GET  /api/me                      account, request access
 GET  /api/recent                  recently added
 GET  /api/calendar?start=&end=    Sonarr/Radarr calendar
-GET  /api/personal/:kind          continue watching, next up, favorites and similar shelves
-GET  /api/watchlist, /api/watch-later, /api/favorite/:id
+GET  /api/personal/:kind          continueWatching, nextUp, watchNext, topUnwatched shelves
+GET  /api/history?limit=          watch history, newest first (limit 1-100, default 50)
+GET  /api/libraries               Jellyfin movie/TV libraries you can see
+GET  /api/libraries/:id/items     browse a library: ?start=&limit=&played=&favorites=true&query=&genres=&years=&sort=name|added|year|rating&order=asc|desc
+GET  /api/watchlist               Jellyfin favorites; /api/favorite/:id checks one title
+GET  /api/watch-later             Marquee watchlist
 GET  /api/recommendations, /api/leaving-soon, /api/in-theaters, /api/library-stats, /api/networks
 GET  /api/library/:id/facts
+GET  /api/weather?latitude=&longitude=&units=celsius|fahrenheit, /api/weather/cities?query=
+GET  /api/image/:id, /api/calendar-image/:id, /api/jellyfin-version
 GET  /api/seerr/search?q=, /api/seerr/popular, /api/seerr/requests, /api/seerr/details/:type/:id
 GET  /api/seerr/request-options, /api/seerr/content-ratings
 POST /api/seerr/request           {"mediaType":"movie|tv","mediaId":123,"seasons":[1]} (request tokens)
@@ -1126,6 +1133,48 @@ app.get("/api/library-stats", requireUser, async (req,res)=>{
     if(demo)return res.json({libraries:[],kidsLibrary:"",kidsShowsLibrary:"",selectionUnavailable:Boolean(kidsLibrary || kidsShowsLibrary),counts:{movies:null,kidsMovies:null,tvShows:null,kidsShows:null,episodes:null,kidsEpisodes:null}});
     res.json(await jellyfinLibraryStats(req.user,kidsLibrary,kidsShowsLibrary));
   } catch {res.status(502).json({error:"Library counts could not be loaded from Jellyfin."});}
+});
+app.get("/api/history", requireUser, async (req, res) => {
+  const limit = req.query.limit === undefined ? 50 : Number(req.query.limit);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) return res.status(400).json({ error: "Limit must be 1 to 100." });
+  try {
+    const items = demo ? titles.slice(0, limit).map((item, index) => ({ ...item, itemId: item.id, watched: true, watchedScope: item.type === "tv" ? "episode" : "movie", lastPlayed: `2026-10-${String(19 - index).padStart(2, "0")}T21:14:00Z` })) : await watchHistory(req.user, limit);
+    for (const item of items) {
+      req.user.state.allowedImages.add(item.id);
+      if (item.itemId) req.user.state.allowedImages.add(item.itemId);
+      if (item.backdropId) req.user.state.allowedImages.add(item.backdropId);
+    }
+    res.json({ items });
+  } catch { res.status(502).json({ error: "Your watch history could not be loaded from Jellyfin." }); }
+});
+const demoLibraries = [{ id: "demo-movies", name: "Movies", type: "movies" }, { id: "demo-tv", name: "TV Shows", type: "tvshows" }];
+app.get("/api/libraries", requireUser, async (req, res) => {
+  try {
+    res.json({ libraries: demo ? demoLibraries : await jellyfinLibraries(req.user) });
+  } catch { res.status(502).json({ error: "Your libraries could not be loaded from Jellyfin." }); }
+});
+app.get("/api/libraries/:id/items", requireUser, async (req, res) => {
+  const start = req.query.start === undefined ? 0 : Number(req.query.start);
+  const limit = req.query.limit === undefined ? 50 : Number(req.query.limit);
+  const played = req.query.played === undefined ? null : { "true": true, "false": false }[req.query.played];
+  const genres = typeof req.query.genres === "string" ? req.query.genres.split(",").map(genre => genre.trim()).filter(genre => genre && genre.length <= 60 && !/[<>\x00-\x1f|]/.test(genre)) : [];
+  const years = typeof req.query.years === "string" && /^\d{4}(,\d{4}){0,9}$/.test(req.query.years) ? req.query.years.split(",") : [];
+  if (!/^[a-zA-Z0-9-]+$/.test(req.params.id) || !Number.isSafeInteger(start) || start < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100 || played === undefined || (req.query.query !== undefined && (typeof req.query.query !== "string" || req.query.query.length > 100)) || (req.query.genres !== undefined && (!genres.length || genres.length > 10 || req.query.genres.length > 300)) || (req.query.years !== undefined && !years.length) || (req.query.sort !== undefined && !["name", "added", "year", "rating"].includes(req.query.sort)) || (req.query.order !== undefined && !["asc", "desc"].includes(req.query.order)))
+    return res.status(400).json({ error: "Invalid library browse options." });
+  try {
+    const result = demo
+      ? (demoLibraries.find(library => library.id === req.params.id) ? { library: demoLibraries.find(library => library.id === req.params.id), total: titles.length, start, items: titles.slice(start, start + limit) } : null)
+      : await libraryItems(req.user, req.params.id, { start, limit, played, favorites: req.query.favorites === "true", query: req.query.query, genres, years, sort: req.query.sort, order: req.query.order });
+    if (!result) return res.status(404).json({ error: "This library is not available to your Jellyfin account." });
+    for (const item of result.items) {
+      req.user.state.allowedImages.add(item.id);
+      if (item.backdropId) req.user.state.allowedImages.add(item.backdropId);
+    }
+    res.json(result);
+  } catch (error) {
+    if (/first 10,000 items/.test(error.message)) return res.status(400).json({ error: "Library browsing is limited to the first 10,000 items." });
+    res.status(502).json({ error: "Library items could not be loaded from Jellyfin." });
+  }
 });
 app.get("/api/personal/:kind", requireUser, async (req, res) => {
   if (!["continueWatching", "nextUp", "watchNext", "topUnwatched"].includes(req.params.kind)) return res.sendStatus(404);

@@ -990,6 +990,65 @@ export async function favoriteItems(user) {
   }));
 }
 
+// Watch history: what this Jellyfin user has finished, newest first.
+export async function watchHistory(user, limit = 50) {
+  const query = new URLSearchParams({ UserId: user.id, Recursive: "true", Filters: "IsPlayed", IncludeItemTypes: "Movie,Episode", SortBy: "DatePlayed", SortOrder: "Descending", Fields: "PremiereDate,Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People,ProviderIds", EnableUserData: "true", EnableImages: "true", Limit: String(limit) });
+  const data = await upstream(process.env.JELLYFIN_URL, `/Users/${encodeURIComponent(user.id)}/Items?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+  return uniquePlaybackItems((data.Items || []).filter(item => ["Movie", "Episode"].includes(item.Type) && !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual" && item.UserData?.Played === true)).map(item => ({
+    id: item.SeriesId || item.Id, itemId: item.Id,
+    tmdbId: item.Type !== "Episode" && Number.isSafeInteger(Number(item.ProviderIds?.Tmdb)) && Number(item.ProviderIds?.Tmdb) > 0 ? Number(item.ProviderIds.Tmdb) : null,
+    favoriteId: item.SeriesId || item.Id, favorite: item.Type === "Episode" ? null : item.UserData?.IsFavorite === true,
+    title: item.SeriesName || item.Name, subtitle: personalItemSubtitle(item),
+    watched: true, watchedScope: item.Type === "Episode" ? "episode" : "movie",
+    lastPlayed: typeof item.UserData?.LastPlayedDate === "string" ? item.UserData.LastPlayedDate : null,
+    image: Boolean(item.ImageTags?.Primary || item.SeriesId), art: "placeholder", link: jellyfinLink(item.Id),
+    backdropId: item.ParentBackdropItemId || (item.BackdropImageTags?.length ? item.Id : item.SeriesId || null),
+    detail: { episodeAirDate: item.Type === "Episode" ? item.PremiereDate || null : null, title: item.SeriesName || item.Name, subtitle: personalItemSubtitle(item), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), mediaType: item.Type === "Movie" ? "movie" : "tv", network: uniqueCreditNames((item.Studios || []).map(studio => studio.Name)), year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
+  }));
+}
+
+// Movie and TV libraries this Jellyfin user can see.
+export async function jellyfinLibraries(user) {
+  const query = new URLSearchParams({ UserId: user.id, Recursive: "false", EnableImages: "false", EnableUserData: "false", Limit: "100" });
+  const root = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+  if (root.TotalRecordCount > 100) throw new Error("Too many libraries to list safely.");
+  return (root.Items || []).filter(item => ["movies", "tvshows"].includes(item.CollectionType) && typeof item.Id === "string" && typeof item.Name === "string").map(item => ({ id: item.Id, name: item.Name, type: item.CollectionType }));
+}
+
+// Browsing never walks past this many items of one library, like provider lookup.
+export const LIBRARY_BROWSE_CAP = 10000;
+// Browse one of this Jellyfin user's libraries. Jellyfin applies the user's own permissions.
+export async function libraryItems(user, libraryId, options = {}) {
+  const libraries = await jellyfinLibraries(user);
+  const library = libraries.find(item => item.id === libraryId);
+  if (!library) return null;
+  const start = Math.max(0, options.start || 0);
+  const limit = Math.min(Math.max(1, options.limit || 50), 100);
+  if (start + limit > LIBRARY_BROWSE_CAP) throw new Error("Library browsing is limited to the first 10,000 items.");
+  const query = new URLSearchParams({ UserId: user.id, ParentId: libraryId, Recursive: "true", IncludeItemTypes: library.type === "movies" ? "Movie" : "Series", ExcludeLocationTypes: "Virtual", IsMissing: "false", IsPlaceHolder: "false", Fields: "DateCreated,PremiereDate,Overview,Genres,Studios,RunTimeTicks,CommunityRating,OfficialRating,People,ProviderIds", EnableUserData: "true", EnableTotalRecordCount: "true", SortBy: "SortName", SortOrder: "Ascending", Limit: String(limit), StartIndex: String(start) });
+  if (options.played === true) query.set("IsPlayed", "true");
+  if (options.played === false) query.set("IsPlayed", "false");
+  if (options.favorites === true) query.set("Filters", "IsFavorite");
+  if (typeof options.query === "string" && options.query.trim()) query.set("SearchTerm", options.query.trim().slice(0, 100));
+  if (Array.isArray(options.genres) && options.genres.length) query.set("Genres", options.genres.join("|"));
+  if (Array.isArray(options.years) && options.years.length) query.set("Years", options.years.join(","));
+  const sorts = { name: "SortName", added: "DateCreated", year: "PremiereDate", rating: "CommunityRating" };
+  if (options.sort && sorts[options.sort] && options.sort !== "name") query.set("SortBy", sorts[options.sort] + ",SortName");
+  if (options.order === "desc") query.set("SortOrder", "Descending");
+  const data = await upstream(process.env.JELLYFIN_URL, `/Items?${query}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+  const items = (data.Items || []).filter(item => ["Movie", "Series"].includes(item.Type) && !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual").map(item => ({
+    id: item.Id, tmdbId: Number.isSafeInteger(Number(item.ProviderIds?.Tmdb)) && Number(item.ProviderIds?.Tmdb) > 0 ? Number(item.ProviderIds.Tmdb) : null,
+    favoriteId: item.Id, favorite: item.UserData?.IsFavorite === true, title: item.Name, subtitle: personalItemSubtitle(item),
+    watched: typeof item.UserData?.Played === "boolean" ? item.UserData.Played : null, watchedScope: item.Type === "Series" ? "series" : "movie",
+    added: typeof item.DateCreated === "string" ? item.DateCreated : null,
+    lastPlayed: typeof item.UserData?.LastPlayedDate === "string" ? item.UserData.LastPlayedDate : null,
+    image: Boolean(item.ImageTags?.Primary), art: "placeholder", link: jellyfinLink(item.Id),
+    backdropId: item.BackdropImageTags?.length ? item.Id : null,
+    detail: { title: item.Name, subtitle: item.Type === "Series" ? "TV series" : "Movie", year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], cast: topCast(item.People, true), contentRating: normalizedContentRating(item.OfficialRating), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
+  }));
+  return { library, total: Number.isSafeInteger(data.TotalRecordCount) ? data.TotalRecordCount : null, start, items };
+}
+
 export function isRecentRecommendation(item, now = new Date()) {
   const cutoff = new Date(now); cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 5);
   const date = item.date;

@@ -9,6 +9,9 @@ import { createApiTokens, tokenAllowed } from "../src/api-tokens.js";
 test("token route rules", () => {
   assert.equal(tokenAllowed("read", "GET", "/api/recent"), true);
   assert.equal(tokenAllowed("read", "GET", "/api/seerr/search"), true);
+  for (const p of ["/api/history", "/api/libraries", "/api/libraries/demo-movies/items", "/api/weather", "/api/weather/cities", "/api/calendar"])
+    assert.equal(tokenAllowed("read", "GET", p), true, p);
+  assert.equal(tokenAllowed("read", "GET", "/api/libraries/demo-movies"), false);
   assert.equal(tokenAllowed("read", "POST", "/api/seerr/request"), false);
   assert.equal(tokenAllowed("request", "POST", "/api/seerr/request"), true);
   for (const p of ["/api/display-preferences", "/api/section-order", "/api/weather-settings", "/api/accessibility-settings", "/api/notifications", "/api/tokens", "/api/login", "/api/logout", "/api/test-connection"]) {
@@ -46,6 +49,28 @@ test("token lifecycle on a demo server", async () => {
     for (const p of ["/api/tokens", "/api/display-preferences", "/api/notifications", "/api/weather-settings", "/api/accessibility-settings"])
       assert.equal((await fetch(base + p, { headers: bearer })).status, 403, p);
     assert.equal((await fetch(base + "/api/docs", { headers: bearer })).status, 200);
+    // Jellyfin user data reads work with a bearer token in demo mode.
+    const history = await (await fetch(base + "/api/history?limit=2", { headers: bearer })).json();
+    assert.equal(history.items.length, 2);
+    assert.ok(history.items[0].lastPlayed);
+    assert.equal((await fetch(base + "/api/history?limit=101", { headers: bearer })).status, 400);
+    const libs = await (await fetch(base + "/api/libraries", { headers: bearer })).json();
+    assert.ok(libs.libraries.length > 0);
+    const browse = await (await fetch(base + "/api/libraries/" + libs.libraries[0].id + "/items", { headers: bearer })).json();
+    assert.ok(Array.isArray(browse.items));
+    assert.equal(typeof browse.total, "number");
+    assert.equal((await fetch(base + "/api/libraries/not-a-library/items", { headers: bearer })).status, 404);
+    assert.equal((await fetch(base + "/api/libraries/demo-movies/items?played=maybe", { headers: bearer })).status, 400);
+    assert.equal((await fetch(base + "/api/libraries/demo-movies/items?played=maybe", { headers: bearer })).status, 400);
+    // Search and filter options validate.
+    assert.equal((await fetch(base + "/api/libraries/demo-movies/items?genres=Drama&years=2026&sort=added&order=desc", { headers: bearer })).status, 200);
+    for (const bad of ["years=26", "years=2026,abc", "sort=evil", "order=sideways", "genres=" + "x".repeat(301)])
+      assert.equal((await fetch(base + "/api/libraries/demo-movies/items?" + bad, { headers: bearer })).status, 400, bad);
+    // Calendar works with a token, with a valid range required.
+    assert.equal((await fetch(base + "/api/calendar?start=2026-10-01&end=2026-10-08", { headers: bearer })).status, 200);
+    assert.equal((await fetch(base + "/api/calendar", { headers: bearer })).status, 400);
+    assert.equal((await fetch(base + "/api/weather?latitude=35.2&longitude=-80.8&units=fahrenheit", { headers: bearer })).status, 200);
+    assert.equal((await fetch(base + "/api/weather/cities?query=charlotte", { headers: bearer })).status, 200);
     // Read-only token cannot request, and POST needs no Origin for bearer.
     const noOrigin = { "Content-Type": "application/json", ...bearer };
     const req = { mediaType: "movie", mediaId: 603 };

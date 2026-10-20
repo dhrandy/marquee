@@ -11,14 +11,6 @@ A self-hosted media dashboard with recent titles, a release calendar, personal J
 <p align="center"><img src="docs/images/mobile.png" alt="Marquee mobile demo with readable calendar list" width="300"></p>
 </details>
 
-### Network search and recent recommendations
-
-Search keeps normal title results and offers matching TV networks as buttons. Pick a network to browse its newest series premieres, excluding future premieres, with page controls. This is network credit, not current streaming availability, and does not sort by the latest episode of an older show. Same-name networks show country or catalog ID so they are not silently merged.
-
-The network directory is TMDB's full daily ID export, fetched on demand and persisted as `network-list.json` in the settings folder for 24 hours. A cached copy survives restarts and can be used during a temporary download outage. Displayed network identities use the existing TMDB key for country details and are cached for a day; without it, choices show their IDs. Directory failure never breaks title search. Each selected network page reads Seerr's TV discovery endpoint with the linked viewer's request state; normal watched/certification lookups still apply.
-
-Recommendations stay based on the last five distinct watched movies/shows, but only picks released within a rolling five-year window are shown. Future or missing release dates are excluded. Available and partially available titles (including 4K-only copies) are excluded using existing Seerr metadata; existing Jellyfin provider-ID checks also remove library matches, even if unwatched. No extra availability calls are added. Seerr's recommendations endpoint has no release-date filter, so Marquee filters on the server before extra metadata work. A short recent pool stays short rather than filling with old titles.
-
 ## Beta
 
 Marquee runs from source using the official Node image. There is no published Marquee image yet. The single-container stack below downloads the current beta when you restart or recreate it; a running app does not update itself.
@@ -28,7 +20,10 @@ Marquee runs from source using the official Node image. There is no published Ma
 - [Features](#features)
 - [Run with Docker Compose](#run-with-docker-compose)
 - [Connection settings](#connection-settings)
+- [API tokens](#api-tokens)
 - [Privacy and permissions](#privacy-and-permissions)
+- [Third-party artwork](#third-party-artwork)
+- [Rights](#rights)
 
 ## Features
 
@@ -45,6 +40,38 @@ Marquee runs from source using the official Node image. There is no published Ma
 - Installable home-screen app (PWA). Demo mode uses fictional titles and needs no external credentials.
 
 Personal shelves and weather start off. Enable them in Settings. Most display choices stay on the current device unless you enable sync; weather, colorblind mode and shelf order are saved per account. The watched badge is read-only and never changes viewing history.
+
+### Network search and recent recommendations
+
+Search keeps normal title results and offers matching TV networks as buttons. Pick a network to browse its newest series premieres, excluding future premieres, with page controls. This is network credit, not current streaming availability, and does not sort by the latest episode of an older show. Same-name networks show country or catalog ID so they are not silently merged.
+
+The network directory is TMDB's full daily ID export, fetched on demand and persisted as `network-list.json` in the settings folder for 24 hours. A cached copy survives restarts and can be used during a temporary download outage. Displayed network identities use the existing TMDB key for country details and are cached for a day; without it, choices show their IDs. Directory failure never breaks title search. Each selected network page reads Seerr's TV discovery endpoint with the linked viewer's request state; normal watched/certification lookups still apply.
+
+Recommendations stay based on the last five distinct watched movies/shows, but only picks released within a rolling five-year window are shown. Future or missing release dates are excluded. Available and partially available titles (including 4K-only copies) are excluded using existing Seerr metadata; existing Jellyfin provider-ID checks also remove library matches, even if unwatched. No extra availability calls are added. Seerr's recommendations endpoint has no release-date filter, so Marquee filters on the server before extra metadata work. A short recent pool stays short rather than filling with old titles.
+
+### What to watch next
+
+On Jellyfin includes an optional What to watch next shelf, enabled by default. It uses one bounded, viewer-scoped Jellyfin query for random unwatched movies and shows. Missing, virtual, placeholder and in-progress results are excluded. No Seerr/TMDB calls or library crawl. Next up stays separate for ongoing shows.
+
+Continue watching only shows activity within the last 180 days, using Jellyfin UserData.LastPlayedDate after resolving resumed episodes. Missing, invalid or future timestamps are excluded. Resume has no date cutoff option, so this filter is local with no extra calls. Series/season rows that resolve to an episode already present are deduped by playback-item ID, preserving the first result and its progress/play link. Different episodes and different movie IDs are not merged.
+
+What to watch next has cycling Animation (No animation, Animation only, Mixed) and Type (Movies only, TV only, Both) filters. They filter the loaded18-pick pool instantly, without another request. Animation follows Jellyfin Animation genre tags; titles with missing genre tags qualify only for Mixed. Both controls default to unrestricted and save with display preferences. Filtering can produce a short or empty shelf.
+
+### Watchlist (stars)
+
+Watchlist is separate from Jellyfin Favorites (hearts). Star accessible movies and shows on your Jellyfin server to save them for later. Seerr/catalog-only titles have no star; Seerr availability alone is not proof of library ownership. Saved per Jellyfin viewer in the persistent settings volume, up to500titles, with no Seerr sync. Enable its shelf on On Jellyfin in Settings. Stars use Jellyfin IDs. Adding rechecks library access; the saved shelf rechecks all IDs in one bounded query and hides unavailable items. Old catalog-only saves are hidden, not deleted. Saved titles do not automatically request media, mark it watched or remove on completion.
+
+Title details show a bold certification followed by Requested by on the certification line when Seerr exposes requesters for that title. Names are taken from Seerr's admin-key detail response, duplicate users are combined, and titles with no named requesters have no row. Toggle Requested by in title details in Settings (on by default); it follows optional display-settings sync. No additional requests or user-directory lookup.
+
+The Requests list shows everyone's requests to every signed-in account, restricted accounts included, and My requests filters it to your own. Everyone's requests are read with the Seerr admin key and send the browser only titles, display names, status and dates. The requested-by line in title details uses the same admin read. My requests still needs your linked Seerr account.
+
+Request status defaults on and can be hidden in Settings. Saved on/off choices are preserved, except that Continue watching and Next up are turned on once per browser (then stay hideable).
+
+Next up uses the same 180-day activity window as Continue watching, through Jellyfin NextUpDateCutoff (series viewing activity, not the next episode air date). Both sections are hidden when they have no items, even when enabled; later successful refreshes can show them again.
+
+### Jellyfin library counts
+
+Six count cards sit at the bottom of On Jellyfin: Movies, Kids Movies, TV Shows, Kids Shows, Episodes and Kids Episodes. On by default and hideable in Settings. Choose the two kids libraries in Settings; exact names Kids Movies and Kids Shows are selected automatically when visible to your account. Standard counts exclude the selected kids library. Missing or inaccessible selections show a dash, not a guessed total. Counts follow your Jellyfin access, omit virtual/missing/placeholder media, and refresh with the active On Jellyfin page. No Seerr catalog totals, item crawl or admin API key.
 
 ## Run with Docker Compose
 
@@ -369,6 +396,16 @@ Discover includes an In theaters shelf from TMDB Now Playing for the US, with up
 
 Without a key, the shelf shows a short setup message and the rest of Discover still works. The TMDB list is stored in `theater-list.json` in the saved settings folder and shared across viewers. It survives restarts and refreshes on the first load after 24 hours. Seerr availability/request state is cached separately for one minute per viewer. The key stays on the server. Seerr supplies availability and request state; requests use the same viewer permissions and approval rules as Top 10. A theater listing or request does not mean the movie is ready to watch on Jellyfin. Hide the shelf in General Settings or move it within Discover. Existing saved shelf order is preserved, with In theaters inserted after Popular right now.
 
+## API tokens
+
+Optional. A Jellyfin admin turns on **Settings > API access > Allow API tokens**. Each user can then make their own tokens there (name, read-only or read and request, and their Jellyfin password once). A token acts as the user who made it: it reads what that user sees and, if allowed, requests titles through Seerr as that user, so Seerr permissions and quotas still apply.
+
+- Send `Authorization: Bearer <token>`. The token is shown once. Only a hash is stored, and the token's Jellyfin login is encrypted in the settings folder. Deleting `session-secret` from the settings folder ends every token.
+- Tokens cannot open Settings, notifications, sign-in or token routes. Revoking a token ends its Jellyfin login.
+- Reads cover what that user sees in Marquee: continue watching, next up, watch history, libraries and library browsing, Jellyfin favorites and watchlist, recently added, the calendar, recommendations, leaving soon, weather and Seerr search/requests. Browsing a library is limited to its first 10,000 items. The full endpoint list is at `/api/docs` when signed in.
+- Limits: 120 requests per minute and 10 writes per minute per token.
+- Keep tokens in your assistant's secret store, never in chat or a file you share.
+
 ## Privacy and permissions
 
 Jellyfin shelves follow the signed-in viewer's library permissions. **The Sonarr/Radarr calendar is shared among all signed-in viewers** and may show titles they cannot access in Jellyfin. Deploy only for viewers you trust with that calendar.
@@ -392,36 +429,3 @@ Country flags use the [flag-icons](https://github.com/lipis/flag-icons) package 
 ## Rights
 
 Copyright (c) 2026 dhrandy. All rights reserved. Marquee is proprietary; no open-source license is granted. Third-party asset notices apply only to those assets.
-
-### What to watch next
-
-On Jellyfin includes an optional What to watch next shelf, enabled by default. It uses one bounded, viewer-scoped Jellyfin query for random unwatched movies and shows. Missing, virtual, placeholder and in-progress results are excluded. No Seerr/TMDB calls or library crawl. Next up stays separate for ongoing shows.
-
-Continue watching only shows activity within the last 180 days, using Jellyfin UserData.LastPlayedDate after resolving resumed episodes. Missing, invalid or future timestamps are excluded. Resume has no date cutoff option, so this filter is local with no extra calls. Series/season rows that resolve to an episode already present are deduped by playback-item ID, preserving the first result and its progress/play link. Different episodes and different movie IDs are not merged.
-
-What to watch next has cycling Animation (No animation, Animation only, Mixed) and Type (Movies only, TV only, Both) filters. They filter the loaded18-pick pool instantly, without another request. Animation follows Jellyfin Animation genre tags; titles with missing genre tags qualify only for Mixed. Both controls default to unrestricted and save with display preferences. Filtering can produce a short or empty shelf.
-
-### Watchlist (stars)
-
-Watchlist is separate from Jellyfin Favorites (hearts). Star accessible movies and shows on your Jellyfin server to save them for later. Seerr/catalog-only titles have no star; Seerr availability alone is not proof of library ownership. Saved per Jellyfin viewer in the persistent settings volume, up to500titles, with no Seerr sync. Enable its shelf on On Jellyfin in Settings. Stars use Jellyfin IDs. Adding rechecks library access; the saved shelf rechecks all IDs in one bounded query and hides unavailable items. Old catalog-only saves are hidden, not deleted. Saved titles do not automatically request media, mark it watched or remove on completion.
-
-Title details show a bold certification followed by Requested by on the certification line when Seerr exposes requesters for that title. Names are taken from Seerr's admin-key detail response, duplicate users are combined, and titles with no named requesters have no row. Toggle Requested by in title details in Settings (on by default); it follows optional display-settings sync. No additional requests or user-directory lookup.
-
-The Requests list shows everyone's requests to every signed-in account, restricted accounts included, and My requests filters it to your own. Everyone's requests are read with the Seerr admin key and send the browser only titles, display names, status and dates. The requested-by line in title details uses the same admin read. My requests still needs your linked Seerr account.
-
-Request status defaults on and can be hidden in Settings. Saved on/off choices are preserved, except that Continue watching and Next up are turned on once per browser (then stay hideable).
-
-Next up uses the same 180-day activity window as Continue watching, through Jellyfin NextUpDateCutoff (series viewing activity, not the next episode air date). Both sections are hidden when they have no items, even when enabled; later successful refreshes can show them again.
-
-### Jellyfin library counts
-
-Six count cards sit at the bottom of On Jellyfin: Movies, Kids Movies, TV Shows, Kids Shows, Episodes and Kids Episodes. On by default and hideable in Settings. Choose the two kids libraries in Settings; exact names Kids Movies and Kids Shows are selected automatically when visible to your account. Standard counts exclude the selected kids library. Missing or inaccessible selections show a dash, not a guessed total. Counts follow your Jellyfin access, omit virtual/missing/placeholder media, and refresh with the active On Jellyfin page. No Seerr catalog totals, item crawl or admin API key.
-
-## API tokens
-
-Optional. A Jellyfin admin turns on **Settings > API access > Allow API tokens**. Each user can then make their own tokens there (name, read-only or read and request, and their Jellyfin password once). A token acts as the user who made it: it reads what that user sees and, if allowed, requests titles through Seerr as that user, so Seerr permissions and quotas still apply.
-
-- Send `Authorization: Bearer <token>`. The token is shown once. Only a hash is stored, and the token's Jellyfin login is encrypted in the settings folder. Deleting `session-secret` from the settings folder ends every token.
-- Tokens cannot open Settings, notifications, sign-in or token routes. Revoking a token ends its Jellyfin login.
-- Limits: 120 requests per minute and 10 writes per minute per token. The endpoint list is at `/api/docs` when signed in.
-- Keep tokens in your assistant's secret store, never in chat or a file you share.

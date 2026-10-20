@@ -1,6 +1,6 @@
 {
   "name": "marquee",
-  "version": "0.2.1-beta.1",
+  "version": "0.2.1-beta.2",
   "private": true,
   "type": "module",
   "description": "A small self-hosted media shelf and release calendar",
