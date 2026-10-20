@@ -233,8 +233,10 @@ export const demoRequests = [
   },
 ];
 
+const demoRequestArt = ["signal", "north", "coast"];
 demoRequests.forEach((item, i) => {
   item.tmdbId = 9000 + i;
+  item.poster = demoRequestArt[i];
 });
 
 export const demoFacts = {

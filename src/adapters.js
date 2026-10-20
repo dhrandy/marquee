@@ -737,6 +737,10 @@ export async function seerrRequests(userId, mine = false) {
             details.name ||
             request.media?.title ||
             request.media?.name,
+          posterPath:
+            typeof details.posterPath === "string"
+              ? details.posterPath
+              : request.media?.posterPath,
         };
       } catch {
         /* Keep request status visible if metadata is temporarily unavailable. */

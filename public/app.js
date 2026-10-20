@@ -1408,15 +1408,24 @@ function requestStatus(r) {
   if (r.status === 3) return ["Declined", "missing"];
   return ["Pending", "pending"];
 }
+function requestThumbHtml(r) {
+  const src = r.poster
+    ? r.poster.startsWith("/")
+      ? `/api/seerr/image?path=${encodeURIComponent(r.poster)}`
+      : `/art/${encodeURIComponent(r.poster)}.svg`
+    : "/art/placeholder.svg";
+  return `<div class="poster-art request-thumb"><img src="${src}" alt="" loading="lazy"></div>`;
+}
 function renderRequests(requests) {
   $("#requests").innerHTML = requests.length
     ? requests
         .map((r) => {
           const [label, cls] = requestStatus(r);
-          return `<div class="request-row"${Number.isInteger(r.tmdbId) && r.tmdbId > 0 ? ` role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.tmdbId}" aria-label="Details for ${escape(r.title)}"` : ""}><span class="status-dot ${cls}"></span>${starHtml(r.watchKey,r.title)}<div class="grow"><strong>${escape(r.title)}</strong><small>${r.mediaType === "movie" ? "Movie" : "TV"} · by ${escape(r.requestedBy || "Unknown requester")}${r.createdAt ? ` · requested ${escape(new Date(r.createdAt).toLocaleDateString([], { month: "short", day: "numeric" }))}` : ""}</small></div><span class="request-status-label">${label}</span></div>`;
+          return `<div class="request-row"${Number.isInteger(r.tmdbId) && r.tmdbId > 0 ? ` role="button" tabindex="0" data-detail-type="${r.mediaType}" data-detail-id="${r.tmdbId}" aria-label="Details for ${escape(r.title)}"` : ""}>${requestThumbHtml(r)}<span class="status-dot ${cls}"></span>${starHtml(r.watchKey,r.title)}<div class="grow"><strong>${escape(r.title)}</strong><small>${r.mediaType === "movie" ? "Movie" : "TV"} · by ${escape(r.requestedBy || "Unknown requester")}${r.createdAt ? ` · requested ${escape(new Date(r.createdAt).toLocaleDateString([], { month: "short", day: "numeric" }))}` : ""}</small></div><span class="request-status-label">${label}</span></div>`;
         })
         .join("")
     : '<p class="empty">No requests yet.</p>';
+  fixBrokenPosters();
 }
 let lastRequests = null, requestsVersion = 0;
 async function loadRequests({ quiet = false } = {}) {
@@ -1432,6 +1441,7 @@ async function loadRequests({ quiet = false } = {}) {
     filter.value = restricted ? "mine" : state.prefs.myRequests ? "mine" : "all";
     shelfLastLoaded.requests = Date.now();
     if (JSON.stringify(lastRequests) !== JSON.stringify(requests) || !$("#requests").childElementCount) renderRequests(requests);
+    else retryBrokenPosters("#requests");
     lastRequests = requests;
   } catch (error) {
     if (quiet) $("#shelf-refresh-status").textContent = "Refresh unavailable. Keeping the last loaded requests.";

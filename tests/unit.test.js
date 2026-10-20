@@ -134,15 +134,30 @@ test("seerr requests normalize status and fall back to a TMDB id title", () => {
         id: 1,
         status: 2,
         createdAt: "2026-10-06",
-        media: { mediaType: "movie", title: "Film", status: 3 },
+        media: {
+          mediaType: "movie",
+          title: "Film",
+          status: 3,
+          posterPath: "/aBc123.jpg",
+        },
       },
-      { id: 2, status: 1, media: { mediaType: "tv", tmdbId: 42 } },
+      {
+        id: 2,
+        status: 1,
+        media: {
+          mediaType: "tv",
+          tmdbId: 42,
+          posterPath: "https://evil.example/x.jpg",
+        },
+      },
     ],
   });
   assert.equal(requests[0].title, "Film");
   assert.equal(requests[0].status, 2);
+  assert.equal(requests[0].poster, "/aBc123.jpg");
   assert.equal(requests[1].title, "TMDB #42");
   assert.equal(requests[1].availability, null);
+  assert.equal(requests[1].poster, null);
 });
 
 test("service URLs normalize scheme-less addresses and trailing slashes, preserving URL bases", () => {

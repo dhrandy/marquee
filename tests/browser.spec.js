@@ -273,6 +273,12 @@ test("demo search, request flow, requests list, and settings toggles", async ({
 }) => {
   await login(page);
   await expect(page.locator("#requests-section .request-row")).toHaveCount(3);
+  await expect(
+    page.locator("#requests-section .request-row .request-thumb img"),
+  ).toHaveCount(3);
+  await expect(
+    page.locator("#requests-section .request-thumb img").first(),
+  ).toHaveAttribute("src", /\/art\/signal\.svg$/);
   await view(page, "discover");
   await page.getByPlaceholder("Search movies and shows").fill("orbit");
   await page.getByRole("button", { name: "Search", exact: true }).click();

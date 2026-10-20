@@ -189,6 +189,11 @@ export function normalizeSeerrRequests(data) {
         : "movie",
       status: Number.isInteger(r.status) ? r.status : null,
       availability: Number.isInteger(r.media?.status) ? r.media.status : null,
+      poster:
+        typeof r.media?.posterPath === "string" &&
+        /^\/[A-Za-z0-9]+\.(jpg|jpeg|png|webp)$/.test(r.media.posterPath)
+          ? r.media.posterPath
+          : null,
       createdAt: typeof r.createdAt === "string" ? r.createdAt : null,
       requestedBy: String(
         r.requestedBy?.displayName ||
