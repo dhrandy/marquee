@@ -16,7 +16,7 @@ export const readRoutes = [
   /^\/api\/me$/,
   /^\/api\/recent$/,
   /^\/api\/calendar$/,
-  /^\/api\/personal\/[a-z-]+$/,
+  /^\/api\/personal\/[A-Za-z-]+$/,
   /^\/api\/history$/,
   /^\/api\/libraries$/,
   /^\/api\/libraries\/[^/]+\/items$/,

@@ -8,6 +8,8 @@ import { createApiTokens, tokenAllowed } from "../src/api-tokens.js";
 
 test("token route rules", () => {
   assert.equal(tokenAllowed("read", "GET", "/api/recent"), true);
+  for (const kind of ["continueWatching", "nextUp", "watchNext", "topUnwatched"])
+    assert.equal(tokenAllowed("read", "GET", "/api/personal/" + kind), true, kind);
   assert.equal(tokenAllowed("read", "GET", "/api/seerr/search"), true);
   for (const p of ["/api/history", "/api/libraries", "/api/libraries/demo-movies/items", "/api/weather", "/api/weather/cities", "/api/calendar"])
     assert.equal(tokenAllowed("read", "GET", p), true, p);
@@ -45,6 +47,9 @@ test("token lifecycle on a demo server", async () => {
     const bearer = { Authorization: "Bearer " + made.token };
     assert.equal((await fetch(base + "/api/me", { headers: bearer })).status, 200);
     assert.equal((await fetch(base + "/api/recent", { headers: bearer })).status, 200);
+    const personal = await (await fetch(base + "/api/personal/continueWatching", { headers: bearer })).json();
+    assert.ok(Array.isArray(personal.items) && personal.items.length > 0);
+    assert.equal((await fetch(base + "/api/personal/continue-watching", { headers: bearer })).status, 404);
     // Never reaches settings, tokens or notifications.
     for (const p of ["/api/tokens", "/api/display-preferences", "/api/notifications", "/api/weather-settings", "/api/accessibility-settings"])
       assert.equal((await fetch(base + p, { headers: bearer })).status, 403, p);
