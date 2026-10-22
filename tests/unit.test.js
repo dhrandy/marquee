@@ -536,3 +536,47 @@ test("one-time personal shelves reset flag is a syncable boolean", async () => {
   assert.equal(cleanDisplayPreferences({ personalShelvesReset: true }).personalShelvesReset, true);
   assert.equal(cleanDisplayPreferences({ personalShelvesReset: "yes" }), null);
 });
+
+
+test("details cache stamps the fetch time, serves repeats, expires and invalidates", async () => {
+  const { seerrDetails, seerrDetailsInvalidate } = await import("../src/adapters.js");
+  const realFetch = globalThis.fetch, realNow = Date.now;
+  const oldUrl = process.env.SEERR_URL, oldKey = process.env.SEERR_API_KEY;
+  process.env.SEERR_URL = "http://synthetic.test";
+  process.env.SEERR_API_KEY = "synthetic-key";
+  let calls = 0, clock = realNow();
+  try {
+    Date.now = () => clock;
+    globalThis.fetch = async () => {
+      calls++;
+      return { ok: true, status: 200, json: async () => ({ id: 424242, title: "Cached Film", releaseDate: "2026-01-02" }) };
+    };
+    const first = await seerrDetails("movie", 424242, 7);
+    assert.equal(first.title, "Cached Film");
+    assert.equal(first.updatedAt, new Date(clock).toISOString());
+    const afterFirst = calls;
+    assert.ok(afterFirst > 0);
+
+    clock += 60000; // A minute later the cached copy answers, stamped with the fetch time.
+    const second = await seerrDetails("movie", 424242, 7);
+    assert.equal(calls, afterFirst);
+    assert.equal(second.updatedAt, first.updatedAt);
+
+    clock += 6 * 60 * 60 * 1000 + 1; // Past the TTL it fetches again and restamps.
+    const third = await seerrDetails("movie", 424242, 7);
+    assert.ok(calls > afterFirst);
+    assert.equal(third.updatedAt, new Date(clock).toISOString());
+
+    const afterThird = calls; // Invalidation forces a refetch and a fresh stamp.
+    seerrDetailsInvalidate("movie", 424242);
+    const fourth = await seerrDetails("movie", 424242, 7);
+    assert.ok(calls > afterThird);
+    assert.equal(fourth.updatedAt, new Date(clock).toISOString());
+    seerrDetailsInvalidate("movie", 424242);
+  } finally {
+    globalThis.fetch = realFetch;
+    Date.now = realNow;
+    if (oldUrl === undefined) delete process.env.SEERR_URL; else process.env.SEERR_URL = oldUrl;
+    if (oldKey === undefined) delete process.env.SEERR_API_KEY; else process.env.SEERR_API_KEY = oldKey;
+  }
+});

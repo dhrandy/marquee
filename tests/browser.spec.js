@@ -3536,3 +3536,14 @@ test("a failed poster retries on the next shelf refresh instead of keeping the p
   }).toPass();
   await context.close();
 });
+
+test("details popup shows the last-refreshed stamp", async ({ page }) => {
+  await login(page);
+  await page.locator("#recent .recent-detail").first().click();
+  await expect(page.locator("#episode-detail")).toBeVisible();
+  const stamp = page.locator("#episode-updated");
+  await expect(stamp).toBeVisible();
+  await expect(stamp).toHaveText(
+    /^Updated [A-Z][a-z]{2} \d{1,2}, \d{4} · \d{1,2}:\d{2} [AP]M$/,
+  );
+});

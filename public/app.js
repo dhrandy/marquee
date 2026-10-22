@@ -891,6 +891,7 @@ async function loadMissingFacts(event) {
     if (["movie", "tv"].includes(data.mediaType) && Number.isSafeInteger(data.mediaId)) { event.mediaType = data.mediaType; event.mediaId = data.mediaId; if (!event.favoriteId) Object.assign(event, { favoriteId: data.favoriteId, favorite: data.favorite }); setDetailSave(event); }
     if(data.watchKey) {event.watchKey=data.watchKey;setDetailStar(event);}
     if (data.network) { event.network = data.network; setDetailNetwork(event); }
+    if (typeof data.updatedAt === "string") { event.updatedAt = data.updatedAt; setDetailUpdated(event); }
     if (!facts) { factsCache.delete(source); return; }
     if (event.watched == null && data.watched === true) { event.watched = true; $("#episode-poster-status").innerHTML = statusBadgeHtml(event) + watchedBadgeHtml(event); }
     event.facts = facts;
@@ -931,6 +932,17 @@ function setDetailNetwork(event) {
   network.textContent = event.mediaType === "tv" && event.network ? `Network · ${event.network}` : "";
   network.hidden = !network.textContent;
 }
+function setDetailUpdated(event) {
+  const stamp = $("#episode-updated");
+  const time = typeof event.updatedAt === "string" ? new Date(event.updatedAt) : null;
+  if (!time || !Number.isFinite(time.getTime())) {
+    stamp.hidden = true;
+    stamp.textContent = "";
+    return;
+  }
+  stamp.textContent = `Updated ${time.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })} · ${time.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+  stamp.hidden = false;
+}
 function setDetailPlay(resume = false) {
   const label = resume ? "Resume in Jellyfin" : "Play in Jellyfin";
   $("#episode-play").setAttribute("aria-label", label); $("#episode-play").title = label;
@@ -957,6 +969,7 @@ function showDetail(event) {
   setDetailSave(event); setDetailStar(event);
   factsRequest++;
   renderDetailFacts(event.facts);
+  setDetailUpdated(event);
   $("#episode-title").textContent =
     `${event.title}${event.year && !new RegExp(`(?:\\(\\s*${String(event.year).replace(/[^0-9]/g, "")}\\s*\\)|\\b${String(event.year).replace(/[^0-9]/g, "")}\\b)\\s*$`).test(event.title) ? ` (${event.year})` : ""}`;
   const detailSubtitle = setDetailCertification(event);

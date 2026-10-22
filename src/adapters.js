@@ -518,7 +518,25 @@ export function seerrRequesterNames(data) {
   }
   return names;
 }
+// Title details are viewer-independent (requester names come from the admin
+// key), so one six-hour cache serves every account. The popup's "updated"
+// stamp shows when the cached data was last fetched from Seerr.
+const detailsCache = new Map();
+const DETAILS_TTL = 6 * 60 * 60 * 1000;
+export function seerrDetailsInvalidate(type, id) {
+  detailsCache.delete(`${type}:${id}`);
+}
 export async function seerrDetails(type, id, userId) {
+  const key = `${type}:${id}`, now = Date.now();
+  for (const [old, entry] of detailsCache) if (entry.until <= now) detailsCache.delete(old);
+  const hit = detailsCache.get(key);
+  if (hit) return { ...hit.detail, updatedAt: new Date(hit.fetchedAt).toISOString() };
+  const detail = await fetchSeerrDetails(type, id, userId);
+  if (detailsCache.size >= 500) detailsCache.delete(detailsCache.keys().next().value);
+  detailsCache.set(key, { detail, fetchedAt: now, until: now + DETAILS_TTL });
+  return { ...detail, updatedAt: new Date(now).toISOString() };
+}
+async function fetchSeerrDetails(type, id, userId) {
   const headers = { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) };
   // Requester names come from an admin-key read so every account sees them; Seerr
   // would otherwise hide other users' requests from accounts without View Requests.

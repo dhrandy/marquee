@@ -1154,6 +1154,10 @@ body.colorblind .legend .premiere { color:#ffe66b; }
 #episode-request { background:var(--purple); color:#1b1730; padding:10px 14px; border-radius:8px; }
 #episode-request-status { font-size:14px; color:#e2e5ed; }
 
+/* Last-refreshed stamp at the lower right of the detail popup: there if you
+   look for it, quiet enough to ignore. */
+.episode-updated { margin:10px 0 0; text-align:right; font-size:10px; line-height:1.4; color:#c5cad6; opacity:.38; font-style:italic; }
+
 /* Certification at the lower right, without changing poster size. */
 .content-rating { position:absolute; right:20px; bottom:18px; margin:0; z-index:1; background:#10121cee; }
 .episode-body:has(.content-rating:not([hidden])) { padding-bottom:58px; }

@@ -21,6 +21,7 @@ import {
   seerrSearch,
   seerrPopular,
   seerrDetails,
+  seerrDetailsInvalidate,
   jellyfinTmdb,
   seerrIdentity,
   seerrContentRatings,
@@ -738,6 +739,7 @@ app.get("/api/seerr/details/:type/:id", requireUser, async (req, res) => {
       poster: "/art/north.svg",
       backdrop: "/art/north.svg",
       facts: demoFacts,
+      updatedAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
     });
   try {
     const access = await requestAccess(req.user);
@@ -751,7 +753,7 @@ app.get("/api/seerr/details/:type/:id", requireUser, async (req, res) => {
   }
 });
 app.get("/api/library/:id/facts", requireUser, async (req, res) => {
-  if (demo) return res.json({ facts: demoFacts });
+  if (demo) return res.json({ facts: demoFacts, updatedAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString() });
   // Only items already shown on the user's shelf can be looked up.
   if (
     !req.user.state.allowedImages.has(req.params.id) ||
@@ -765,7 +767,7 @@ app.get("/api/library/:id/facts", requireUser, async (req, res) => {
     if (access.error) return res.json({ facts: null });
     const detail = await seerrDetails(tmdb.type, tmdb.id, access.id);
     const [marked] = await withWatched(req.user, [detail]);
-    res.json({ facts: detail.facts, contentRating: detail.contentRating, network: tmdb.type === "tv" ? detail.network : null, mediaType: tmdb.type, mediaId: tmdb.id, watched: marked.watched, favoriteId: marked.favoriteId, favorite: marked.favorite });
+    res.json({ facts: detail.facts, updatedAt: detail.updatedAt, contentRating: detail.contentRating, network: tmdb.type === "tv" ? detail.network : null, mediaType: tmdb.type, mediaId: tmdb.id, watched: marked.watched, favoriteId: marked.favoriteId, favorite: marked.favorite });
   } catch {
     res.json({ facts: null });
   }
@@ -1091,6 +1093,7 @@ app.post("/api/seerr/request", requireUser, async (req, res) => {
       Object.assign(options, { serverId: offered.serverId, profileId, rootFolder });
     }
     const result = await seerrRequest(mediaType, mediaId, access.id, options);
+    seerrDetailsInvalidate(mediaType, mediaId);
     res.json({ ok: true, status: result.status ?? null });
   } catch (error) {
     const denied = /Service answered HTTP (403|409)/.test(error.message);
