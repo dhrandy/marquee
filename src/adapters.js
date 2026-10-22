@@ -520,7 +520,8 @@ export function seerrRequesterNames(data) {
 }
 // Title details are viewer-independent (requester names come from the admin
 // key), so one six-hour cache serves every account. The popup's "updated"
-// stamp shows when the cached data was last fetched from Seerr.
+// stamp shows when the title's DATA last changed (Seerr record writes, or
+// TMDB's change log), never when Marquee happened to fetch it.
 const detailsCache = new Map();
 const DETAILS_TTL = 6 * 60 * 60 * 1000;
 export function seerrDetailsInvalidate(type, id) {
@@ -530,11 +531,43 @@ export async function seerrDetails(type, id, userId) {
   const key = `${type}:${id}`, now = Date.now();
   for (const [old, entry] of detailsCache) if (entry.until <= now) detailsCache.delete(old);
   const hit = detailsCache.get(key);
-  if (hit) return { ...hit.detail, updatedAt: new Date(hit.fetchedAt).toISOString() };
+  if (hit) return { ...hit.detail };
   const detail = await fetchSeerrDetails(type, id, userId);
   if (detailsCache.size >= 500) detailsCache.delete(detailsCache.keys().next().value);
-  detailsCache.set(key, { detail, fetchedAt: now, until: now + DETAILS_TTL });
-  return { ...detail, updatedAt: new Date(now).toISOString() };
+  detailsCache.set(key, { detail, until: now + DETAILS_TTL });
+  return { ...detail };
+}
+// The latest write time on a title's Seerr record: the media row's own
+// timestamps plus every request's (a request create/approve/complete moves
+// request.updatedAt, not media.updatedAt). Null when no record exists.
+export function seerrChangedAt(media) {
+  if (!media || typeof media !== "object") return null;
+  let latest = 0;
+  const times = [media.createdAt, media.updatedAt, media.mediaAddedAt, media.lastSeasonChange];
+  for (const request of Array.isArray(media.requests) ? media.requests.slice(0, 100) : []) times.push(request?.createdAt, request?.updatedAt);
+  for (const value of times) {
+    const time = Date.parse(value);
+    if (Number.isFinite(time) && time > latest) latest = time;
+  }
+  return latest ? new Date(latest).toISOString() : null;
+}
+// TMDB's change log covers the last 14 days; without a key or a recent change
+// there is no honest time and the stamp stays hidden.
+export async function tmdbLastChange(type, id) {
+  const key = (process.env.TMDB_API_KEY || "").trim();
+  if (!key) return null;
+  const stamp = (day) => day.toISOString().slice(0, 10);
+  const end = new Date();
+  const start = new Date(end.getTime() - 13 * 86400000);
+  const query = new URLSearchParams({ api_key: key, start_date: stamp(start), end_date: stamp(end) });
+  const data = await upstream("https://api.themoviedb.org", `/3/${type}/${id}/changes?${query}`);
+  let latest = 0;
+  for (const change of Array.isArray(data?.changes) ? data.changes : [])
+    for (const item of Array.isArray(change?.items) ? change.items : []) {
+      const time = Date.parse(item?.time);
+      if (Number.isFinite(time) && time > latest) latest = time;
+    }
+  return latest ? new Date(latest).toISOString() : null;
 }
 async function fetchSeerrDetails(type, id, userId) {
   const headers = { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) };
@@ -546,6 +579,11 @@ async function fetchSeerrDetails(type, id, userId) {
     upstream(process.env.SEERR_URL, `/api/v1/${type}/${id}/${type === "movie" ? "ratingscombined" : "ratings"}`, { headers }).then(r => type === "tv" ? { rt: r } : r).catch(() => ({})),
     upstream(process.env.SEERR_URL, `/api/v1/${type}/${id}`, { headers: adminHeaders }).catch(() => null),
   ]);
+  let changedAt = seerrChangedAt(adminData?.mediaInfo || data.mediaInfo), changeSource = changedAt ? "seerr" : null;
+  if (!changedAt) {
+    changedAt = await tmdbLastChange(type, id).catch(() => null);
+    changeSource = changedAt ? "tmdb" : null;
+  }
   const safeArt = (value) =>
     typeof value === "string" &&
     /^\/[A-Za-z0-9]+\.(jpg|jpeg|png|webp)$/.test(value)
@@ -554,6 +592,8 @@ async function fetchSeerrDetails(type, id, userId) {
   return {
     mediaType: type,
     mediaId: id,
+    changedAt,
+    changeSource,
     facts: {...seerrFacts(data, type, ratings), requestedBy: seerrRequesterNames(adminData || data)},
     availability: Number.isInteger(data.mediaInfo?.status)
       ? data.mediaInfo.status
@@ -817,7 +857,7 @@ export async function jellyfinTmdb(user, itemId) {
   const type = item.Type === "Movie" ? "movie" : item.Type === "Series" ? "tv" : null;
   const id = Number(item.ProviderIds?.Tmdb);
   if (!type || !Number.isSafeInteger(id) || id < 1 || id > 1e9) return null;
-  return { type, id };
+  return { type, id, dateCreated: typeof item.DateCreated === "string" && Number.isFinite(Date.parse(item.DateCreated)) ? item.DateCreated : null };
 }
 
 // MPAA / TV rating for search rows. Seerr only returns it on a title's own

@@ -330,3 +330,49 @@ test("regional re-release dates do not pass the primary-date filter; old persist
     const saved=JSON.parse(await fs.readFile(path.join(dir,"theater-list.json"),"utf8"));assert.equal(saved.filterVersion,2);assert.equal(saved.titles.length,1);
   }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
+
+test("theater list stamp tracks when contents changed, not when pulled", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  process.env.TMDB_API_KEY = "mock-tmdb-key";
+  process.env.SEERR_URL = "http://seerr.test";
+  process.env.SEERR_API_KEY = "mock-seerr-key";
+  const today = new Date().toISOString().slice(0, 10);
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "marquee-theaters-"));
+  const file = path.join(dir, "theater-list.json");
+  const stamp = Date.parse("2026-10-15T12:00:00Z");
+  const title = (id, name) => ({ id, mediaType: "movie", title: name, originalReleaseDate: today });
+  const read = (ids) => async (base, route) => {
+    if (base.includes("themoviedb") && !route.includes("now_playing"))
+      return { id: Number(new URL(route, base).pathname.split("/").at(-1)), release_date: today };
+    if (base.includes("themoviedb"))
+      return { results: ids.map((id) => ({ id, title: `Movie ${id}`, release_date: today })) };
+    return { id: Number(route.split("/").at(-1)), mediaInfo: { status: 5 } };
+  };
+  try {
+    // A stale snapshot with the same contents keeps its original change time.
+    await fs.writeFile(file, JSON.stringify({ region: "US", filterVersion: 2, capped: false, fetchedAt: Date.now() - 25 * 60 * 60000, lastChangedAt: stamp, titles: [title(1, "One"), title(2, "Two")] }));
+    const same = await inTheaters(7, { read: read([1, 2]), dataDir: dir });
+    assert.equal(same.listUpdatedAt, new Date(stamp).toISOString());
+
+    // A stale snapshot with different contents bumps the change time to now.
+    await fs.writeFile(file, JSON.stringify({ region: "US", filterVersion: 2, capped: false, fetchedAt: Date.now() - 25 * 60 * 60000, lastChangedAt: stamp, titles: [title(9, "Nine")] }));
+    const before = Date.now();
+    const changed = await inTheaters(7, { read: read([1, 2, 3]), dataDir: dir });
+    const bumped = Date.parse(changed.listUpdatedAt);
+    assert.ok(bumped >= before && bumped <= Date.now());
+
+    // No snapshot at all: first-seen counts as the change time.
+    const dir2 = await fs.mkdtemp(path.join(os.tmpdir(), "marquee-theaters-"));
+    const fresh = await inTheaters(7, { read: read([1]), dataDir: dir2 });
+    assert.ok(Date.parse(fresh.listUpdatedAt) >= before);
+
+    // A legacy snapshot without a recorded change time falls back to its fetch time.
+    await fs.writeFile(file, JSON.stringify({ region: "US", filterVersion: 2, capped: false, fetchedAt: stamp, titles: [title(1, "One"), title(2, "Two")] }));
+    const legacy = await inTheaters(7, { read: read([1, 2]), dataDir: dir });
+    assert.equal(legacy.listUpdatedAt, new Date(stamp).toISOString());
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

@@ -538,45 +538,82 @@ test("one-time personal shelves reset flag is a syncable boolean", async () => {
 });
 
 
-test("details cache stamps the fetch time, serves repeats, expires and invalidates", async () => {
+test("details cache carries the data-change time, serves repeats, expires and invalidates", async () => {
   const { seerrDetails, seerrDetailsInvalidate } = await import("../src/adapters.js");
   const realFetch = globalThis.fetch, realNow = Date.now;
-  const oldUrl = process.env.SEERR_URL, oldKey = process.env.SEERR_API_KEY;
+  const oldUrl = process.env.SEERR_URL, oldKey = process.env.SEERR_API_KEY, oldTmdb = process.env.TMDB_API_KEY;
   process.env.SEERR_URL = "http://synthetic.test";
   process.env.SEERR_API_KEY = "synthetic-key";
+  delete process.env.TMDB_API_KEY;
   let calls = 0, clock = realNow();
   try {
     Date.now = () => clock;
     globalThis.fetch = async () => {
       calls++;
-      return { ok: true, status: 200, json: async () => ({ id: 424242, title: "Cached Film", releaseDate: "2026-01-02" }) };
+      return { ok: true, status: 200, json: async () => ({ id: 424242, title: "Cached Film", releaseDate: "2026-01-02", mediaInfo: { status: 3, createdAt: "2026-09-30T10:00:00Z", updatedAt: "2026-10-01T10:00:00Z", requests: [{ createdAt: "2026-10-04T10:00:00Z", updatedAt: "2026-10-05T10:00:00Z" }] } }) };
     };
     const first = await seerrDetails("movie", 424242, 7);
     assert.equal(first.title, "Cached Film");
-    assert.equal(first.updatedAt, new Date(clock).toISOString());
+    assert.equal(first.changedAt, "2026-10-05T10:00:00.000Z"); // the request's write beats the media row's
+    assert.equal(first.changeSource, "seerr");
+    assert.equal(first.updatedAt, undefined); // fetch time is no longer exposed
     const afterFirst = calls;
     assert.ok(afterFirst > 0);
 
-    clock += 60000; // A minute later the cached copy answers, stamped with the fetch time.
+    clock += 60000; // A minute later the cached copy answers with the same change time.
     const second = await seerrDetails("movie", 424242, 7);
     assert.equal(calls, afterFirst);
-    assert.equal(second.updatedAt, first.updatedAt);
+    assert.equal(second.changedAt, first.changedAt);
 
-    clock += 6 * 60 * 60 * 1000 + 1; // Past the TTL it fetches again and restamps.
+    clock += 6 * 60 * 60 * 1000 + 1; // Past the TTL it fetches again.
     const third = await seerrDetails("movie", 424242, 7);
     assert.ok(calls > afterFirst);
-    assert.equal(third.updatedAt, new Date(clock).toISOString());
+    assert.equal(third.changedAt, first.changedAt);
 
-    const afterThird = calls; // Invalidation forces a refetch and a fresh stamp.
+    const afterThird = calls; // Invalidation forces a refetch.
     seerrDetailsInvalidate("movie", 424242);
     const fourth = await seerrDetails("movie", 424242, 7);
     assert.ok(calls > afterThird);
-    assert.equal(fourth.updatedAt, new Date(clock).toISOString());
     seerrDetailsInvalidate("movie", 424242);
   } finally {
     globalThis.fetch = realFetch;
     Date.now = realNow;
     if (oldUrl === undefined) delete process.env.SEERR_URL; else process.env.SEERR_URL = oldUrl;
     if (oldKey === undefined) delete process.env.SEERR_API_KEY; else process.env.SEERR_API_KEY = oldKey;
+    if (oldTmdb === undefined) delete process.env.TMDB_API_KEY; else process.env.TMDB_API_KEY = oldTmdb;
+  }
+});
+
+test("seerrChangedAt takes the newest write across media and requests, or nothing", async () => {
+  const { seerrChangedAt } = await import("../src/adapters.js");
+  assert.equal(seerrChangedAt(null), null);
+  assert.equal(seerrChangedAt({}), null);
+  assert.equal(seerrChangedAt({ status: 5 }), null);
+  assert.equal(seerrChangedAt({ updatedAt: "not-a-date", createdAt: "2026-10-01T00:00:00Z" }), "2026-10-01T00:00:00.000Z");
+  assert.equal(seerrChangedAt({ updatedAt: "2026-10-02T00:00:00Z", mediaAddedAt: "2026-10-03T00:00:00Z", requests: [{ updatedAt: "2026-10-04T00:00:00Z" }, { createdAt: "2026-10-01T00:00:00Z" }] }), "2026-10-04T00:00:00.000Z");
+});
+
+test("tmdbLastChange reads the newest change-log entry within the window", async () => {
+  const { tmdbLastChange } = await import("../src/adapters.js");
+  const realFetch = globalThis.fetch, oldTmdb = process.env.TMDB_API_KEY;
+  try {
+    delete process.env.TMDB_API_KEY;
+    let calls = 0;
+    globalThis.fetch = async () => { calls++; throw new Error("must not fetch without a key"); };
+    assert.equal(await tmdbLastChange("movie", 1), null);
+    assert.equal(calls, 0);
+
+    process.env.TMDB_API_KEY = "synthetic-tmdb";
+    let url = "";
+    globalThis.fetch = async (target) => { url = String(target); return { ok: true, status: 200, json: async () => ({ changes: [{ key: "images", items: [{ time: "2026-10-18 09:00:00 UTC" }] }, { key: "videos", items: [{ time: "2026-10-20 14:30:00 UTC" }, { time: "2026-10-19 01:00:00 UTC" }] }, { key: "empty", items: "bad" }] }) }; };
+    assert.equal(await tmdbLastChange("movie", 42), new Date(Date.parse("2026-10-20 14:30:00 UTC")).toISOString());
+    assert.ok(url.includes("/3/movie/42/changes"));
+    assert.ok(url.includes("start_date=") && url.includes("end_date="));
+
+    globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ changes: [] }) });
+    assert.equal(await tmdbLastChange("movie", 42), null); // no change in window: no honest time
+  } finally {
+    globalThis.fetch = realFetch;
+    if (oldTmdb === undefined) delete process.env.TMDB_API_KEY; else process.env.TMDB_API_KEY = oldTmdb;
   }
 });

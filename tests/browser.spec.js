@@ -3547,3 +3547,14 @@ test("details popup shows the last-refreshed stamp", async ({ page }) => {
     /^Updated [A-Z][a-z]{2} \d{1,2}, \d{4} · \d{1,2}:\d{2} [AP]M$/,
   );
 });
+
+test("in theaters popup shows when the list last changed", async ({ page }) => {
+  await login(page);
+  await expect(page.locator("#inTheaters-content .result-card .poster-art").first()).toBeVisible();
+  await page.locator("#inTheaters-content .result-card .poster-art").first().click();
+  await expect(page.locator("#episode-detail")).toBeVisible();
+  const stamp = page.locator("#episode-updated");
+  await expect(stamp).toBeVisible();
+  await expect(stamp).toContainText("In theaters list updated");
+  await expect(stamp).toContainText(/Updated [A-Z][a-z]{2} \d{1,2}, \d{4}/);
+});

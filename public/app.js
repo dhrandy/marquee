@@ -12,6 +12,7 @@ const state = {
   name: "Marquee",
   cityResults: [],
   recentItems: [],
+  inTheatersUpdatedAt: null,
   watchlistItems: [],
   personalItems: {},
 };
@@ -891,7 +892,7 @@ async function loadMissingFacts(event) {
     if (["movie", "tv"].includes(data.mediaType) && Number.isSafeInteger(data.mediaId)) { event.mediaType = data.mediaType; event.mediaId = data.mediaId; if (!event.favoriteId) Object.assign(event, { favoriteId: data.favoriteId, favorite: data.favorite }); setDetailSave(event); }
     if(data.watchKey) {event.watchKey=data.watchKey;setDetailStar(event);}
     if (data.network) { event.network = data.network; setDetailNetwork(event); }
-    if (typeof data.updatedAt === "string") { event.updatedAt = data.updatedAt; setDetailUpdated(event); }
+    if (typeof data.changedAt === "string") { event.changedAt = data.changedAt; setDetailUpdated(event); }
     if (!facts) { factsCache.delete(source); return; }
     if (event.watched == null && data.watched === true) { event.watched = true; $("#episode-poster-status").innerHTML = statusBadgeHtml(event) + watchedBadgeHtml(event); }
     event.facts = facts;
@@ -932,16 +933,23 @@ function setDetailNetwork(event) {
   network.textContent = event.mediaType === "tv" && event.network ? `Network · ${event.network}` : "";
   network.hidden = !network.textContent;
 }
+function stampTime(value) {
+  const time = typeof value === "string" ? new Date(value) : null;
+  return time && Number.isFinite(time.getTime()) ? time : null;
+}
+function stampText(time) {
+  return `${time.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })} · ${time.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+}
+// The stamp only shows times the data itself changed; without one it hides.
 function setDetailUpdated(event) {
   const stamp = $("#episode-updated");
-  const time = typeof event.updatedAt === "string" ? new Date(event.updatedAt) : null;
-  if (!time || !Number.isFinite(time.getTime())) {
-    stamp.hidden = true;
-    stamp.textContent = "";
-    return;
-  }
-  stamp.textContent = `Updated ${time.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })} · ${time.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
-  stamp.hidden = false;
+  const lines = [];
+  const changed = stampTime(event.changedAt);
+  if (changed) lines.push(`Updated ${stampText(changed)}`);
+  const listChanged = stampTime(event.listUpdatedAt);
+  if (listChanged) lines.push(`In theaters list updated ${stampText(listChanged)}`);
+  stamp.innerHTML = lines.map(escape).join("<br>");
+  stamp.hidden = !lines.length;
 }
 function setDetailPlay(resume = false) {
   const label = resume ? "Resume in Jellyfin" : "Play in Jellyfin";
@@ -1326,11 +1334,12 @@ $("#popular-collapse").addEventListener("click", () => {
   state.prefs.popularCollapsed = !state.prefs.popularCollapsed;
   persist();
 });
-async function openMediaDetail(card, status) {
+async function openMediaDetail(card, status, fromInTheaters = false) {
   try {
     const detail = await api(
       `/api/seerr/details/${card.dataset.detailType}/${card.dataset.detailId}`,
     );
+    if (fromInTheaters && state.inTheatersUpdatedAt) detail.listUpdatedAt = state.inTheatersUpdatedAt;
     if (state.demo) {
       const action = card
         .closest(".result-card")
@@ -1359,14 +1368,14 @@ for (const [container, status] of [
     // Search rows open the popup from anywhere on the row except the button.
     if (!card && container === "#search-results" && !event.target.closest("button, a"))
       card = event.target.closest(".result-card")?.querySelector("[data-detail-id]");
-    if (card) openMediaDetail(card, $(status));
+    if (card) openMediaDetail(card, $(status), container === "#inTheaters-section");
   });
   $(container).addEventListener("keydown", (event) => {
     if (event.target.closest("[data-request]")) return;
     const card = event.target.closest("[data-detail-id]");
     if (card && ["Enter", " "].includes(event.key)) {
       event.preventDefault();
-      openMediaDetail(card, $(status));
+      openMediaDetail(card, $(status), container === "#inTheaters-section");
     }
   });
 }
@@ -1394,6 +1403,7 @@ async function loadInTheaters({ quiet = false } = {}) {
     const data = await api("/api/in-theaters");
     if (quiet && !safeShelfRefresh()) { delete shelfLastLoaded.inTheaters; return; }
     shelfLastLoaded.inTheaters = Date.now();
+    state.inTheatersUpdatedAt = typeof data.listUpdatedAt === "string" ? data.listUpdatedAt : null;
     updateShelfHtml($("#inTheaters-content"), data.items.length ? data.items.slice(0,25).map(item => resultCardHtml(item)).join("") : '<p class="empty">No theater titles returned for the US.</p>');
     $("#inTheaters-status").textContent = "";
     fixBrokenPosters();
