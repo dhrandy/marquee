@@ -40,9 +40,6 @@ export async function inTheaters(userId, { read = upstream, dataDir } = {}) {
   const listKey = JSON.stringify([key, dataDir || null]);
   const list = await cached(cache.lists, listKey, 24 * 60 * 60000, async () => {
     const file = dataDir && path.join(dataDir, "theater-list.json");
-    // A stale-but-valid snapshot is kept for diffing, so the shelf can say when
-    // the list's contents last changed instead of when Marquee last pulled it.
-    let stale = null;
     if (file) {
       try {
         const saved = JSON.parse(await fs.readFile(file, "utf8"));
@@ -52,8 +49,7 @@ export async function inTheaters(userId, { read = upstream, dataDir } = {}) {
           typeof saved.capped === "boolean" &&
           Number.isFinite(saved.fetchedAt) &&
           saved.fetchedAt <= Date.now() &&
-          (saved.lastChangedAt === undefined ||
-            (Number.isFinite(saved.lastChangedAt) && saved.lastChangedAt <= Date.now())) &&
+          Date.now() - saved.fetchedAt < 24 * 60 * 60000 &&
           Array.isArray(saved.titles) &&
           saved.titles.length <= MAX_TITLES &&
           saved.titles.every(
@@ -64,10 +60,8 @@ export async function inTheaters(userId, { read = upstream, dataDir } = {}) {
               typeof item.title === "string" &&
               isNewTheaterRelease(item.originalReleaseDate),
           )
-        ) {
-          if (Date.now() - saved.fetchedAt < 24 * 60 * 60000) return saved;
-          stale = saved;
-        }
+        )
+          return saved;
       } catch (error) {
         if (error.code !== "ENOENT" && !(error instanceof SyntaxError))
           throw error;
@@ -129,10 +123,7 @@ export async function inTheaters(userId, { read = upstream, dataDir } = {}) {
       );
     }
     titles.forEach((item, index) => { item.originalReleaseDate = raw[index].release_date; item.streamer = raw[index].streamer; });
-    // First-seen counts as a change: with no trustworthy prior snapshot, this
-    // pull is when the current list contents began as far as Marquee knows.
-    const sameList = stale && JSON.stringify(stale.titles.map(item => item.id)) === JSON.stringify(titles.map(item => item.id));
-    const result = { titles, capped, region: "US", filterVersion: FILTER_VERSION, fetchedAt: Date.now(), lastChangedAt: sameList ? (stale.lastChangedAt ?? stale.fetchedAt) : Date.now() };
+    const result = { titles, capped, region: "US", filterVersion: FILTER_VERSION, fetchedAt: Date.now() };
     if (file) {
       await fs.mkdir(dataDir, { recursive: true, mode: 0o700 });
       await fs.writeFile(file + ".tmp", JSON.stringify(result), {
@@ -185,6 +176,8 @@ export async function inTheaters(userId, { read = upstream, dataDir } = {}) {
       );
       items.push(...batch);
     }
-    return { items, region: "US", capped, listUpdatedAt: Number.isFinite(list.lastChangedAt) ? new Date(list.lastChangedAt).toISOString() : null };
+    // The shelf's stamp is the last pull time: it moves with every daily
+    // pull, even when the list's contents do not change.
+    return { items, region: "US", capped, listUpdatedAt: Number.isFinite(list.fetchedAt) ? new Date(list.fetchedAt).toISOString() : null };
   });
 }

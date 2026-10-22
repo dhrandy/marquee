@@ -331,7 +331,7 @@ test("regional re-release dates do not pass the primary-date filter; old persist
   }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
 
-test("theater list stamp tracks when contents changed, not when pulled", async () => {
+test("theater list stamp is the last pull time, moving with every daily pull", async () => {
   const fs = await import("node:fs/promises");
   const os = await import("node:os");
   const path = await import("node:path");
@@ -341,7 +341,7 @@ test("theater list stamp tracks when contents changed, not when pulled", async (
   const today = new Date().toISOString().slice(0, 10);
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "marquee-theaters-"));
   const file = path.join(dir, "theater-list.json");
-  const stamp = Date.parse("2026-10-15T12:00:00Z");
+  const pulled = Date.now() - 60 * 60000; // an hour ago: fresh, no repull
   const title = (id, name) => ({ id, mediaType: "movie", title: name, originalReleaseDate: today });
   const read = (ids) => async (base, route) => {
     if (base.includes("themoviedb") && !route.includes("now_playing"))
@@ -351,27 +351,21 @@ test("theater list stamp tracks when contents changed, not when pulled", async (
     return { id: Number(route.split("/").at(-1)), mediaInfo: { status: 5 } };
   };
   try {
-    // A stale snapshot with the same contents keeps its original change time.
-    await fs.writeFile(file, JSON.stringify({ region: "US", filterVersion: 2, capped: false, fetchedAt: Date.now() - 25 * 60 * 60000, lastChangedAt: stamp, titles: [title(1, "One"), title(2, "Two")] }));
-    const same = await inTheaters(7, { read: read([1, 2]), dataDir: dir });
-    assert.equal(same.listUpdatedAt, new Date(stamp).toISOString());
+    // A fresh snapshot reports its own pull time, however old the contents are.
+    await fs.writeFile(file, JSON.stringify({ region: "US", filterVersion: 2, capped: false, fetchedAt: pulled, titles: [title(1, "One"), title(2, "Two")] }));
+    const fresh = await inTheaters(7, { read: read([1, 2]), dataDir: dir });
+    assert.equal(fresh.listUpdatedAt, new Date(pulled).toISOString());
 
-    // A stale snapshot with different contents bumps the change time to now.
-    await fs.writeFile(file, JSON.stringify({ region: "US", filterVersion: 2, capped: false, fetchedAt: Date.now() - 25 * 60 * 60000, lastChangedAt: stamp, titles: [title(9, "Nine")] }));
+    // A stale snapshot forces a new pull, and the stamp moves to now even when
+    // the list's contents come back identical.
+    await fs.writeFile(file, JSON.stringify({ region: "US", filterVersion: 2, capped: false, fetchedAt: Date.now() - 25 * 60 * 60000, titles: [title(1, "One"), title(2, "Two")] }));
     const before = Date.now();
-    const changed = await inTheaters(7, { read: read([1, 2, 3]), dataDir: dir });
-    const bumped = Date.parse(changed.listUpdatedAt);
-    assert.ok(bumped >= before && bumped <= Date.now());
-
-    // No snapshot at all: first-seen counts as the change time.
-    const dir2 = await fs.mkdtemp(path.join(os.tmpdir(), "marquee-theaters-"));
-    const fresh = await inTheaters(7, { read: read([1]), dataDir: dir2 });
-    assert.ok(Date.parse(fresh.listUpdatedAt) >= before);
-
-    // A legacy snapshot without a recorded change time falls back to its fetch time.
-    await fs.writeFile(file, JSON.stringify({ region: "US", filterVersion: 2, capped: false, fetchedAt: stamp, titles: [title(1, "One"), title(2, "Two")] }));
-    const legacy = await inTheaters(7, { read: read([1, 2]), dataDir: dir });
-    assert.equal(legacy.listUpdatedAt, new Date(stamp).toISOString());
+    const repulled = await inTheaters(7, { read: read([1, 2]), dataDir: dir });
+    const stamp = Date.parse(repulled.listUpdatedAt);
+    assert.ok(stamp >= before && stamp <= Date.now());
+    const saved = JSON.parse(await fs.readFile(file, "utf8"));
+    assert.equal(saved.fetchedAt, stamp);
+    assert.equal(saved.lastChangedAt, undefined); // no change-time tracking remains
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }

@@ -739,7 +739,7 @@ app.get("/api/seerr/details/:type/:id", requireUser, async (req, res) => {
       poster: "/art/north.svg",
       backdrop: "/art/north.svg",
       facts: demoFacts,
-      changedAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
+      updatedAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
     });
   try {
     const access = await requestAccess(req.user);
@@ -753,7 +753,7 @@ app.get("/api/seerr/details/:type/:id", requireUser, async (req, res) => {
   }
 });
 app.get("/api/library/:id/facts", requireUser, async (req, res) => {
-  if (demo) return res.json({ facts: demoFacts, changedAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString() });
+  if (demo) return res.json({ facts: demoFacts, updatedAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString() });
   // Only items already shown on the user's shelf can be looked up.
   if (
     !req.user.state.allowedImages.has(req.params.id) ||
@@ -767,16 +767,13 @@ app.get("/api/library/:id/facts", requireUser, async (req, res) => {
     if (access.error) return res.json({ facts: null });
     const detail = await seerrDetails(tmdb.type, tmdb.id, access.id);
     const [marked] = await withWatched(req.user, [detail]);
-    // A Seerr record's own write time wins; a library title without one falls
-    // back to when Jellyfin added it, then to TMDB's change log.
-    const changedAt = detail.changeSource === "seerr" ? detail.changedAt : (tmdb.dateCreated || detail.changedAt);
-    res.json({ facts: detail.facts, changedAt, contentRating: detail.contentRating, network: tmdb.type === "tv" ? detail.network : null, mediaType: tmdb.type, mediaId: tmdb.id, watched: marked.watched, favoriteId: marked.favoriteId, favorite: marked.favorite });
+    res.json({ facts: detail.facts, updatedAt: detail.updatedAt, contentRating: detail.contentRating, network: tmdb.type === "tv" ? detail.network : null, mediaType: tmdb.type, mediaId: tmdb.id, watched: marked.watched, favoriteId: marked.favoriteId, favorite: marked.favorite });
   } catch {
     res.json({ facts: null });
   }
 });
 app.get("/api/in-theaters", requireUser, async (req, res) => {
-  if (demo) return res.json({ region: "US", listUpdatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), items: demoSearch("").filter(item => item.mediaType === "movie").map((item, i) => ({ ...item, id: 9000 + i, availability: i === 0 ? 5 : i === 1 ? 2 : null, requested: i === 1 })) });
+  if (demo) return res.json({ region: "US", listUpdatedAt: new Date(Date.now() - 5 * 60 * 60000).toISOString(), items: demoSearch("").filter(item => item.mediaType === "movie").map((item, i) => ({ ...item, id: 9000 + i, availability: i === 0 ? 5 : i === 1 ? 2 : null, requested: i === 1 })) });
   if (!process.env.TMDB_API_KEY?.trim()) return res.status(503).json({ error: "In theaters needs a TMDB API key in the server settings." });
   try {
     const access = await requestAccess(req.user);

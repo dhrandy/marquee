@@ -3548,7 +3548,7 @@ test("details popup shows the last-refreshed stamp", async ({ page }) => {
   );
 });
 
-test("in theaters popup shows when the list last changed", async ({ page }) => {
+test("in theaters popup shows when the list was last pulled", async ({ page }) => {
   await login(page);
   await expect(page.locator("#inTheaters-content .result-card .poster-art").first()).toBeVisible();
   await page.locator("#inTheaters-content .result-card .poster-art").first().click();

@@ -892,7 +892,7 @@ async function loadMissingFacts(event) {
     if (["movie", "tv"].includes(data.mediaType) && Number.isSafeInteger(data.mediaId)) { event.mediaType = data.mediaType; event.mediaId = data.mediaId; if (!event.favoriteId) Object.assign(event, { favoriteId: data.favoriteId, favorite: data.favorite }); setDetailSave(event); }
     if(data.watchKey) {event.watchKey=data.watchKey;setDetailStar(event);}
     if (data.network) { event.network = data.network; setDetailNetwork(event); }
-    if (typeof data.changedAt === "string") { event.changedAt = data.changedAt; setDetailUpdated(event); }
+    if (typeof data.updatedAt === "string") { event.updatedAt = data.updatedAt; setDetailUpdated(event); }
     if (!facts) { factsCache.delete(source); return; }
     if (event.watched == null && data.watched === true) { event.watched = true; $("#episode-poster-status").innerHTML = statusBadgeHtml(event) + watchedBadgeHtml(event); }
     event.facts = facts;
@@ -940,14 +940,16 @@ function stampTime(value) {
 function stampText(time) {
   return `${time.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })} · ${time.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
 }
-// The stamp only shows times the data itself changed; without one it hides.
+// The stamp shows freshness on each data set's own pull schedule: when
+// Marquee last pulled the title's details, and (for the In theaters shelf)
+// when the daily theater-list pull last ran.
 function setDetailUpdated(event) {
   const stamp = $("#episode-updated");
   const lines = [];
-  const changed = stampTime(event.changedAt);
-  if (changed) lines.push(`Updated ${stampText(changed)}`);
-  const listChanged = stampTime(event.listUpdatedAt);
-  if (listChanged) lines.push(`In theaters list updated ${stampText(listChanged)}`);
+  const updated = stampTime(event.updatedAt);
+  if (updated) lines.push(`Updated ${stampText(updated)}`);
+  const listUpdated = stampTime(event.listUpdatedAt);
+  if (listUpdated) lines.push(`In theaters list updated ${stampText(listUpdated)}`);
   stamp.innerHTML = lines.map(escape).join("<br>");
   stamp.hidden = !lines.length;
 }
