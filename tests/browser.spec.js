@@ -3558,3 +3558,79 @@ test("in theaters popup shows when the list was last pulled", async ({ page }) =
   await expect(stamp).toContainText("In theaters list updated");
   await expect(stamp).toContainText(/Updated [A-Z][a-z]{2} \d{1,2}, \d{4}/);
 });
+
+test("trailers play inside the details popup with fallbacks", async ({
+  page,
+}) => {
+  // CI must not depend on YouTube: stub the player API, block the player host,
+  // and record fallback navigations instead of opening real tabs.
+  await page.addInitScript(() => {
+    window.__opened = [];
+    window.open = (url) => {
+      window.__opened.push(String(url));
+      return null;
+    };
+  });
+  await page.route("https://www.youtube.com/iframe_api", (route) =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: `window.YT={Player:class{constructor(el,opts){const f=document.createElement("iframe");f.src=opts.host+"/embed/"+opts.videoId;el.appendChild(f);setTimeout(()=>{if(window.__trailerError)opts.events?.onError?.({data:101});else opts.events?.onReady?.({target:{playVideo(){}}});},0);}destroy(){}}};window.onYouTubeIframeAPIReady?.();`,
+    }),
+  );
+  await page.route(/youtube-nocookie\.com/, (route) => route.abort());
+  await login(page);
+  await view(page, "discover");
+  await page.getByPlaceholder("Search movies and shows").fill("orbit");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Details for Orbit Nine" })
+    .first()
+    .click();
+  const tile = page.locator("#episode-trailer");
+  const box = page.locator("#episode-trailer-player");
+  // Demo details supply the trailer key, so the tile switches to in-popup play.
+  await expect(tile).toHaveAttribute("aria-label", "Play trailer");
+  await expect(box).toBeHidden();
+  await tile.click();
+  await expect(box).toBeVisible();
+  await expect(box.locator("iframe")).toHaveAttribute(
+    "src",
+    "https://www.youtube-nocookie.com/embed/M7lc1UVf-VE",
+  );
+  await tile.click();
+  await expect(box).toBeHidden();
+  // Closing the popup tears the player down so audio cannot keep playing.
+  await tile.click();
+  await expect(box).toBeVisible();
+  await page.getByRole("button", { name: "Close episode details" }).click();
+  await expect(box).toBeHidden();
+  expect(await page.evaluate(() => window.__opened)).toEqual([]);
+  // Refused embed (owner-disabled, player error 101/150): open it on YouTube.
+  await page.evaluate(() => {
+    window.__trailerError = true;
+  });
+  await page
+    .getByRole("button", { name: "Details for Orbit Nine" })
+    .first()
+    .click();
+  await expect(tile).toHaveAttribute("aria-label", "Play trailer");
+  await tile.click();
+  await expect(box).toBeHidden();
+  expect(await page.evaluate(() => window.__opened)).toEqual([
+    "https://www.youtube.com/watch?v=M7lc1UVf-VE",
+  ]);
+  await page.getByRole("button", { name: "Close episode details" }).click();
+  // Setting off: the tile keeps its plain YouTube search-link behavior.
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator('[data-pref="trailers"]').uncheck();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await page
+    .getByRole("button", { name: "Details for Orbit Nine" })
+    .first()
+    .click();
+  await expect(tile).toHaveAttribute("aria-label", "Find trailer on YouTube");
+  await expect(tile).toHaveAttribute(
+    "href",
+    /youtube\.com\/results\?search_query=/,
+  );
+});

@@ -34,7 +34,7 @@ import {
   testService,
   serviceUrl,
 } from "./adapters.js";
-import { demoEvents, demoRequests, demoSearch, titles, demoFacts } from "./demo.js";
+import { demoEvents, demoRequests, demoSearch, titles, demoFacts, demoTrailer } from "./demo.js";
 import { validateRange } from "./model.js";
 import { compress } from "./compress.js";
 import { createSessions } from "./sessions.js";
@@ -135,7 +135,9 @@ app.use(compress());
 app.use((req, res, next) => {
   res.set({
     "Content-Security-Policy":
-      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+      // YouTube domains: the trailer embed lazy-loads the player API script and
+      // frames the privacy-enhanced player (click-to-play in title details).
+      "default-src 'self'; script-src 'self' https://www.youtube.com; style-src 'self'; img-src 'self'; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://www.youtube.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
@@ -740,6 +742,7 @@ app.get("/api/seerr/details/:type/:id", requireUser, async (req, res) => {
         "A discovery draws old friends into a story that changes their lives.",
       poster: "/art/north.svg",
       backdrop: "/art/north.svg",
+      trailer: demoTrailer,
       facts: demoFacts,
       updatedAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
     });
@@ -755,7 +758,7 @@ app.get("/api/seerr/details/:type/:id", requireUser, async (req, res) => {
   }
 });
 app.get("/api/library/:id/facts", requireUser, async (req, res) => {
-  if (demo) return res.json({ facts: demoFacts, updatedAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString() });
+  if (demo) return res.json({ facts: demoFacts, updatedAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(), trailer: demoTrailer });
   // Only items already shown on the user's shelf can be looked up.
   if (
     !req.user.state.allowedImages.has(req.params.id) ||
@@ -769,7 +772,7 @@ app.get("/api/library/:id/facts", requireUser, async (req, res) => {
     if (access.error) return res.json({ facts: null });
     const detail = await seerrDetails(tmdb.type, tmdb.id, access.id);
     const [marked] = await withWatched(req.user, [detail]);
-    res.json({ facts: detail.facts, updatedAt: detail.updatedAt, contentRating: detail.contentRating, network: tmdb.type === "tv" ? detail.network : null, mediaType: tmdb.type, mediaId: tmdb.id, watched: marked.watched, favoriteId: marked.favoriteId, favorite: marked.favorite });
+    res.json({ facts: detail.facts, updatedAt: detail.updatedAt, trailer: detail.trailer, contentRating: detail.contentRating, network: tmdb.type === "tv" ? detail.network : null, mediaType: tmdb.type, mediaId: tmdb.id, watched: marked.watched, favoriteId: marked.favoriteId, favorite: marked.favorite });
   } catch {
     res.json({ facts: null });
   }

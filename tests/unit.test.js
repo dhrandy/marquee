@@ -1,4 +1,4 @@
-import { serviceUrl, upstream } from "../src/adapters.js";
+import { serviceUrl, upstream, trailerKey } from "../src/adapters.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -11,6 +11,21 @@ import {
   normalizeSeerrRequests,
 } from "../src/model.js";
 const now = new Date("2026-10-07T12:00:00Z");
+test("trailerKey picks only a valid YouTube trailer", () => {
+  assert.equal(
+    trailerKey([
+      { type: "Teaser", site: "YouTube", key: "M7lc1UVf-VE" },
+      { type: "Trailer", site: "YouTube", key: "9qhL2_UxXM0" },
+    ]),
+    "9qhL2_UxXM0",
+  );
+  assert.equal(trailerKey([{ type: "Clip", site: "YouTube", key: "9qhL2_UxXM0" }]), null);
+  assert.equal(trailerKey([{ type: "Trailer", site: "Vimeo", key: "9qhL2_UxXM0" }]), null);
+  assert.equal(trailerKey([{ type: "Trailer", site: "YouTube", key: "bad key!" }]), null);
+  assert.equal(trailerKey([{ type: "Trailer", key: "9qhL2_UxXM0" }]), "9qhL2_UxXM0");
+  assert.equal(trailerKey(null), null);
+  assert.equal(trailerKey("9qhL2_UxXM0"), null);
+});
 test("TV states distinguish files, aired missing, and future episodes", () => {
   assert.equal(episodeStatus({ hasFile: true }, now), "available");
   assert.equal(episodeStatus({ airDateUtc: "2026-10-06" }, now), "missing");

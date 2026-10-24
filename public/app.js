@@ -32,6 +32,7 @@ const defaults = {
   popular: true, inTheaters: true,
   ratings: true,
   requestedBy: true,
+  trailers: true,
   libraryStats: true, kidsMoviesLibrary: "", kidsShowsLibrary: "",
   colorblind: false,
   jellyfinLink: true,
@@ -381,6 +382,7 @@ function buildSettings() {
     inTheaters: "In theaters (US)",
     ratings: "Show ratings",
     requestedBy: "Requested by in title details",
+    trailers: "YouTube trailers in title details",
     libraryStats: "Jellyfin library counts",
     colorblind: "Colorblind-friendly status colors",
     jellyfinLink: "Jellyfin shortcut",
@@ -400,6 +402,7 @@ function buildSettings() {
       state.prefs[el.dataset.pref] = el.checked;
       persist(); buildSectionOrder();
       if (el.dataset.pref === "requestedBy" && currentDetail) setDetailCertification(currentDetail);
+      if (el.dataset.pref === "trailers") { if (!el.checked) destroyTrailerPlayer(); if (currentDetail) setDetailTrailer(currentDetail); }
       if (el.dataset.pref === "colorblind")
         api("/api/accessibility-settings", {
           method: "POST",
@@ -889,6 +892,7 @@ async function loadMissingFacts(event) {
     const facts = data.facts;
     // Ignore the answer if another popup was opened in the meantime.
     if (request !== factsRequest || !$("#episode-detail").open || currentDetail !== event) return;
+    if (typeof data.trailer === "string" || data.trailer === null) { event.trailer = data.trailer; setDetailTrailer(event); }
     if (["movie", "tv"].includes(data.mediaType) && Number.isSafeInteger(data.mediaId)) { event.mediaType = data.mediaType; event.mediaId = data.mediaId; if (!event.favoriteId) Object.assign(event, { favoriteId: data.favoriteId, favorite: data.favorite }); setDetailSave(event); }
     if(data.watchKey) {event.watchKey=data.watchKey;setDetailStar(event);}
     if (data.network) { event.network = data.network; setDetailNetwork(event); }
@@ -974,8 +978,85 @@ function setDetailCertification(event) {
   $("#episode-subtitle").textContent = detailSubtitle.join(" · ");
   return detailSubtitle;
 }
+// In-popup trailer playback: the YouTube tile keeps its search-link href as
+// the fallback, and only intercepts the click when the title has an embeddable
+// trailer and the feature is on. The player API script lazy-loads on first use.
+let trailerPlayer = null;
+let trailerApiPromise = null;
+function loadTrailerApi() {
+  if (!trailerApiPromise)
+    trailerApiPromise = new Promise((resolve, reject) => {
+      window.onYouTubeIframeAPIReady = resolve;
+      const script = document.createElement("script");
+      script.src = "https://www.youtube.com/iframe_api";
+      script.onerror = () => {
+        trailerApiPromise = null;
+        reject(new Error("YouTube player unavailable"));
+      };
+      document.head.appendChild(script);
+    });
+  return trailerApiPromise;
+}
+function destroyTrailerPlayer() {
+  if (trailerPlayer) {
+    try { trailerPlayer.destroy(); } catch { /* player already gone */ }
+    trailerPlayer = null;
+  }
+  const box = $("#episode-trailer-player");
+  box.hidden = true;
+  box.replaceChildren();
+}
+function setDetailTrailer(event) {
+  const tile = $("#episode-trailer");
+  const playable = state.prefs.trailers && typeof event.trailer === "string";
+  const label = playable ? "Play trailer" : "Find trailer on YouTube";
+  tile.setAttribute("aria-label", label);
+  tile.title = label;
+  if (!playable) destroyTrailerPlayer();
+}
+async function toggleTrailerPlayer(event) {
+  if (trailerPlayer || !$("#episode-trailer-player").hidden) {
+    destroyTrailerPlayer();
+    return;
+  }
+  const key = event.trailer;
+  // No embed (script blocked) or a refused embed (owner-disabled): open the
+  // video on YouTube instead, the same escape hatch the search link gives.
+  const fallback = () =>
+    window.open(`https://www.youtube.com/watch?v=${key}`, "_blank", "noopener");
+  const box = $("#episode-trailer-player");
+  box.replaceChildren(document.createElement("div"));
+  box.hidden = false;
+  try {
+    await loadTrailerApi();
+  } catch {
+    destroyTrailerPlayer();
+    fallback();
+    return;
+  }
+  if (currentDetail !== event || !$("#episode-detail").open) {
+    destroyTrailerPlayer();
+    return;
+  }
+  trailerPlayer = new YT.Player(box.firstElementChild, {
+    host: "https://www.youtube-nocookie.com",
+    width: "100%",
+    height: "100%",
+    videoId: key,
+    playerVars: { rel: 0, origin: location.origin },
+    events: {
+      onReady: (e) => e.target.playVideo(),
+      onError: () => {
+        destroyTrailerPlayer();
+        fallback();
+      },
+    },
+  });
+}
 function showDetail(event) {
   currentDetail = event;
+  destroyTrailerPlayer();
+  setDetailTrailer(event);
   setDetailSave(event); setDetailStar(event);
   factsRequest++;
   renderDetailFacts(event.facts);
@@ -1114,6 +1195,12 @@ $("#episode-more").addEventListener("click", (e) => {
 $("#episode-close").addEventListener("click", () =>
   $("#episode-detail").close(),
 );
+$("#episode-trailer").addEventListener("click", (event) => {
+  if (!state.prefs.trailers || typeof currentDetail?.trailer !== "string") return;
+  event.preventDefault();
+  toggleTrailerPlayer(currentDetail);
+});
+$("#episode-detail").addEventListener("close", destroyTrailerPlayer);
 function renderCalendar() {
   const { start, end } = period();
   const events = visibleEvents();

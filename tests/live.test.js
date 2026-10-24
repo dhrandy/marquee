@@ -434,7 +434,7 @@ const service = http.createServer(async (req, res) => {
   }
   if (["/api/v1/movie/9002","/api/v1/tv/9003"].includes(url.pathname)) {
     if (req.headers["x-api-user"]) assert.equal(req.headers["x-api-user"], "4");
-    return res.end(JSON.stringify({title:"Fallback Film",name:"Sample Show",status:"Returning Series",firstAirDate:"2025-02-17",originalLanguage:"en"}));
+    return res.end(JSON.stringify({title:"Fallback Film",name:"Sample Show",status:"Returning Series",firstAirDate:"2025-02-17",originalLanguage:"en",relatedVideos:[{type:"Clip",site:"YouTube",key:"bQ5kbGTkYIY"}]}));
   }
   if (url.pathname === "/api/v1/movie/9001/ratingscombined") {
     assert.equal(req.headers["x-api-user"], "4");
@@ -447,6 +447,12 @@ const service = http.createServer(async (req, res) => {
     return res.end(
       JSON.stringify({
         mediaInfo:{status:2,requests:[{requestedBy:{id:1,displayName:"Alex Sample"}},{requestedBy:{id:1,displayName:"Alex Sample"}},{requestedBy:{id:2,username:"Morgan Example"}}]},title: "Requested Film",
+        relatedVideos: [
+          { type: "Teaser", site: "YouTube", key: "M7lc1UVf-VE" },
+          { type: "Clip", site: "YouTube", key: "bQ5kbGTkYIY" },
+          { type: "Trailer", site: "YouTube", key: "9qhL2_UxXM0" },
+          { type: "Trailer", site: "YouTube", key: "bad key!" },
+        ],
         status:"Released", originalLanguage:"en",
         productionCountries:[{iso_3166_1:"US",name:"United States"}],
         releases: {
@@ -1202,12 +1208,14 @@ try {
     assert.deepEqual(data.genres, ["Drama"]);
     assert.equal(data.network, "Sample Studio");
     assert.equal(data.backdrop, "/api/seerr/image?path=%2Fabc.jpg");
+    assert.equal(data.trailer, "9qhL2_UxXM0");
   });
   await test("optional movie ratings failure and TV ratings keep detail usable",async()=>{
     const cookie=(await signin("alice")).headers.get("set-cookie").split(";")[0];
     const get=async path=>{const response=await fetch(`${base}/api/seerr/details/${path}`,{headers:{Cookie:cookie}});assert.equal(response.status,200);return response.json();};
     const movie=await get("movie/9002");
     assert.equal(movie.title,"Fallback Film");assert.deepEqual(movie.facts.requestedBy,[]);
+    assert.equal(movie.trailer, null);
     assert.deepEqual(movie.facts.scores,{critics:null,audience:null,imdb:null,tmdb:null});
     const tv=await get("tv/9003");
     assert.deepEqual(tv.facts.scores,{critics:81,audience:72,imdb:null,tmdb:null});

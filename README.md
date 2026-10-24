@@ -39,7 +39,7 @@ Marquee runs from source on the official Node image; there is no published image
 - Seerr search, popular movies/shows and requests using your linked Seerr permissions and quotas. The Requests list can show everyone's requests to every account, or just yours.
 - Shared Sonarr/Radarr release calendar with month, week, day, agenda (default) and list views, Sunday-first, with release filters, cinema/home releases and a status legend.
 - Search also matches TV networks: pick a network button to browse its newest series premieres.
-- Detail popouts with cast, ratings, certifications, TV network and overview. Play/Resume opens Jellyfin, a YouTube button opens a trailer search, and any title in your library shows a Play in Jellyfin button. Seerr requester names show as Requested by when available.
+- Detail popouts with cast, ratings, certifications, TV network and overview. Play/Resume opens Jellyfin, and the YouTube button plays the trailer right in the popout (official YouTube embed in privacy-enhanced mode, hideable in Settings; titles without an embeddable trailer fall back to a YouTube search), and any title in your library shows a Play in Jellyfin button. Seerr requester names show as Requested by when available.
 - Small, Standard or Large posters per device. Shelf arrows on desktop; phones and tablets swipe.
 - Optional weather and five-day forecast (free Open-Meteo, no key), colorblind-friendly status colors, and display-settings sync across browsers.
 - Shelves refresh automatically in an open, visible tab and pause while you interact. Unchanged results leave cards and posters untouched.

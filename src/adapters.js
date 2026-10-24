@@ -536,6 +536,20 @@ export async function seerrDetails(type, id, userId) {
   detailsCache.set(key, { detail, fetchedAt: now, until: now + DETAILS_TTL });
   return { ...detail, updatedAt: new Date(now).toISOString() };
 }
+// Seerr hands back TMDB's related videos; the popup can only embed YouTube
+// trailers, so keep the first Trailer entry with a valid 11-character key.
+export function trailerKey(videos) {
+  if (!Array.isArray(videos)) return null;
+  const hit = videos.find(
+    (video) =>
+      video &&
+      video.type === "Trailer" &&
+      (!video.site || video.site === "YouTube") &&
+      typeof video.key === "string" &&
+      /^[A-Za-z0-9_-]{11}$/.test(video.key),
+  );
+  return hit ? hit.key : null;
+}
 async function fetchSeerrDetails(type, id, userId) {
   const headers = { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) };
   // Requester names come from an admin-key read so every account sees them; Seerr
@@ -576,6 +590,7 @@ async function fetchSeerrDetails(type, id, userId) {
     rating: normalizedRating(data.voteAverage, "TMDB", data.voteCount),
     poster: safeArt(data.posterPath),
     backdrop: safeArt(data.backdropPath) || safeArt(data.posterPath),
+    trailer: trailerKey(data.relatedVideos),
   };
 }
 

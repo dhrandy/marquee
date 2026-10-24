@@ -254,6 +254,11 @@ try {
         /frame-ancestors 'none'/,
         path,
       );
+      assert.match(
+        response.headers.get("content-security-policy"),
+        /frame-src https:\/\/www\.youtube-nocookie\.com https:\/\/www\.youtube\.com/,
+        path,
+      );
       assert.equal(
         response.headers.get("x-content-type-options"),
         "nosniff",

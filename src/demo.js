@@ -241,6 +241,8 @@ demoRequests.forEach((item, i) => {
   item.poster = demoRequestArt[i];
 });
 
+// Sample key from YouTube's embed docs; demo mode only, never a real lookup.
+export const demoTrailer = "M7lc1UVf-VE";
 export const demoFacts = {
   status: "Released",
   productionCountries: [{ code: "US", name: "United States" }],
