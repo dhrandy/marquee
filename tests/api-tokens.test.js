@@ -16,6 +16,11 @@ test("token route rules", () => {
   assert.equal(tokenAllowed("read", "GET", "/api/libraries/demo-movies"), false);
   assert.equal(tokenAllowed("read", "POST", "/api/seerr/request"), false);
   assert.equal(tokenAllowed("request", "POST", "/api/seerr/request"), true);
+  assert.equal(tokenAllowed("read", "DELETE", "/api/seerr/request/12"), false);
+  assert.equal(tokenAllowed("request", "DELETE", "/api/seerr/request/12"), true);
+  assert.equal(tokenAllowed("request", "DELETE", "/api/seerr/request"), false);
+  assert.equal(tokenAllowed("request", "DELETE", "/api/seerr/request/abc"), false);
+  assert.equal(tokenAllowed("request", "DELETE", "/api/seerr/request/1/extra"), false);
   for (const p of ["/api/display-preferences", "/api/section-order", "/api/weather-settings", "/api/accessibility-settings", "/api/notifications", "/api/tokens", "/api/login", "/api/logout", "/api/test-connection"]) {
     assert.equal(tokenAllowed("request", "GET", p), false, p);
     assert.equal(tokenAllowed("request", "POST", p), false, p);
@@ -90,6 +95,12 @@ test("token lifecycle on a demo server", async () => {
     const rq = await (await post("/api/tokens", { name: "Req", scope: "request", password: "x" }, c)).json();
     const ok = await fetch(base + "/api/seerr/request", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + rq.token }, body: JSON.stringify(req) });
     assert.equal(ok.status, 200);
+    // A read-only token cannot cancel; a request token cancels in demo mode.
+    assert.equal((await fetch(base + "/api/seerr/request/1", { method: "DELETE", headers: noOrigin })).status, 403);
+    const del = { method: "DELETE", headers: { Authorization: "Bearer " + rq.token } };
+    assert.equal((await fetch(base + "/api/seerr/request/1", del)).status, 200);
+    // A malformed id is not on the token allowlist, so it never reaches the route.
+    assert.equal((await fetch(base + "/api/seerr/request/abc", del)).status, 403);
     // Revoke.
     assert.equal((await fetch(base + "/api/tokens/" + made.id, { method: "DELETE", headers: { Origin: base, ...c } })).status, 200);
     assert.equal((await fetch(base + "/api/me", { headers: bearer })).status, 401);

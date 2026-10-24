@@ -28,6 +28,7 @@ import {
   seerrFranchise,
   seerrPersonCredits,
   seerrRequest,
+  seerrCancelRequest,
   seerrRequestOptions,
   seerrRequests,
   testService,
@@ -279,7 +280,7 @@ function cookie(res, value, maxAge) {
 
 const apiDocs = `Marquee API
 Authorization: Bearer <token>. A token acts as the Jellyfin user who made it and can read what that user sees.
-Read-only tokens: GET only. Request tokens may also POST /api/seerr/request.
+Read-only tokens: GET only. Request tokens may also POST /api/seerr/request and DELETE /api/seerr/request/:id.
 Limits: 120 requests per minute per token, 10 writes per minute.
 GET  /api/me                      account, request access
 GET  /api/recent                  recently added
@@ -297,6 +298,7 @@ GET  /api/image/:id, /api/calendar-image/:id, /api/jellyfin-version
 GET  /api/seerr/search?q=, /api/seerr/popular, /api/seerr/requests, /api/seerr/details/:type/:id
 GET  /api/seerr/request-options, /api/seerr/content-ratings
 POST /api/seerr/request           {"mediaType":"movie|tv","mediaId":123,"seasons":[1]} (request tokens)
+DELETE /api/seerr/request/:id      cancel one of your own requests still waiting for approval (request tokens)
 Settings, notifications, sign-in and token routes are not available to tokens.
 `;
 const notificationUser = user => demo ? { ...user, id: user.sid } : user;
@@ -1103,6 +1105,28 @@ app.post("/api/seerr/request", requireUser, async (req, res) => {
         ? "Seerr declined this request. Check your permissions, remaining quota, or whether it was already requested."
         : `Seerr could not complete the request. ${error.message}`,
     });
+  }
+});
+app.delete("/api/seerr/request/:id", requireUser, async (req, res) => {
+  const requestId = Number(req.params.id);
+  if (!Number.isSafeInteger(requestId) || requestId < 1 || requestId > 1e9)
+    return res.status(400).json({ error: "Invalid request." });
+  if (demo) return res.json({ ok: true });
+  try {
+    const access = await requestAccess(req.user);
+    if (access.error) return res.status(403).json({ error: access.error });
+    const cancelled = await seerrCancelRequest(requestId, access.id);
+    const type = cancelled?.type || cancelled?.media?.mediaType;
+    const tmdbId = Number(cancelled?.media?.tmdbId);
+    if (["movie", "tv"].includes(type) && Number.isSafeInteger(tmdbId) && tmdbId > 0)
+      seerrDetailsInvalidate(type, tmdbId);
+    res.json({ ok: true });
+  } catch (error) {
+    if (/Service answered HTTP (403|404)|^That request was not found/.test(error.message))
+      return res.status(404).json({ error: "That request was not found. You can only cancel your own requests." });
+    if (/^That request is no longer/.test(error.message))
+      return res.status(409).json({ error: error.message });
+    seerrFailure(res, error);
   }
 });
 app.get("/api/seerr/image", requireUser, async (req, res) => {

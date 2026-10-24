@@ -369,6 +369,7 @@ Optional. A Jellyfin admin turns on **Settings > API access > Allow API tokens**
 - Send `Authorization: Bearer <token>`. The token is shown once; only a hash is stored. Deleting `session-secret` from the settings folder ends every token.
 - Tokens cannot open Settings, notifications, sign-in or token routes. Revoking a token ends its Jellyfin login.
 - Reads cover what that user sees in Marquee: continue watching, next up, watch history, libraries and library browsing, favorites and watchlist, recently added, calendar, recommendations, leaving soon, weather and Seerr search/requests. Browsing a library is limited to its first 10,000 items. The full endpoint list is at `/api/docs` when signed in.
+- Request tokens can also cancel one of their own requests while it is still waiting for approval: `DELETE /api/seerr/request/<id>`. Someone else's request answers 404.
 - Limits: 120 requests per minute and 10 writes per minute per token.
 - Keep tokens in your assistant's secret store, never in chat or a file you share.
 

@@ -490,6 +490,23 @@ const service = http.createServer(async (req, res) => {
       profiles: [{ id: 5, name: "Any", extra: "x" }, { id: 6, name: "HD" }],
       rootFolders: [{ id: 1, path: "/movies", freeSpace: 100 }, { id: 2, path: "/other", freeSpace: 50 }],
     }));
+  if (/^\/api\/v1\/request\/\d+$/.test(url.pathname) && req.method === "GET") {
+    const id = Number(url.pathname.split("/").pop());
+    assert.equal(req.headers["x-api-key"], "seerr-mock");
+    if (id === 1)
+      return res.end(JSON.stringify({ id: 1, status: 1, type: "movie", requestedBy: { id: 4, displayName: "Sample viewer" }, media: { mediaType: "movie", tmdbId: 9001 } }));
+    if (id === 2)
+      return res.end(JSON.stringify({ id: 2, status: 1, type: "movie", requestedBy: { id: 6, displayName: "Another viewer" }, media: { mediaType: "movie", tmdbId: 9001 } }));
+    if (id === 3)
+      return res.end(JSON.stringify({ id: 3, status: 2, type: "movie", requestedBy: { id: 4, displayName: "Sample viewer" }, media: { mediaType: "movie", tmdbId: 9001 } }));
+    res.writeHead(404);
+    return res.end("{}");
+  }
+  if (/^\/api\/v1\/request\/\d+$/.test(url.pathname) && req.method === "DELETE") {
+    calls.push({ path: "seerr-request-delete", id: url.pathname.split("/").pop(), actor: req.headers["x-api-user"], apiKey: req.headers["x-api-key"] });
+    res.writeHead(204);
+    return res.end();
+  }
   if (url.pathname === "/api/v1/request" && req.method === "POST") {
     let body = "";
     for await (const chunk of req) body += chunk;
@@ -791,6 +808,23 @@ try {
       body: JSON.stringify({ mediaType: "person", mediaId: 7 }),
     });
     assert.equal(badType.status, 400);
+    // Cancel your own request: pending and yours only, acting as the user.
+    const cancel = (c, id) =>
+      fetch(`${base}/api/seerr/request/${id}`, {
+        method: "DELETE",
+        headers: { Origin: base, Cookie: c },
+      });
+    assert.equal((await cancel(cookie, 1)).status, 200);
+    const removed = calls.filter((c) => c.path === "seerr-request-delete");
+    assert.equal(removed.length, 1);
+    assert.equal(removed[0].id, "1");
+    assert.equal(removed[0].actor, "4");
+    assert.equal(removed[0].apiKey, "seerr-mock");
+    assert.equal((await cancel(cookie, 2)).status, 404);
+    assert.equal((await cancel(cookie, 3)).status, 409);
+    assert.equal((await cancel(cookie, 9)).status, 404);
+    assert.equal((await cancel(cookie, "abc")).status, 400);
+    assert.equal(calls.filter((c) => c.path === "seerr-request-delete").length, 1);
     const post = (body) =>
       fetch(`${base}/api/test-connection`, {
         method: "POST",

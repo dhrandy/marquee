@@ -38,7 +38,10 @@ export const readRoutes = [
   /^\/api\/seerr\/details\/[a-z]+\/\d+$/,
   /^\/api\/docs$/,
 ];
-export const writeRoutes = [{ method: "POST", path: /^\/api\/seerr\/request$/ }];
+export const writeRoutes = [
+  { method: "POST", path: /^\/api\/seerr\/request$/ },
+  { method: "DELETE", path: /^\/api\/seerr\/request\/\d+$/ },
+];
 
 export function tokenAllowed(scope, method, pathname) {
   if (method === "GET" || method === "HEAD") return readRoutes.some(r => r.test(pathname));

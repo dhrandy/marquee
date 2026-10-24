@@ -657,6 +657,26 @@ export async function seerrRequest(mediaType, mediaId, userId, options = {}) {
   });
 }
 
+// Cancels one of the acting user's own requests that is still waiting for
+// approval. The record is read as the user first, so a request Seerr will not
+// show this account (missing or someone else's) fails before anything is
+// touched, and the owner field keeps "cancel mine" honest even for accounts
+// allowed to see everyone's requests.
+export async function seerrCancelRequest(requestId, userId) {
+  const headers = {
+    "X-Api-Key": process.env.SEERR_API_KEY,
+    "X-API-User": String(userId),
+  };
+  const request = await upstream(process.env.SEERR_URL, `/api/v1/request/${requestId}`, { headers });
+  const owner = Number(request?.requestedBy?.id);
+  if (!Number.isSafeInteger(owner) || owner !== userId)
+    throw new Error("That request was not found. You can only cancel your own requests.");
+  if (Number(request.status) !== 1)
+    throw new Error("That request is no longer waiting for approval, so it cannot be cancelled.");
+  await upstream(process.env.SEERR_URL, `/api/v1/request/${requestId}`, { method: "DELETE", headers });
+  return request;
+}
+
 // What the request dialog needs: seasons for a series (with what Seerr already
 // knows about each) and, for users allowed to change them, the quality
 // profiles and root folders of the default Seerr server.

@@ -124,7 +124,9 @@ export function demoEvents(start, end) {
         "Lantern Pictures",
         n === 6 ? "available" : "unreleased",
       );
-    if ([8, 15, 22].includes(n)) {
+    // Premieres land at most 10 days apart, so the 14-day demo agenda always
+    // has one in view regardless of the day of the month the tests run.
+    if ([8, 15, 22, 29].includes(n)) {
       add("movie", "Orbit Nine", "Meridian Studios", "cinema");
       add(
         "tv",
