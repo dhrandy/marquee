@@ -3623,6 +3623,12 @@ test("trailers play inside the details popup with fallbacks", async ({
   // reopening builds a fresh player: captions default off again there too.
   await tile.click();
   await expect(box).toBeVisible();
+  // Wait for the fresh player's ready (its play call) before firing a state
+  // event: the stub delivers onReady on a timer, and state changes only come
+  // after ready.
+  await expect
+    .poll(() => page.evaluate(() => window.__captionCalls.length))
+    .toBe(3);
   await page.evaluate(() => { window.__setTrack({ languageCode: "en" }); window.__fireState(3); });
   await expect
     .poll(() => page.evaluate(() => window.__captionCalls))
