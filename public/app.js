@@ -117,6 +117,17 @@ async function api(path, options = {}) {
   if (!response.ok) throw new Error(data.error || "Could not load data.");
   return data;
 }
+async function runStaggered(tasks, gapMs = 75) {
+  // Start each load a beat after the last, in display order: the top of the
+  // page reaches the server first, but every request is on its way quickly.
+  const running = [];
+  for (const task of tasks) {
+    running.push(task());
+    if (running.length < tasks.length)
+      await new Promise((resolve) => setTimeout(resolve, gapMs));
+  }
+  await Promise.all(running);
+}
 function report(error) {
   $("#global-error").textContent = error.message;
   $("#global-error").hidden = false;
@@ -434,6 +445,7 @@ function buildSettings() {
 }
 async function enter(name) {
   resetAccountState();
+  delete document.body.dataset.entryLoaded;
   state.key = `marquee:${name}:preferences`;
   try {
     const saved = JSON.parse(localStorage.getItem(state.key) || "null");
@@ -467,8 +479,19 @@ async function enter(name) {
   }
   pageInitialized = false;
   sectionOrder = [...defaultSectionOrder];
+  // Section order, settings and identity are independent reads: start them
+  // together so the shelves below start round trips sooner.
+  const orderPromise = api("/api/section-order").catch((error) => {
+    $("#section-order-status").textContent = error.message;
+    return {};
+  });
+  const settingsPromise = Promise.all([
+    api("/api/weather-settings"),
+    api("/api/accessibility-settings"),
+  ]);
+  const mePromise = api("/api/me");
   try {
-    let { order } = await api("/api/section-order");
+    let { order } = await orderPromise;
     if (Array.isArray(order) && [9, 10, 11, 12].includes(order.length)) { order = [...order]; for (const key of ["leavingSoon", "recommendations"]) if (!order.includes(key)) order.splice(order.indexOf("popular"), 0, key); }
     if (Array.isArray(order) && order.length === 11 && !order.includes("inTheaters")) { order = [...order]; order.splice(order.indexOf("popular") + 1, 0, "inTheaters"); }
     if (Array.isArray(order) && !order.includes("watchNext") && order.includes("continueWatching")) { order = [...order]; order.splice(order.indexOf("continueWatching")+1, 0, "watchNext"); }
@@ -476,10 +499,7 @@ async function enter(name) {
     if (Array.isArray(order) && !order.includes("topUnwatched") && order.includes("watchLater")) { order = [...order]; order.splice(order.indexOf("watchLater") + 1, 0, "topUnwatched"); }
     if (Array.isArray(order) && order.length === defaultSectionOrder.length && new Set(order).size === order.length && order.every(key => defaultSectionOrder.includes(key))) sectionOrder = order;
   } catch (error) { $("#section-order-status").textContent = error.message; }
-  const [weatherSettings, accessibilitySettings] = await Promise.all([
-    api("/api/weather-settings"),
-    api("/api/accessibility-settings"),
-  ]);
+  const [weatherSettings, accessibilitySettings] = await settingsPromise;
   Object.assign(state.prefs, weatherSettings, accessibilitySettings);
   // Reading account settings on entry must not write them back and race another device.
   const { weather, weatherCity, weatherUnits, colorblind, ...entryPrefs } = state.prefs;
@@ -493,7 +513,7 @@ async function enter(name) {
   loadJellyfinVersion();
   buildSettings();
   applyPrefs();
-  const me = await api("/api/me");
+  const me = await mePromise;
   const jellyfin = $("#jellyfin-home");
   jellyfin.removeAttribute("href");
   if (me.jellyfinWebUrl) {
@@ -518,16 +538,25 @@ async function enter(name) {
     tv: me.canRequest,
   };
   $("#display-name-settings").hidden = !me.isAdmin;
-  await Promise.all([
-    loadRecent(),
-    loadCalendar(),
-    loadRequests(),
-    loadRecommendations(),
-    loadPopular(),
-    loadInTheaters(),
-    loadPersonalShelves(),
-    loadLibraryStats(),
-  ]);
+  buildPersonalShelfSections();
+  // Load shelves in the viewer's section order, a few at a time, so the top of
+  // the page fills in first instead of everything arriving at once.
+  const shelfLoaders = {
+    recent: () => loadRecent(),
+    calendar: () => loadCalendar(),
+    popular: () => loadPopular(),
+    inTheaters: () => loadInTheaters(),
+    recommendations: () => loadRecommendations(),
+    requests: () => loadRequests(),
+  };
+  for (const key of Object.keys(personalLabels)) {
+    if (["watchlist", "watchLater"].includes(key) || state.prefs[key])
+      shelfLoaders[key] = () => loadPersonalShelf(key);
+  }
+  const entryLoads = sectionOrder.map((key) => shelfLoaders[key]).filter(Boolean);
+  entryLoads.push(() => loadLibraryStats());
+  await runStaggered(entryLoads);
+  document.body.dataset.entryLoaded = "1";
 }
 function fixBrokenPosters() {
   // One guarded listener per img: a failed poster swaps in the placeholder but
@@ -983,6 +1012,7 @@ function setDetailCertification(event) {
 // trailer and the feature is on. The player API script lazy-loads on first use.
 let trailerPlayer = null;
 let trailerApiPromise = null;
+let trailerCaptionWatch = null;
 function loadTrailerApi() {
   if (!trailerApiPromise)
     trailerApiPromise = new Promise((resolve, reject) => {
@@ -998,6 +1028,10 @@ function loadTrailerApi() {
   return trailerApiPromise;
 }
 function destroyTrailerPlayer() {
+  if (trailerCaptionWatch) {
+    clearInterval(trailerCaptionWatch);
+    trailerCaptionWatch = null;
+  }
   if (trailerPlayer) {
     try { trailerPlayer.destroy(); } catch { /* player already gone */ }
     trailerPlayer = null;
@@ -1038,6 +1072,22 @@ async function toggleTrailerPlayer(event) {
     destroyTrailerPlayer();
     return;
   }
+  // Captions default off, like the TV app; the viewer can still turn them on
+  // with the player's CC button. YouTube attaches the viewer's caption
+  // preference after onReady, sometimes without a state-change event, so watch
+  // the first seconds and clear the first caption track that appears -
+  // exactly once, then stop for good: a viewer's own CC choice is never undone.
+  const clearCaptions = (target) => {
+    try { target.setOption?.("captions", "track", {}); } catch { /* older API */ }
+    try { if (target.getOption?.("captions", "track")?.languageCode) target.unloadModule?.("captions"); } catch { /* older API */ }
+  };
+  let captionsTurnedOff = false;
+  const turnCaptionsOffOnce = (target) => {
+    if (captionsTurnedOff) return;
+    let track = null;
+    try { track = target.getOption?.("captions", "track"); } catch { /* older API */ }
+    if (track?.languageCode) { captionsTurnedOff = true; clearCaptions(target); }
+  };
   trailerPlayer = new YT.Player(box.firstElementChild, {
     host: "https://www.youtube-nocookie.com",
     width: "100%",
@@ -1045,7 +1095,23 @@ async function toggleTrailerPlayer(event) {
     videoId: key,
     playerVars: { rel: 0, origin: location.origin },
     events: {
-      onReady: (e) => e.target.playVideo(),
+      onReady: (e) => {
+        turnCaptionsOffOnce(e.target);
+        e.target.playVideo();
+        if (trailerCaptionWatch) clearInterval(trailerCaptionWatch);
+        const started = Date.now();
+        trailerCaptionWatch = setInterval(() => {
+          if (trailerPlayer !== e.target || captionsTurnedOff || Date.now() - started > 10000) {
+            clearInterval(trailerCaptionWatch);
+            trailerCaptionWatch = null;
+            return;
+          }
+          turnCaptionsOffOnce(e.target);
+        }, 400);
+      },
+      onStateChange: (e) => {
+        if (e.data === 1 /* PLAYING */ || e.data === 3 /* BUFFERING */) turnCaptionsOffOnce(e.target);
+      },
       onError: () => {
         destroyTrailerPlayer();
         fallback();
@@ -2094,12 +2160,15 @@ document.addEventListener("error", (event) => {
 
 const personalLabels = { leavingSoon: "Leaving soon", watchlist: "Favorites", watchLater: "Watchlist", topUnwatched: "Top unwatched movies", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up" };
 let personalLoad = 0;
-async function loadPersonalShelves() {
-  const seq = ++personalLoad;
+function buildPersonalShelfSections() {
   if (!$("#watchlist-section")) {
     $("#personal-shelves").innerHTML = Object.entries(personalLabels).map(([key, label]) => `<section id="${key}-section" class="personal-section" hidden><div class="section-heading"><div><span class="eyebrow">JUST FOR YOU</span><h2>${label}</h2>${key === "watchNext" ? `<p>Unwatched picks already on your server</p><div class="watch-next-filters" aria-label="What to watch next filters"><button type="button" data-watch-next-filter="watchNextAnimation"></button><button type="button" data-watch-next-filter="watchNextType"></button></div>` : key === "leavingSoon" ? `<p class="departure-note">Scheduled by Maintainerr. Dates show eligibility, not guaranteed removal.</p>` : ""}</div><button class="personal-collapse" data-collapse="${key}" aria-controls="${key}-content" aria-expanded="true" aria-label="Collapse ${label}" title="Collapse ${label}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><div id="${key}-content" class="poster-row"></div></section>`).join("");
   }
   applyPrefs();
+}
+async function loadPersonalShelves() {
+  const seq = ++personalLoad;
+  buildPersonalShelfSections();
   await Promise.all(Object.keys(personalLabels).map(key => {
     if (!["watchlist","watchLater"].includes(key) && !state.prefs[key]) return;
     return loadPersonalShelf(key, { seq });

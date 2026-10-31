@@ -13,6 +13,8 @@ async function login(page) {
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();
+  // Entry loads cascade in section order; white-box steps need them settled.
+  await page.waitForSelector("body[data-entry-loaded]");
   await expect(
     page.getByRole("heading", { name: "Recently added" }),
   ).toBeVisible();
@@ -1983,6 +1985,9 @@ for (const width of [1440, 393]) {
     expect(await page.evaluate(() => document.querySelector("#calendar-section").getBoundingClientRect().top < document.querySelector("#search-section").getBoundingClientRect().top)).toBe(true);
     await page.screenshot({ path: `${shots}/marquee-order-dashboard-${width}.png` });
     await page.reload();
+    // Staggered entry loads must settle before the white-box steps below,
+    // or a late shelf load can overwrite the injected watchlist state.
+    await page.waitForSelector("body[data-entry-loaded]");
     await expect(page.locator("#recent .poster-card")).toHaveCount(6);
     expect(await page.evaluate(() => document.querySelector("#calendar-section").getBoundingClientRect().top < document.querySelector("#search-section").getBoundingClientRect().top)).toBe(true);
     await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -3566,6 +3571,7 @@ test("trailers play inside the details popup with fallbacks", async ({
   // and record fallback navigations instead of opening real tabs.
   await page.addInitScript(() => {
     window.__opened = [];
+    window.__captionCalls = [];
     window.open = (url) => {
       window.__opened.push(String(url));
       return null;
@@ -3574,7 +3580,7 @@ test("trailers play inside the details popup with fallbacks", async ({
   await page.route("https://www.youtube.com/iframe_api", (route) =>
     route.fulfill({
       contentType: "application/javascript",
-      body: `window.YT={Player:class{constructor(el,opts){const f=document.createElement("iframe");f.src=opts.host+"/embed/"+opts.videoId;el.appendChild(f);setTimeout(()=>{if(window.__trailerError)opts.events?.onError?.({data:101});else opts.events?.onReady?.({target:{playVideo(){}}});},0);}destroy(){}}};window.onYouTubeIframeAPIReady?.();`,
+      body: `window.YT={Player:class{constructor(el,opts){const f=document.createElement("iframe");f.src=opts.host+"/embed/"+opts.videoId;el.appendChild(f);let track=null;const t={playVideo(){window.__captionCalls.push("play")},setOption(a,b){window.__captionCalls.push("setOption:"+a+"/"+b);if(a==="captions"&&b==="track")track=null;},getOption(a,b){return a==="captions"&&b==="track"?track:null},unloadModule(m){window.__captionCalls.push("unloadModule:"+m)}};window.__setTrack=(tr)=>{track=tr};window.__fireState=(d)=>opts.events?.onStateChange?.({data:d,target:t});setTimeout(()=>{if(window.__trailerError)opts.events?.onError?.({data:101});else{opts.events?.onReady?.({target:t});}},0);}destroy(){}}};window.onYouTubeIframeAPIReady?.();`,
     }),
   );
   await page.route(/youtube-nocookie\.com/, (route) => route.abort());
@@ -3597,11 +3603,30 @@ test("trailers play inside the details popup with fallbacks", async ({
     "src",
     "https://www.youtube-nocookie.com/embed/M7lc1UVf-VE",
   );
+  // Captions default off, like the TV app: no track at ready, nothing to clear.
+  expect(await page.evaluate(() => window.__captionCalls)).toEqual(["play"]);
+  // YouTube attaches the viewer's caption preference late; the first track to
+  // appear is cleared, exactly once.
+  await page.evaluate(() => { window.__setTrack({ languageCode: "en" }); window.__fireState(3); });
+  await expect
+    .poll(() => page.evaluate(() => window.__captionCalls))
+    .toEqual(["play", "setOption:captions/track"]);
+  // Later playback events do not clear again...
+  await page.evaluate(() => window.__fireState(1));
+  // ...and a viewer turning captions back on keeps them: no watcher remains.
+  await page.evaluate(() => { window.__setTrack({ languageCode: "en" }); window.__fireState(1); });
+  await page.waitForTimeout(600);
+  expect(await page.evaluate(() => window.__captionCalls)).toEqual(["play", "setOption:captions/track"]);
   await tile.click();
   await expect(box).toBeHidden();
-  // Closing the popup tears the player down so audio cannot keep playing.
+  // Closing the popup tears the player down so audio cannot keep playing, and
+  // reopening builds a fresh player: captions default off again there too.
   await tile.click();
   await expect(box).toBeVisible();
+  await page.evaluate(() => { window.__setTrack({ languageCode: "en" }); window.__fireState(3); });
+  await expect
+    .poll(() => page.evaluate(() => window.__captionCalls))
+    .toEqual(["play", "setOption:captions/track", "play", "setOption:captions/track"]);
   await page.getByRole("button", { name: "Close episode details" }).click();
   await expect(box).toBeHidden();
   expect(await page.evaluate(() => window.__opened)).toEqual([]);
@@ -3633,4 +3658,47 @@ test("trailers play inside the details popup with fallbacks", async ({
     "href",
     /youtube\.com\/results\?search_query=/,
   );
+});
+
+test("home shelves load in section order, a few at a time", async ({ page }) => {
+  const shelfPaths = new Set([
+    "/api/recent",
+    "/api/calendar",
+    "/api/seerr/popular",
+    "/api/in-theaters",
+    "/api/recommendations",
+    "/api/watchlist",
+    "/api/watch-later",
+    "/api/personal/topUnwatched",
+    "/api/leaving-soon",
+    "/api/seerr/requests",
+  ]);
+  const starts = [];
+  let inFlight = 0, maxInFlight = 0;
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (!shelfPaths.has(path)) return route.continue();
+    starts.push(path);
+    inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    inFlight--;
+    return route.continue();
+  });
+  await login(page);
+  await expect.poll(() => starts.length, { timeout: 10000 }).toBe(shelfPaths.size);
+  // The top of the page loads first; every shelf request starts in the
+  // viewer's section order, never more than three at once.
+  expect(starts).toEqual([
+    "/api/recent",
+    "/api/calendar",
+    "/api/seerr/popular",
+    "/api/in-theaters",
+    "/api/recommendations",
+    "/api/watchlist",
+    "/api/watch-later",
+    "/api/personal/topUnwatched",
+    "/api/leaving-soon",
+    "/api/seerr/requests",
+  ]);
+  expect(maxInFlight).toBeLessThanOrEqual(4);
 });

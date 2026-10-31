@@ -152,6 +152,7 @@ h2 {
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 180ms ease;
 }
 .poster-card time {
   display: block;
@@ -1056,11 +1057,13 @@ dialog select { min-width: 0; max-width: 100%; }
 #popular-collapse svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
 #popular-collapse[aria-expanded="false"] svg { transform: rotate(-90deg); }
 #popular-collapse:hover { color: var(--ink); }
-.popular-row .poster-art { overflow: hidden; }
-.popular-row .poster-art img { transition: transform 180ms ease; }
-@media(hover:hover) { .ranked-poster:hover .poster-art img { transform: scale(1.045); } .ranked-poster:hover h3 { color: var(--purple); } }
+/* Every poster card zooms slightly on hover, like the Top 10 shelves. */
+@media(hover:hover) {
+  .poster-card:hover .poster-art img, .ranked-poster:hover .poster-art img, .result-card:hover .poster-art img { transform: scale(1.045); }
+  .ranked-poster:hover h3 { color: var(--purple); }
+}
 .ranked-poster:focus-within .poster-art { outline: 2px solid var(--purple); outline-offset: -2px; }
-@media(prefers-reduced-motion:reduce) { .popular-row .poster-art img { transition: none; } }
+@media(prefers-reduced-motion:reduce) { .poster-art img { transition: none; } }
 
 .poster-art[data-detail-id] { cursor: pointer; }
 .poster-art[data-detail-id]:focus-visible { outline: 2px solid var(--purple); outline-offset: -2px; }
