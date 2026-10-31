@@ -7,6 +7,7 @@ import http from "node:http";
 import { spawn } from "node:child_process";
 
 const calls = [];
+const imageHits = [];
 const authDeviceIds = [];
 let maliciousArtwork = null;
 let watchLaterImageTags = false;
@@ -18,6 +19,11 @@ const service = http.createServer(async (req, res) => {
     authorization: req.headers.authorization,
     apiKey: req.headers["x-api-key"],
   });
+  if (/^\/Items\/[^/]+\/Images\/(Primary|Backdrop)$/.test(url.pathname)) {
+    imageHits.push(url.pathname);
+    res.setHeader("Content-Type", "image/jpeg");
+    return res.end(Buffer.from([1, 2, 3, 4]));
+  }
   res.setHeader("Content-Type", "application/json");
   const accountPath = new URL(req.url, "http://localhost").pathname;
   if (/^\/Users\/[^/]+$/.test(accountPath) && accountPath !== "/Users/AuthenticateByName") {
@@ -218,6 +224,8 @@ const service = http.createServer(async (req, res) => {
             ParentIndexNumber: user === "missing-season" ? undefined : 2,
             IndexNumber: 1,
             DateCreated: "2026-10-07T10:00:00Z",
+            ImageTags: { Primary: "tag-episode-1" },
+            SeriesPrimaryImageTag: "tag-series-1",
           },
           {
             Id: "episode-2",
@@ -652,6 +660,73 @@ try {
     assert.equal(
       (await fetch(`${base}/api/me`, { headers: { Cookie: cookie2 } })).status,
       200,
+    );
+  });
+  await test("jellyfin poster proxy caches tagged artwork immutably and revalidates without an upstream fetch", async () => {
+    const cookie = (await signin("alice")).headers.get("set-cookie").split(";")[0];
+    const me = await (
+      await fetch(`${base}/api/me`, { headers: { Cookie: cookie } })
+    ).json();
+    assert.match(me.imageKey, /^[a-f0-9]{32}$/);
+    const recent = await (
+      await fetch(`${base}/api/recent`, { headers: { Cookie: cookie } })
+    ).json();
+    assert.equal(recent.items[0].image, true);
+    assert.equal(recent.items[0].imageTag, "tag-series-1");
+    const url = `${base}/api/image/series-alice?k=${me.imageKey}&v=tag-series-1`;
+    const tagged = await fetch(url, { headers: { Cookie: cookie } });
+    assert.equal(tagged.status, 200);
+    assert.equal(tagged.headers.get("content-type"), "image/jpeg");
+    assert.equal(
+      tagged.headers.get("cache-control"),
+      "private, max-age=31536000, immutable",
+    );
+    assert.equal(tagged.headers.get("etag"), '"series-alice-Primary-tag-series-1"');
+    await tagged.arrayBuffer();
+    const hits = imageHits.length;
+    const revalidate = await fetch(url, {
+      headers: { Cookie: cookie, "If-None-Match": '"series-alice-Primary-tag-series-1"' },
+    });
+    assert.equal(revalidate.status, 304);
+    assert.equal(
+      revalidate.headers.get("cache-control"),
+      "private, max-age=31536000, immutable",
+    );
+    assert.equal(imageHits.length, hits);
+    // A tag the session was never told about (stale or invented) gets bytes
+    // with no-store, never immutable caching.
+    const staleTag = await fetch(`${base}/api/image/series-alice?k=${me.imageKey}&v=zzz999`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(staleTag.status, 200);
+    assert.equal(staleTag.headers.get("cache-control"), "no-store");
+    assert.notEqual(staleTag.headers.get("etag"), '"series-alice-Primary-zzz999"');
+    await staleTag.arrayBuffer();
+    const untagged = await fetch(`${base}/api/image/series-alice?k=${me.imageKey}`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(untagged.status, 200);
+    assert.equal(untagged.headers.get("cache-control"), "no-store");
+    await untagged.arrayBuffer();
+    // No per-login key, no artwork - even with a valid tag.
+    assert.equal(
+      (await fetch(`${base}/api/image/series-alice?v=tag-series-1`, { headers: { Cookie: cookie } })).status,
+      404,
+    );
+    // Another account cannot reuse this account's exact cached URL.
+    const cookie2 = (await signin("bob")).headers.get("set-cookie").split(";")[0];
+    const me2 = await (
+      await fetch(`${base}/api/me`, { headers: { Cookie: cookie2 } })
+    ).json();
+    assert.notEqual(me2.imageKey, me.imageKey);
+    assert.equal((await fetch(url, { headers: { Cookie: cookie2 } })).status, 404);
+    assert.equal(
+      (
+        await fetch(`${base}/api/image/series-alice?k=${me2.imageKey}&v=tag-series-1`, {
+          headers: { Cookie: cookie2 },
+        })
+      ).status,
+      404,
     );
   });
   await test("seerr search, request allowlist, image proxy, and requests list", async () => {
@@ -1362,7 +1437,9 @@ try {
     // the saved snapshot's image flag is refreshed from Jellyfin on every load.
     assert.equal((await get("/api/watch-later",alice)).items[0].image,false);
     watchLaterImageTags=true;
-    assert.equal((await get("/api/watch-later",alice)).items[0].image,true);
+    const watchLaterWithArt = (await get("/api/watch-later",alice)).items[0];
+    assert.equal(watchLaterWithArt.image,true);
+    assert.equal(watchLaterWithArt.imageTag,"tag");
     watchLaterImageTags=false;
     assert.equal((await post("/api/watch-later",bob,{key:catalog.watchKey,saved:true})).status,404);
     assert.equal((await post("/api/watch-later",alice,{key:"tmdb:movie:99999999",saved:true})).status,404);

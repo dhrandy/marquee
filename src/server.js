@@ -203,7 +203,7 @@ async function requireUser(req, res, next) {
       entry.count++; tokenWrites.set(tokenRow.id, entry);
       if (entry.count > 10) return res.status(429).json({ error: "Too many requests for this token. Try again in a minute." });
     }
-    if (!tokenState.has(tokenRow.id)) tokenState.set(tokenRow.id, { allowedImages: new Set(), calendarImages: undefined, exp: Infinity });
+    if (!tokenState.has(tokenRow.id)) tokenState.set(tokenRow.id, { allowedImages: new Set(), imageTags: new Map(), imageKey: sessions.imageKey("token:" + tokenRow.id), calendarImages: undefined, exp: Infinity });
     req.user = { ...found.user, state: tokenState.get(tokenRow.id) };
     req.tokenRow = tokenRow;
   } else {
@@ -579,6 +579,7 @@ app.get("/api/me", requireUser, async (req, res) => {
     jellyfinWebUrl: demo
       ? null
       : safeWebUrl(process.env.JELLYFIN_WEB_URL || process.env.JELLYFIN_URL),
+    imageKey: req.user.state.imageKey,
   });
 });
 // Account-scoped personal data uses verified Jellyfin IDs, never supplied user IDs.
@@ -611,12 +612,12 @@ app.get("/api/watch-later", requireUser, async (req,res) => {
   const libraryIds=items.map(item=>item.libraryId).filter(Boolean);
   const accessible=new Map();
   if(libraryIds.length && !demo) {
-    try {const params=new URLSearchParams({UserId:req.user.id,Ids:libraryIds.join(","),Recursive:"true",Fields:"ProviderIds",Limit:String(libraryIds.length)});const data=await upstream(process.env.JELLYFIN_URL,`/Items?${params}`,{headers:jellyfinHeaders(req.user.token,req.user.deviceId)});for(const item of data.Items || [])if(["Movie","Series"].includes(item.Type) && !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual")accessible.set(item.Id,Boolean(item.ImageTags?.Primary));}
+    try {const params=new URLSearchParams({UserId:req.user.id,Ids:libraryIds.join(","),Recursive:"true",Fields:"ProviderIds",Limit:String(libraryIds.length)});const data=await upstream(process.env.JELLYFIN_URL,`/Items?${params}`,{headers:jellyfinHeaders(req.user.token,req.user.deviceId)});for(const item of data.Items || [])if(["Movie","Series"].includes(item.Type) && !item.IsMissing && !item.IsPlaceHolder && item.LocationType !== "Virtual")accessible.set(item.Id,item.ImageTags?.Primary || false);}
     catch {return res.status(502).json({error:"Could not verify saved Jellyfin titles. Your Watchlist is unchanged."});}
   }
   // The saved snapshot's image flag froze when the title was starred; posters
   // arrive and change on Jellyfin afterwards, so take the flag fresh on every load.
-  const visible=items.filter(item=>demo || accessible.has(item.libraryId)).map(item=>{if(demo)return item;req.user.state.allowedImages.add(item.libraryId);return {...item,image:accessible.get(item.libraryId) === true,link:jellyfinLink(item.libraryId)};});
+  const visible=items.filter(item=>demo || accessible.has(item.libraryId)).map(item=>{if(demo)return item;{const tag=accessible.get(item.libraryId);allowImage(req.user.state, item.libraryId, tag || null);return {...item,image:tag !== false,imageTag:tag || null,link:jellyfinLink(item.libraryId)};}});
   res.json({items:visible});
 });
 app.post("/api/watch-later", requireUser, async (req,res) => {
@@ -634,7 +635,7 @@ app.post("/api/watch-later", requireUser, async (req,res) => {
 app.get("/api/watchlist", requireUser, async (req, res) => {
   try {
     const items = demo ? savedSettings.demoFavorites?.[personalKey(req.user)] || [] : await favoriteItems(req.user);
-    for (const item of items) { req.user.state.allowedImages.add(item.id); if (item.backdropId) req.user.state.allowedImages.add(item.backdropId); }
+    for (const item of items) { allowImage(req.user.state, item.id, item.imageTag); if (item.backdropId) allowImage(req.user.state, item.backdropId, item.backdropTag); }
     res.json({ items });
   } catch { res.status(502).json({ error: "Could not load your Jellyfin favorites." }); }
 });
@@ -946,7 +947,7 @@ app.get("/api/leaving-soon", requireUser, async (req, res) => {
   if (!demo && !process.env.MAINTAINERR_URL) return res.status(503).json({ error: "Set MAINTAINERR_URL on the server to see scheduled departures." });
   try {
     const items = demo ? titles.slice(0, 3).map((item, index) => ({ ...item, favoriteId: item.id, favorite: false, leavingAt: new Date(Date.now() + (index + 2) * 86400000).toISOString() })) : await leavingSoon(req.user);
-    for (const item of items) req.user.state.allowedImages.add(item.id);
+    for (const item of items) allowImage(req.user.state, item.id, item.imageTag);
     res.json({ items });
   } catch { res.status(502).json({ error: "Could not verify Maintainerr departures. Check its URL, version, collections and exclusions." }); }
 });
@@ -1172,9 +1173,9 @@ app.get("/api/history", requireUser, async (req, res) => {
   try {
     const items = demo ? titles.slice(0, limit).map((item, index) => ({ ...item, itemId: item.id, watched: true, watchedScope: item.type === "tv" ? "episode" : "movie", lastPlayed: `2026-10-${String(19 - index).padStart(2, "0")}T21:14:00Z` })) : await watchHistory(req.user, limit);
     for (const item of items) {
-      req.user.state.allowedImages.add(item.id);
-      if (item.itemId) req.user.state.allowedImages.add(item.itemId);
-      if (item.backdropId) req.user.state.allowedImages.add(item.backdropId);
+      allowImage(req.user.state, item.id, item.imageTag);
+      if (item.itemId) allowImage(req.user.state, item.itemId);
+      if (item.backdropId) allowImage(req.user.state, item.backdropId, item.backdropTag);
     }
     res.json({ items });
   } catch { res.status(502).json({ error: "Your watch history could not be loaded from Jellyfin." }); }
@@ -1224,8 +1225,8 @@ app.get("/api/recent", requireUser, async (req, res) => {
   try {
     const items = demo ? titles : await recentItems(req.user);
     for (const item of items) {
-      if (item.image) req.user.state.allowedImages.add(item.id);
-      if (item.backdropId) req.user.state.allowedImages.add(item.backdropId);
+      if (item.image) allowImage(req.user.state, item.id, item.imageTag);
+      if (item.backdropId) allowImage(req.user.state, item.backdropId, item.backdropTag);
     }
     res.json({ items });
   } catch (error) {
@@ -1237,14 +1238,42 @@ app.get("/api/recent", requireUser, async (req, res) => {
     res.status(502).json({ error: `Recently added could not be loaded from Jellyfin. ${error.message}` });
   }
 });
+// Shelf routes register the artwork they handed out: the id may be fetched,
+// and the tag this session currently knows proves a tagged URL is fresh enough
+// for immutable browser caching.
+function allowImage(state, id, tag) {
+  if (!id) return;
+  state.allowedImages.add(id);
+  if (typeof tag === "string" && tag) {
+    if (state.imageTags.size >= 2000 && !state.imageTags.has(id))
+      state.imageTags.delete(state.imageTags.keys().next().value);
+    state.imageTags.set(id, tag);
+  }
+}
 app.get("/api/image/:id", requireUser, async (req, res) => {
   if (
     !req.user.state.allowedImages.has(req.params.id) ||
-    !/^[a-zA-Z0-9-]+$/.test(req.params.id)
+    !/^[a-zA-Z0-9-]+$/.test(req.params.id) ||
+    req.query.k !== req.user.state.imageKey
   )
     return res.sendStatus(404);
   const type = req.query.type || "Primary";
   if (!["Primary", "Backdrop"].includes(type)) return res.sendStatus(400);
+  // Jellyfin's image tag changes when the artwork changes, so a tagged URL is
+  // immutable: the browser may keep it (as Jellyfin's own clients do), and a
+  // matching revalidation answers 304 without an upstream fetch.
+  const tag =
+    typeof req.query.v === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(req.query.v)
+      ? req.query.v
+      : null;
+  const known = req.user.state.imageTags.get(req.params.id) || null;
+  const fresh = tag && known === tag;
+  const etag = fresh ? `"${req.params.id}-${type}-${tag}"` : null;
+  if (etag && req.headers["if-none-match"] === etag)
+    return res
+      .set("Cache-Control", "private, max-age=31536000, immutable")
+      .set("ETag", etag)
+      .sendStatus(304);
   try {
     const response = await fetch(
       `${process.env.JELLYFIN_URL.replace(/\/$/, "")}/Items/${req.params.id}/Images/${type}?maxWidth=${type === "Backdrop" ? 900 : 420}&quality=85`,
@@ -1262,6 +1291,11 @@ app.get("/api/image/:id", requireUser, async (req, res) => {
     )
       return res.sendStatus(502);
     const bytes = await imageBytes(response, 5 * 1024 * 1024);
+    if (etag)
+      res.set("Cache-Control", "private, max-age=31536000, immutable").set(
+        "ETag",
+        etag,
+      );
     res.type(response.headers.get("content-type")).send(bytes);
   } catch {
     res.sendStatus(502);

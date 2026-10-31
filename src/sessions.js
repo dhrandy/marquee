@@ -64,6 +64,15 @@ export function createSessions({ dataDir, ttl }) {
   // Per-session image allow lists. These only cache what the shelf and
   // calendar last showed, so losing them on restart is harmless.
   const state = new Map();
+  // Artwork URLs carry this per-login key so one account's browser-cached
+  // posters are useless to a different account on the same browser. Derived,
+  // not stored: stable across restarts, gone on sign-out, no personal data.
+  const imageKey = (seed) =>
+    crypto
+      .createHmac("sha256", key)
+      .update("image-key:" + seed)
+      .digest("hex")
+      .slice(0, 32);
 
   function seal(user, sid = crypto.randomBytes(16).toString("hex"), expires = Date.now() + ttl) {
     const payload = JSON.stringify({ sid, exp: expires, user });
@@ -93,7 +102,7 @@ export function createSessions({ dataDir, ttl }) {
     if (!data) return null;
     let extra = state.get(data.sid);
     if (!extra) {
-      extra = { allowedImages: new Set(), calendarImages: undefined, exp: data.exp };
+      extra = { allowedImages: new Set(), imageTags: new Map(), imageKey: imageKey(data.sid), calendarImages: undefined, exp: data.exp };
       state.set(data.sid, extra);
     }
     return { sid: data.sid, ...data.user, expires: data.exp, state: extra };
@@ -110,5 +119,5 @@ export function createSessions({ dataDir, ttl }) {
     for (const [sid, data] of state) if (data.exp < Date.now()) state.delete(sid);
     if (changed) { try { persist(); } catch { /* Logged; in-memory revocations remain authoritative. */ } }
   }
-  return { seal, fromRequest, revoke, sweep };
+  return { seal, fromRequest, revoke, sweep, imageKey };
 }

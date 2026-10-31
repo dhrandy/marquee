@@ -257,9 +257,11 @@ export async function recentItems(user) {
         link: jellyfinLink(item.Id),
         type: item.Type === "Episode" ? "tv" : "movie",
         image: Boolean(item.ImageTags?.Primary || item.SeriesId),
+        imageTag: item.SeriesId ? item.SeriesPrimaryImageTag || null : item.ImageTags?.Primary || null,
         backdropId:
           item.ParentBackdropItemId ||
           (item.BackdropImageTags?.length ? item.Id : item.SeriesId || null),
+        backdropTag: item.ParentBackdropItemId ? item.ParentBackdropImageTags?.[0] || null : item.BackdropImageTags?.length ? item.BackdropImageTags[0] : null,
         art: "placeholder",
         tagline: "",
         rating: normalizedRating(item.CommunityRating, "Jellyfin community"),
@@ -948,8 +950,9 @@ export async function personalItems(user, kind) {
       id: item.SeriesId || item.Id, tmdbId: item.Type !== "Episode" && Number.isSafeInteger(Number(item.ProviderIds?.Tmdb)) && Number(item.ProviderIds?.Tmdb)>0 ? Number(item.ProviderIds.Tmdb) : null, favoriteId: item.SeriesId || item.Id, favorite: item.Type === "Episode" ? null : item.UserData?.IsFavorite === true, title: item.SeriesName || item.Name,
       watched: typeof item.UserData?.Played === "boolean" ? item.UserData.Played : null, watchedScope: item.Type === "Episode" ? "episode" : item.Type === "Series" ? "series" : item.Type === "Season" ? "season" : "movie",
       subtitle: personalItemSubtitle(item),
-      image: Boolean(item.ImageTags?.Primary || item.SeriesId), art: "placeholder", link: jellyfinLink(item.Id),
+      image: Boolean(item.ImageTags?.Primary || item.SeriesId), imageTag: item.SeriesId ? item.SeriesPrimaryImageTag || null : item.ImageTags?.Primary || null, art: "placeholder", link: jellyfinLink(item.Id),
       backdropId: item.ParentBackdropItemId || (item.BackdropImageTags?.length ? item.Id : item.SeriesId || null),
+      backdropTag: item.ParentBackdropItemId ? item.ParentBackdropImageTags?.[0] || null : item.BackdropImageTags?.length ? item.BackdropImageTags[0] : null,
       progress, remaining: item.RunTimeTicks > ticks ? Math.ceil((item.RunTimeTicks - ticks) / 600000000) : null,
       detail: { episodeAirDate: item.Type === "Episode" ? item.PremiereDate || null : null, title: item.SeriesName || item.Name, subtitle: personalItemSubtitle(item), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), mediaType: item.Type === "Movie" ? "movie" : "tv", network: uniqueCreditNames((item.Studios || []).map(studio => studio.Name)), year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
     };
@@ -1040,9 +1043,10 @@ export async function favoriteItems(user) {
     if (page.length < 100 || (Number.isFinite(data.TotalRecordCount) && start >= data.TotalRecordCount)) break;
   }
   return items.slice(0, 500).filter(item => ["Movie", "Series"].includes(item.Type) && item.UserData?.IsFavorite === true).map(item => ({
-    id: item.Id, tmdbId: Number.isSafeInteger(Number(item.ProviderIds?.Tmdb)) && Number(item.ProviderIds?.Tmdb)>0 ? Number(item.ProviderIds.Tmdb) : null, favoriteId: item.Id, favorite: true, title: item.Name, subtitle: personalItemSubtitle(item), image: Boolean(item.ImageTags?.Primary), art: "placeholder", link: jellyfinLink(item.Id),
+    id: item.Id, tmdbId: Number.isSafeInteger(Number(item.ProviderIds?.Tmdb)) && Number(item.ProviderIds?.Tmdb)>0 ? Number(item.ProviderIds.Tmdb) : null, favoriteId: item.Id, favorite: true, title: item.Name, subtitle: personalItemSubtitle(item), image: Boolean(item.ImageTags?.Primary), imageTag: item.ImageTags?.Primary || null, art: "placeholder", link: jellyfinLink(item.Id),
     watched: typeof item.UserData?.Played === "boolean" ? item.UserData.Played : null, watchedScope: item.Type === "Series" ? "series" : "movie",
     backdropId: item.BackdropImageTags?.length ? item.Id : null,
+    backdropTag: item.BackdropImageTags?.length ? item.BackdropImageTags[0] : null,
     detail: { title: item.Name, subtitle: item.Type === "Series" ? "TV series" : "Movie", year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], cast: topCast(item.People, true), contentRating: normalizedContentRating(item.OfficialRating), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
   }));
 }
@@ -1058,8 +1062,9 @@ export async function watchHistory(user, limit = 50) {
     title: item.SeriesName || item.Name, subtitle: personalItemSubtitle(item),
     watched: true, watchedScope: item.Type === "Episode" ? "episode" : "movie",
     lastPlayed: typeof item.UserData?.LastPlayedDate === "string" ? item.UserData.LastPlayedDate : null,
-    image: Boolean(item.ImageTags?.Primary || item.SeriesId), art: "placeholder", link: jellyfinLink(item.Id),
+    image: Boolean(item.ImageTags?.Primary || item.SeriesId), imageTag: item.SeriesId ? item.SeriesPrimaryImageTag || null : item.ImageTags?.Primary || null, art: "placeholder", link: jellyfinLink(item.Id),
     backdropId: item.ParentBackdropItemId || (item.BackdropImageTags?.length ? item.Id : item.SeriesId || null),
+    backdropTag: item.ParentBackdropItemId ? item.ParentBackdropImageTags?.[0] || null : item.BackdropImageTags?.length ? item.BackdropImageTags[0] : null,
     detail: { episodeAirDate: item.Type === "Episode" ? item.PremiereDate || null : null, title: item.SeriesName || item.Name, subtitle: personalItemSubtitle(item), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), mediaType: item.Type === "Movie" ? "movie" : "tv", network: uniqueCreditNames((item.Studios || []).map(studio => studio.Name)), year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], contentRating: normalizedContentRating(item.OfficialRating), cast: topCast(item.People, true), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
   }));
 }
@@ -1099,8 +1104,9 @@ export async function libraryItems(user, libraryId, options = {}) {
     watched: typeof item.UserData?.Played === "boolean" ? item.UserData.Played : null, watchedScope: item.Type === "Series" ? "series" : "movie",
     added: typeof item.DateCreated === "string" ? item.DateCreated : null,
     lastPlayed: typeof item.UserData?.LastPlayedDate === "string" ? item.UserData.LastPlayedDate : null,
-    image: Boolean(item.ImageTags?.Primary), art: "placeholder", link: jellyfinLink(item.Id),
+    image: Boolean(item.ImageTags?.Primary), imageTag: item.ImageTags?.Primary || null, art: "placeholder", link: jellyfinLink(item.Id),
     backdropId: item.BackdropImageTags?.length ? item.Id : null,
+    backdropTag: item.BackdropImageTags?.length ? item.BackdropImageTags[0] : null,
     detail: { title: item.Name, subtitle: item.Type === "Series" ? "TV series" : "Movie", year: String(item.ProductionYear || ""), overview: item.Overview || "", genres: item.Genres || [], cast: topCast(item.People, true), contentRating: normalizedContentRating(item.OfficialRating), rating: normalizedRating(item.CommunityRating, "Jellyfin community"), runtime: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null },
   }));
   return { library, total: Number.isSafeInteger(data.TotalRecordCount) ? data.TotalRecordCount : null, start, items };
