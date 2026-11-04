@@ -1153,7 +1153,7 @@ function showDetail(event) {
     Number.isSafeInteger(event.mediaId) &&
     event.mediaId > 0 &&
     state.requestAccess[event.mediaType] &&
-    !actionLabel
+    (!actionLabel || event.availability === 4)
   );
   requestButton.disabled = false;
   delete requestButton.dataset.request;
@@ -1445,7 +1445,9 @@ async function loadWeather() {
 function resultCardHtml(r, includeContentRating = false) {
   const shelf = !includeContentRating;
   const label = mediaActionLabel(r);
-  const action = label
+  // A partially available series can still be missing seasons or episodes, so
+  // it keeps its request button; the dialog lists only the missing seasons.
+  const action = label && r.availability !== 4
     ? ""
     : state.requestAccess[r.mediaType]
       ? `<button class="request-btn${shelf ? " poster-request" : ""}"${shelf ? ` aria-label="Request ${escape(r.title)}" title="Request ${escape(r.title)}"` : ""} data-request data-media-type="${r.mediaType}" data-media-id="${r.id}" data-title="${escape(r.title)}">${shelf ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>' : "Request"}</button>`
@@ -2094,6 +2096,14 @@ async function requestFromButton(event) {
       }),
     });
     const requestedState = { availability: result.status === 1 ? 2 : 3, requested: true };
+    // Swap any badge the card already carries (a partial series keeps its
+    // request button, so it can already show "Partially available").
+    const setCardState = (card) => {
+      const art = card.querySelector(".poster-art");
+      art.querySelector(".poster-status")?.remove();
+      art.insertAdjacentHTML("beforeend", statusBadgeHtml(requestedState));
+      card.dataset.availability = String(requestedState.availability);
+    };
     if (button.id === "episode-request") {
       button.hidden = true;
       delete button.dataset.request;
@@ -2105,14 +2115,12 @@ async function requestFromButton(event) {
           other.dataset.mediaId === button.dataset.mediaId &&
           other.dataset.mediaType === button.dataset.mediaType
         ) {
-          other.closest(".result-card").querySelector(".poster-art").insertAdjacentHTML("beforeend", statusBadgeHtml(requestedState));
-          other.closest(".result-card").dataset.availability = String(requestedState.availability);
+          setCardState(other.closest(".result-card"));
           other.remove();
         }
       }
     } else {
-      button.closest(".result-card").querySelector(".poster-art").insertAdjacentHTML("beforeend", statusBadgeHtml(requestedState));
-      button.closest(".result-card").dataset.availability = String(requestedState.availability);
+      setCardState(button.closest(".result-card"));
       button.remove();
     }
     loadRequests();

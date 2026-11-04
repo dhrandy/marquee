@@ -617,7 +617,9 @@ test("Seerr request buttons reflect movie/TV access and escape denial text", asy
   await page.getByPlaceholder("Search movies and shows").fill("o");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator("#search-results .request-btn")).toHaveCount(1);
-  await expect(page.locator("#search-results .request-unavailable")).toHaveCount(0);
+  // The partially available show is a TV title, so it explains the denial instead of hiding.
+  await expect(page.locator("#search-results .request-unavailable")).toHaveCount(1);
+  await expect(page.locator("#search-results .request-unavailable")).toHaveText("TV requests are not permitted by Seerr.");
   await page.evaluate(() => renderSearch([{ id: 444, mediaType: "tv", title: "New show", availability: 1 }]));
   await expect(page.locator("#search-results .request-unavailable")).toHaveText("TV requests are not permitted by Seerr.");
 });
@@ -1400,7 +1402,7 @@ for (const width of [1440, 393, 320, 280]) {
     await page.setViewportSize({ width, height: 900 });
     await login(page);
     for (const mediaType of ["movie", "tv"]) {
-      for (const [availability, requested, label] of [[2, false, "Pending"], [3, false, "Processing"], [4, false, "Partially available"], [5, false, "In your library"], [null, true, "Requested"]]) {
+      for (const [availability, requested, label] of [[2, false, "Pending"], [3, false, "Processing"], [5, false, "In your library"], [null, true, "Requested"]]) {
         await page.evaluate(({ mediaType, availability, requested }) => {
           const item = { id: 42, mediaId: 42, mediaType, availability, requested, title: "Fictional Processing Film", subtitle: "Movie", poster: "north" };
           document.querySelector("#search-results").innerHTML = resultCardHtml(item, true);
@@ -1422,6 +1424,17 @@ for (const width of [1440, 393, 320, 280]) {
     await page.evaluate(() => showDetail({ mediaType: "movie", mediaId: 42, title: "New film", availability: 1, requested: false }));
     await expect(page.locator("#episode-request")).toBeVisible();
     await expect(page.locator("#episode-poster-status .poster-status")).toHaveCount(0);
+    await page.locator("#episode-close").click();
+    // A partially available series keeps its status badge but offers Request again.
+    await page.evaluate(() => {
+      const item = { id: 42, mediaId: 42, mediaType: "tv", availability: 4, requested: false, title: "Fictional Partial Series", subtitle: "TV", poster: "north" };
+      document.querySelector("#search-results").innerHTML = resultCardHtml(item, true);
+      showDetail({ ...item, poster: "/art/north.svg" });
+    });
+    await expect(page.locator("#search-results .poster-status")).toHaveAttribute("aria-label", "Partially available");
+    await expect(page.locator("#search-results [data-request]")).toHaveCount(1);
+    await expect(page.locator("#episode-request")).toBeVisible();
+    await expect(page.locator("#episode-poster-status .poster-status")).toHaveAttribute("aria-label", "Partially available");
   });
 }
 
@@ -1628,6 +1641,32 @@ for (const width of [1440, 393]) {
     await page.locator("#settings").screenshot({ path: `${shots}/marquee-settings-user-${width}.png` });
   });
 }
+
+test("a partially available series can be requested for its missing seasons", async ({ page }) => {
+  await login(page);
+  await view(page, "discover");
+  await page.getByPlaceholder("Search movies and shows").fill("after hours");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  const card = page.locator("#search-results .result-card").first();
+  await expect(card.locator("h3")).toHaveText("After Hours");
+  await expect(card.locator(".poster-status")).toHaveAttribute("aria-label", "Partially available");
+  let body = null;
+  await page.route("**/api/seerr/request", async (route) => {
+    body = route.request().postDataJSON();
+    await route.continue();
+  });
+  await card.getByRole("button", { name: "Request", exact: true }).click();
+  const dialog = page.locator("dialog#request-dialog[open]");
+  // Season 1 is already in the library and stays locked; the missing seasons come pre-checked.
+  await expect(dialog.locator('input[data-season="1"]')).toBeDisabled();
+  await expect(dialog.locator(".season-row").filter({ hasText: "Season 1" })).toContainText("Available");
+  await expect(dialog.locator('input[data-season="2"]')).toBeChecked();
+  await expect(dialog.locator('input[data-season="3"]')).toBeChecked();
+  await dialog.locator('input[data-season="3"]').uncheck();
+  await dialog.locator("#request-submit").click();
+  await expect.poll(() => body).toEqual({ mediaType: "tv", mediaId: 104, seasons: [2] });
+  await expect(card.locator(".poster-status")).toHaveAttribute("aria-label", "Processing");
+});
 
 test("request dialog still lets you request when the options cannot load", async ({ page }) => {
   await login(page);
