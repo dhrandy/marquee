@@ -215,26 +215,33 @@ export async function recentItems(user) {
           Limit: "0",
           EnableTotalRecordCount: "true",
         });
-        try {
-          const season = await upstream(process.env.JELLYFIN_URL, `/Items?${params}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
-          count = season.TotalRecordCount;
-          const details = await upstream(process.env.JELLYFIN_URL, `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(item.SeasonId)}`, { headers: jellyfinHeaders(user.token, user.deviceId) });
+        const seasonPath = `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(item.SeasonId)}`;
+        // The episode count and the season details are independent reads:
+        // fetch them together instead of one after the other.
+        const [seasonResult, detailsResult] = await Promise.allSettled([
+          upstream(process.env.JELLYFIN_URL, `/Items?${params}`, { headers: jellyfinHeaders(user.token, user.deviceId) }),
+          upstream(process.env.JELLYFIN_URL, seasonPath, { headers: jellyfinHeaders(user.token, user.deviceId) }),
+        ]);
+        // Optional episode counts must not blank the entire shelf on a transient failure.
+        for (const result of [seasonResult, detailsResult])
+          if (result.status === "rejected" && /HTTP (401|403)/.test(result.reason.message)) throw result.reason;
+        let details = null;
+        if (seasonResult.status === "fulfilled") count = seasonResult.value.TotalRecordCount;
+        if (detailsResult.status === "fulfilled") {
+          details = detailsResult.value;
           played = typeof details.UserData?.Played === "boolean" ? details.UserData.Played : null;
-        } catch (error) {
-          // Optional episode counts must not blank the entire shelf on a transient failure.
-          if (/HTTP (401|403)/.test(error.message)) throw error;
         }
         if (seasonNumber === null) {
-          try {
-            const details = await upstream(
-              process.env.JELLYFIN_URL,
-              `/Users/${encodeURIComponent(user.id)}/Items/${encodeURIComponent(item.SeasonId)}`,
-              { headers: jellyfinHeaders(user.token, user.deviceId) },
-            );
-            if (Number.isInteger(details.IndexNumber))
-              seasonNumber = details.IndexNumber;
-          } catch {
-            /* Missing metadata is unknown, never silently season zero. */
+          // The details read above is the same lookup, so reuse it first.
+          if (details && Number.isInteger(details.IndexNumber)) seasonNumber = details.IndexNumber;
+          else if (!details) {
+            try {
+              const retry = await upstream(process.env.JELLYFIN_URL, seasonPath, { headers: jellyfinHeaders(user.token, user.deviceId) });
+              if (Number.isInteger(retry.IndexNumber))
+                seasonNumber = retry.IndexNumber;
+            } catch {
+              /* Missing metadata is unknown, never silently season zero. */
+            }
           }
         }
       }

@@ -303,11 +303,12 @@ const service = http.createServer(async (req, res) => {
   if (url.pathname === "/api/v1/user")
     return res.end(
       JSON.stringify({
-        pageInfo: { results: 3 },
+        pageInfo: { results: 4 },
         results: [
           { id: 4, jellyfinUserId: "alice", permissions: 32 | 16384 },
           { id: 5, jellyfinUserId: "bob", permissions: 262144 },
           { id: 6, jellyfinUserId: "tvonly", permissions: 524288 },
+          { id: 9, jellyfinUserId: "cache-checker", permissions: 262144 },
         ],
       }),
     );
@@ -1095,6 +1096,64 @@ try {
     assert.deepEqual(await result.json(), { ok: true });
     const statusCall = calls.find((c) => c.path === "/api/v3/system/status");
     assert.equal(statusCall.apiKey, "mock-key");
+  });
+  await test("identity read reuses the short permission cache across page loads", async () => {
+    const cookie = (await signin("cache-checker")).headers
+      .get("set-cookie")
+      .split(";")[0];
+    const identityCalls = () =>
+      calls.filter(
+        (c) =>
+          c.path === "/api/v1/user" ||
+          /^\/api\/v1\/user\/\d+\/quota$/.test(c.path),
+      ).length;
+    const before = identityCalls();
+    const first = await fetch(`${base}/api/me`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(first.status, 200);
+    const me = await first.json();
+    assert.equal(me.name, "cache-checker");
+    assert.equal(me.canRequest, true);
+    assert.equal(me.requestAccess.movie, true);
+    assert.equal(me.requestAccess.tv, false);
+    const afterFirst = identityCalls();
+    const second = await fetch(`${base}/api/me`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(second.status, 200);
+    // First read: one Seerr user-list lookup plus its quota read. The repeat
+    // within the cache window adds none, so page loads stop paying for it.
+    assert.equal(afterFirst - before, 2);
+    assert.equal(identityCalls() - afterFirst, 0);
+  });
+  await test("HTML points at versioned assets and code files cache immutably", async () => {
+    const page = await fetch(`${base}/`);
+    assert.equal(page.status, 200);
+    assert.equal(
+      page.headers.get("cache-control"),
+      "public, max-age=0, must-revalidate",
+    );
+    const html = await page.text();
+    assert.match(html, /\/app\.js\?v=[0-9A-Za-z.%-]+/);
+    assert.match(html, /\/style\.css\?v=[0-9A-Za-z.%-]+/);
+    const etag = page.headers.get("etag");
+    assert.ok(etag);
+    const revalidate = await fetch(`${base}/`, {
+      headers: { "If-None-Match": etag },
+    });
+    assert.equal(revalidate.status, 304);
+    for (const path of ["/app.js", "/app.js?v=0.0.0-test", "/style.css"]) {
+      const asset = await fetch(`${base}${path}`);
+      assert.equal(asset.status, 200);
+      assert.equal(
+        asset.headers.get("cache-control"),
+        "public, max-age=31536000, immutable",
+      );
+    }
+    // Artwork and icons keep their short cache; API answers stay uncacheable.
+    const art = await fetch(`${base}/art/placeholder.svg`);
+    assert.equal(art.headers.get("cache-control"), "public, max-age=300");
   });
   await test("recent season number falls back to Jellyfin season metadata, with episode title", async () => {
     const login = await signin("missing-season");

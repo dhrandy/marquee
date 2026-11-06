@@ -118,16 +118,30 @@ async function api(path, options = {}) {
   if (!response.ok) throw new Error(data.error || "Could not load data.");
   return data;
 }
-async function runStaggered(tasks, gapMs = 75) {
-  // Start each load a beat after the last, in display order: the top of the
-  // page reaches the server first, but every request is on its way quickly.
-  const running = [];
-  for (const task of tasks) {
-    running.push(task());
-    if (running.length < tasks.length)
+async function runStaggered(tasks, gapMs = 30, maxInFlight = 3) {
+  // Start each load a short beat after the last, in display order, so the
+  // top of the page reaches the server first. Later shelves start as soon as
+  // an earlier one has landed instead of waiting out a long fixed stagger -
+  // a few at a time, so the bottom of the page no longer sits a full second
+  // behind the top.
+  const running = new Set();
+  const all = [];
+  for (const [index, task] of tasks.entries()) {
+    let waited = false;
+    while (running.size >= maxInFlight) {
+      waited = true;
+      await Promise.race(running);
+    }
+    const done = task();
+    done.catch(() => {}); // Promise.all below still observes the outcome.
+    all.push(done);
+    let tracked;
+    tracked = done.catch(() => {}).finally(() => running.delete(tracked));
+    running.add(tracked);
+    if (!waited && index < tasks.length - 1)
       await new Promise((resolve) => setTimeout(resolve, gapMs));
   }
-  await Promise.all(running);
+  await Promise.all(all);
 }
 // Jellyfin's image tag changes when the artwork changes, so tag the proxy URL
 // and the server lets the browser cache it instead of re-downloading posters.
@@ -2140,7 +2154,18 @@ $("#popular-section").addEventListener("click", requestFromButton);
 $("#inTheaters-section").addEventListener("click", requestFromButton);
 $("#recommendations-section").addEventListener("click", requestFromButton);
 (async () => {
-  const config = await api("/api/config");
+  // Config and identity are independent reads: start both together so a
+  // signed-in viewer's shelves begin one round trip sooner. The identity
+  // probe is a plain fetch on purpose: before sign-in it usually answers
+  // 401, and api() would treat that as an account change and fail the
+  // config read racing alongside it.
+  const configPromise = api("/api/config");
+  const mePromise = fetch("/api/me").then((response) => {
+    if (!response.ok) throw new Error("Not signed in.");
+    return response.json();
+  });
+  mePromise.catch(() => {}); // Awaited below; avoid an unhandled rejection if config fails first.
+  const config = await configPromise;
   state.demo = config.demo;
   setDisplayName(config.name);
   $("#demo-badge").hidden = !config.demo;
@@ -2150,7 +2175,7 @@ $("#recommendations-section").addEventListener("click", requestFromButton);
     $("#login-note").textContent =
       "Demo mode: invented titles and artwork. No server connection.";
   try {
-    const user = await api("/api/me");
+    const user = await mePromise;
     await enter(user.name, user);
   } catch {
     $("#login").hidden = false;

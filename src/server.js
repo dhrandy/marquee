@@ -8,6 +8,7 @@ import { proxyTrust, allowedOrigin } from "./security.js";
 import crypto from "node:crypto";
 import path from "node:path";
 import fs from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import {
@@ -106,6 +107,24 @@ function validWeather(value) {
 }
 const app = express();
 const root = path.dirname(fileURLToPath(import.meta.url));
+// The page's code and styles only change with a release, so the HTML points
+// at them with the package version and browsers can keep them indefinitely.
+const packageVersion = (() => {
+  try {
+    const pkg = JSON.parse(readFileSync(path.join(root, "..", "package.json"), "utf8"));
+    return String(pkg.version || "").slice(0, 40);
+  } catch {
+    return "";
+  }
+})();
+let indexHtml = readFileSync(path.join(root, "..", "public", "index.html"), "utf8");
+if (packageVersion) {
+  const version = encodeURIComponent(packageVersion);
+  indexHtml = indexHtml
+    .replace('href="/style.css"', `href="/style.css?v=${version}"`)
+    .replace('src="/app.js"', `src="/app.js?v=${version}"`);
+}
+const indexEtag = `W/"${crypto.createHash("sha256").update(indexHtml).digest("hex").slice(0, 32)}"`;
 const demo = process.env.DEMO_MODE === "true";
 const secure = process.env.COOKIE_SECURE !== "false";
 const attempts = new Map();
@@ -570,7 +589,9 @@ app.post("/api/accessibility-settings", requireUser, async (req, res) => {
   }
 });
 app.get("/api/me", requireUser, async (req, res) => {
-  const access = await requestAccess(req.user);
+  // This gates every shelf on the page; reuse the same short-lived
+  // permission lookup search uses instead of two fresh Seerr reads per load.
+  const access = await cachedAccess(req.user);
   res.json({
     name: req.user.name,
     isAdmin: req.user.isAdmin === true,
@@ -1518,14 +1539,27 @@ app.use(
     index: false,
   }),
 );
+app.get(["/", "/index.html"], (req, res) => {
+  // The HTML always revalidates so a new release is picked up on the next
+  // visit; its versioned asset URLs make that enough to refresh everything.
+  res.set("Cache-Control", "public, max-age=0, must-revalidate");
+  res.set("ETag", indexEtag);
+  if (req.headers["if-none-match"] === indexEtag) return res.sendStatus(304);
+  res.type("html").send(indexHtml);
+});
 app.use(
   express.static(path.join(root, "..", "public"), {
     etag: true,
     maxAge: 0,
+    index: false,
     setHeaders(res, file) {
       // Posters and icons rarely change, so let browsers reuse them for 5 minutes.
       if (/[\\/](art|icons)[\\/]/.test(file))
         res.setHeader("Cache-Control", "public, max-age=300");
+      // Versioned by the HTML above: a restart with new code changes the URL,
+      // so the current app.js/style.css are safe to cache for a year.
+      else if (/[\\/](app\.js|style\.css)$/.test(file))
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     },
   }),
 );
