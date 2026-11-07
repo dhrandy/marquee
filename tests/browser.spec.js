@@ -1805,7 +1805,7 @@ for (const width of [1440, 834, 393, 320, 280]) {
     await expect(page.locator("#weather-content")).toContainText("68°F");
     const gap = () => page.evaluate(() => document.querySelector("#weather").getBoundingClientRect().top - document.querySelector("#search-form").getBoundingClientRect().bottom);
     const idleGap = await gap();
-    if (width < 1100) expect(idleGap).toBe(57);
+    if (width < 768) expect(idleGap).toBe(57);
     await expect(page.locator("#search-status")).toBeHidden();
     await expect(page.locator("#search-results")).toBeHidden();
     await page.screenshot({ path: `${shots}/marquee-spacing-after-${width}.png`, fullPage: true });
@@ -1832,7 +1832,7 @@ for (const width of [1440, 834, 393, 320, 280]) {
     await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#weather")).toBeHidden();
     await expect(page.locator("#recent-section")).toBeHidden();
-    const hiddenGap = await page.evaluate(() => document.querySelector("#calendar-section").getBoundingClientRect().top - document.querySelector("#search-form").getBoundingClientRect().bottom);
+    const hiddenGap = await page.evaluate(w => document.querySelector("#calendar-section").getBoundingClientRect().top - document.querySelector(w >= 768 ? "#page-nav" : "#search-form").getBoundingClientRect().bottom, width);
     expect(hiddenGap).toBeGreaterThanOrEqual(24);
     expect(hiddenGap).toBeLessThanOrEqual(100);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -1857,16 +1857,16 @@ for (const [label, saved, enabled] of [
     await page.goto("/");
     await page.getByRole("button", { name: "Explore demo" }).click();
     await expect(page.locator("#recent .poster-card")).toHaveCount(6);
-    await expect(page.locator("#search-section")).toBeVisible({ visible: enabled });
+    await expect(page.locator("#search-form")).toBeVisible({ visible: enabled });
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("marquee:Demo viewer:preferences")).search)).toBe(enabled);
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await expect(page.locator('[data-pref="search"]')).toBeChecked({ checked: enabled });
     await page.locator('[data-pref="search"]').setChecked(!enabled);
     await page.getByRole("button", { name: "Close settings" }).click();
-    await expect(page.locator("#search-section")).toBeVisible({ visible: !enabled });
+    await expect(page.locator("#search-form")).toBeVisible({ visible: !enabled });
     await page.reload();
     await expect(page.locator("#recent .poster-card")).toHaveCount(6);
-    await expect(page.locator("#search-section")).toBeVisible({ visible: !enabled });
+    await expect(page.locator("#search-form")).toBeVisible({ visible: !enabled });
     if (label === "fresh") {
       await page.getByRole("button", { name: "Settings", exact: true }).click();
       await page.locator('[data-pref="search"]').check();
@@ -1983,9 +1983,9 @@ for (const width of [1440, 1100, 834, 393]) {
       const content = document.querySelector("#weather-content").getBoundingClientRect();
       return { left: weather.left, center: (weather.left + weather.right) / 2, contentLeft: content.left, contentCenter: (content.left + content.right) / 2 };
     });
-    if (width >= 1100) {
+    if (width >= 768) {
       const before = await positions();
-      expect(Math.abs(before.contentCenter - before.center)).toBeLessThan(1);
+      expect(Math.abs(before.contentLeft - before.left)).toBeLessThan(1);
     }
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.locator('[data-pref="search"]').uncheck();
@@ -1996,9 +1996,9 @@ for (const width of [1440, 1100, 834, 393]) {
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.locator('[data-pref="search"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
-    if (width >= 1100) {
+    if (width >= 768) {
       const after = await positions();
-      expect(Math.abs(after.contentCenter - after.center)).toBeLessThan(1);
+      expect(Math.abs(after.contentLeft - after.left)).toBeLessThan(1);
     }
   });
 }
@@ -2076,6 +2076,7 @@ test("section ordering keeps separated search/weather and saves touch drag", asy
   await page.getByRole("button", { name: "Reset Discover order", exact: true }).click();
   await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
   await page.getByRole("button", { name: "Close settings" }).click();
+  await page.setViewportSize({ width: 393, height: 900 });
   await expect(page.locator(".home-top-row")).toBeVisible();
   await context.close();
 });
@@ -2092,14 +2093,15 @@ test("weather dragged above search still shares the desktop row", async ({ brows
   await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
   await page.getByRole("button", { name: "Close settings" }).click();
   const row = page.locator(".home-top-row");
-  await expect(row).toBeVisible();
-  // The saved order stays in the DOM; the wide layout places search left and weather right regardless.
-  expect(await row.evaluate(el => [...el.children].map(child => child.id))).toEqual(["weather", "search-section"]);
-  const wide = await row.evaluate(el => { const search = el.querySelector("#search-section").getBoundingClientRect(), weather = el.querySelector("#weather").getBoundingClientRect(); return { searchLeft: search.left, searchTop: search.top, weatherLeft: weather.left, weatherTop: weather.top }; });
-  expect(Math.abs(wide.searchTop - wide.weatherTop)).toBeLessThan(40);
-  expect(wide.searchLeft).toBeLessThan(wide.weatherLeft);
-  // Narrow: they stack in the saved order, weather above search.
+  // Wide layouts keep search in the masthead, so weather stands alone in the saved order.
+  await expect(row).toBeHidden();
+  expect(await page.locator("#weather").evaluate(el => el.parentElement.tagName)).toBe("MAIN");
+  const wide = await page.evaluate(() => ({ weather: document.querySelector("#weather").getBoundingClientRect().top, search: document.querySelector("#search-section").getBoundingClientRect().top }));
+  expect(wide.weather).toBeLessThan(wide.search);
+  // Narrow: they pair again and stack in the saved order, weather above search.
   await page.setViewportSize({ width: 500, height: 900 });
+  await expect(row).toBeVisible();
+  expect(await row.evaluate(el => [...el.children].map(child => child.id))).toEqual(["weather", "search-section"]);
   const stacked = await row.evaluate(el => { const search = el.querySelector("#search-section").getBoundingClientRect(), weather = el.querySelector("#weather").getBoundingClientRect(); return { gap: search.top - weather.top, divider: getComputedStyle(el.querySelector("#weather")).borderBottomWidth }; });
   expect(stacked.gap).toBeGreaterThan(100);
   expect(stacked.divider).toBe("1px");
@@ -2371,7 +2373,6 @@ for (const width of [1440, 393, 280]) {
     await page.locator('[data-pref="leavingSoon"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#leavingSoon-content .poster-card")).toHaveCount(3);
-    await expect(page.locator("#leavingSoon-section")).toContainText("eligibility, not guaranteed removal");
     await expect(page.locator("#leavingSoon-content .leaving-date").first()).toContainText("Eligible");
   await view(page, "home");
     await page.locator("#leavingSoon-section").screenshot({ path: `${shots}/marquee-leaving-soon-${width}.png` });
@@ -2424,15 +2425,17 @@ for (const width of [1440, 393, 280]) {
     await page.locator('[data-pref="weather"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#weather-forecast .forecast-day")).toHaveCount(5);
-    if (width >= 1100) {
-      const alignment = await page.evaluate(() => ({
-        left: document.querySelector("#view-kicker").getBoundingClientRect().top,
-        right: document.querySelector("#weather .eyebrow").getBoundingClientRect().top,
+    if (width >= 768) {
+      const header = await page.evaluate(() => ({
+        inAccount: document.querySelector("#search-form").parentElement.classList.contains("account"),
+        formRight: document.querySelector("#search-form").getBoundingClientRect().right,
+        dotLeft: document.querySelector("#jellyfin-header-status").getBoundingClientRect().left,
         search: document.querySelector("#search-section").getBoundingClientRect().width,
         weather: document.querySelector("#weather").getBoundingClientRect().width,
       }));
-      expect(Math.abs(alignment.left - alignment.right)).toBeLessThan(6);
-      expect(Math.abs(alignment.search - alignment.weather)).toBeLessThan(2);
+      expect(header.inAccount).toBe(true);
+      expect(header.formRight).toBeLessThanOrEqual(header.dotLeft + 1);
+      expect(Math.abs(header.search - header.weather)).toBeLessThan(2);
     }
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({ path: `${shots}/marquee-nav-weather-${width}.png` });
@@ -3049,7 +3052,7 @@ for (const width of [280, 393, 1440]) {
     const box = await search.boundingBox();
     expect(box.width).toBeGreaterThanOrEqual(44);
     expect(box.height).toBeGreaterThanOrEqual(44);
-    await page.locator("#search-section").screenshot({ path: `${shots}/marquee-search-icon-${width}.png` });
+    await page.locator(width >= 768 ? "#search-form" : "#search-section").screenshot({ path: `${shots}/marquee-search-icon-${width}.png` });
     await page.getByPlaceholder("Search movies and shows").fill("Signal");
     await search.click();
     await expect(page.locator("#search-results .result-card").first()).toBeVisible();
@@ -3396,15 +3399,15 @@ for(const width of [393,1440]) test(`watchnext genre/type cycles are instant, co
  ]}})});
  await page.goto('/');await page.getByRole('button',{name:'Explore demo'}).click();await view(page,'home');
  const a=page.locator('[data-watch-next-filter="watchNextAnimation"]'),t=page.locator('[data-watch-next-filter="watchNextType"]'),cards=page.locator('#watchNext-content .poster-card');
- await expect(cards).toHaveCount(5);const initial=reads;await expect(a).toHaveText('Mixed');await expect(t).toHaveText('Both');
- await a.click();await expect(a).toHaveText('No animation');await expect(cards).toHaveCount(2);
- await t.click();await expect(t).toHaveText('Movies only');await expect(cards).toHaveCount(1);await expect(cards).toContainText('Live movie');
- await a.click();await expect(a).toHaveText('Animation only');await expect(cards).toHaveCount(1);await expect(cards).toContainText('Animated movie');
- await t.click();await expect(t).toHaveText('TV only');await expect(cards).toContainText('Animated show');await cards.first().locator('[data-personal]').click();await expect(page.locator('#episode-detail h2')).toHaveText('Animated show');await page.getByRole('button',{name:'Close episode details'}).click();
- await t.click();await expect(t).toHaveText('Both');await expect(cards).toHaveCount(2);expect(reads).toBe(initial);
+ await expect(cards).toHaveCount(5);const initial=reads;await expect(a).toHaveText('Animation: Mixed');await expect(t).toHaveText('Type: Both');
+ await a.click();await expect(a).toHaveText('Animation: None');await expect(cards).toHaveCount(2);
+ await t.click();await expect(t).toHaveText('Type: Movies');await expect(cards).toHaveCount(1);await expect(cards).toContainText('Live movie');
+ await a.click();await expect(a).toHaveText('Animation: Only');await expect(cards).toHaveCount(1);await expect(cards).toContainText('Animated movie');
+ await t.click();await expect(t).toHaveText('Type: TV');await expect(cards).toContainText('Animated show');await cards.first().locator('[data-personal]').click();await expect(page.locator('#episode-detail h2')).toHaveText('Animated show');await page.getByRole('button',{name:'Close episode details'}).click();
+ await t.click();await expect(t).toHaveText('Type: Both');await expect(cards).toHaveCount(2);expect(reads).toBe(initial);
  await page.locator('#watchNext-section').screenshot({path:`${shots}/watch-next-filters-${width}.png`});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await page.reload();await view(page,'home');await expect(a).toHaveText('Animation only');await expect(t).toHaveText('Both');await expect(cards).toHaveCount(2);
- await a.click();await expect(a).toHaveText('Mixed');await expect(cards).toHaveCount(5);
+ await page.reload();await view(page,'home');await expect(a).toHaveText('Animation: Only');await expect(t).toHaveText('Type: Both');await expect(cards).toHaveCount(2);
+ await a.click();await expect(a).toHaveText('Animation: Mixed');await expect(cards).toHaveCount(5);
 });
 
 test('star watchlist only saves library titles and leaves catalog titles unstarred',async({page})=>{
@@ -3443,7 +3446,7 @@ for (const size of [{width:834,height:1194},{width:1194,height:834},{width:768,h
  await page.screenshot({path:`${shots}/ipad-top-${size.width}.png`});
  await page.evaluate(()=>scrollTo(0,140));await expect(page.locator('#page-nav')).toBeVisible();const nav=await page.locator('#page-nav').boundingBox(),button=await page.locator('#page-nav button').first().boundingBox();expect(nav.y).toBeGreaterThanOrEqual(0);expect(button.y).toBeGreaterThanOrEqual(24);expect(await page.locator('#page-nav').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(16, 18, 27)');
  await page.screenshot({path:`${shots}/ipad-scrolled-${size.width}.png`});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await page.evaluate(()=>scrollTo(0,0));const search=await page.locator('#search-form').boundingBox();expect(search.y).toBeGreaterThan(nav.height);
+ await page.evaluate(()=>scrollTo(0,0));expect(await page.evaluate(()=>document.querySelector('#search-form').parentElement.classList.contains('account'))).toBe(true);
 });
 
 for (const saved of [false,true]) test(`personal section defaults are enabled unless saved off: ${saved}`,async({page})=>{

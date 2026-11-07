@@ -53,12 +53,11 @@
         <button type="button" data-page="home"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4m-11-2 5-3-5-3z"/></svg><span>On Jellyfin</span></button>
       </nav>
       <main>
-        <div class="view-intro"><span id="view-kicker" class="eyebrow">FIND YOUR NEXT FAVORITE</span><h1 id="view-title">Something good is waiting.</h1><p id="view-description">Explore the latest arrivals, see what's next, and find your next watch.</p></div>
         <p id="global-error" role="alert" hidden></p>
         <div class="home-top-row">
         <section id="search-section">
           <div class="section-heading">
-            <div><span class="eyebrow">FIND SOMETHING TO WATCH</span><h2>Search and request</h2></div>
+            <div><h2>Search and request</h2></div>
           </div>
           <form id="search-form" class="search-bar">
             <input name="query" maxlength="120" placeholder="Search movies and shows" autocomplete="off" required />
@@ -71,7 +70,7 @@
         </section>
         <section id="weather" class="weather" hidden>
           <div>
-            <span class="eyebrow">OUTSIDE YOUR WINDOW</span>
+
             <h2 id="weather-content"></h2>
             <div id="weather-forecast" class="weather-forecast"></div>
           </div>
@@ -81,7 +80,7 @@
         <section id="personal-shelves"></section>
         <section id="recent-section">
           <div class="section-heading">
-            <div><span class="eyebrow">FRESH ON THE SHELF</span><h1>Recently added</h1></div>
+            <div><h1>Recently added</h1></div>
             <div class="recent-controls">
               <button id="shelf-back" aria-label="Previous posters"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button>
               <button id="shelf-next" aria-label="Next posters"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4 6 6-6 6" /></svg></button>
@@ -91,7 +90,7 @@
         </section>
         <section id="calendar-section">
           <div class="section-heading calendar-heading">
-            <div><span class="eyebrow">WHAT'S ON THE HORIZON</span><h2>Release calendar</h2></div>
+            <div><h2>Release calendar</h2></div>
             <div id="legend" class="legend">
               <span class="cinema">● In cinemas</span><span class="available">● Available</span><span class="missing">● Missing</span>
               <span class="premiere">● Premiere</span><span class="upcoming">● Upcoming</span><span class="unreleased">○ Unreleased</span>
@@ -132,14 +131,14 @@
             <div id="calendar" aria-live="polite"></div>
           </div>
         </section>
-        <section id="recommendations-section" hidden><div class="section-heading"><div><span class="eyebrow">PICKED FOR YOU</span><h2>Recommendations</h2><p id="recommendation-seed"></p></div></div><p id="recommendations-status" role="status"></p><div id="recommendations-content" class="popular-row"></div></section>
-        <section id="inTheaters-section"><div class="section-heading"><div><span class="eyebrow">ON THE BIG SCREEN</span><h2>In theaters</h2></div><div class="shelf-controls"><button data-shelf="inTheaters-content" data-direction="-1" aria-label="Previous theater movies"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button><button data-shelf="inTheaters-content" data-direction="1" aria-label="Next theater movies"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4 6 6-6 6" /></svg></button></div></div><p id="inTheaters-status" role="status"></p><div id="inTheaters-content" class="popular-row"></div></section>
+        <section id="recommendations-section" hidden><div class="section-heading"><div><h2>Recommendations</h2><p id="recommendation-seed"></p></div></div><p id="recommendations-status" role="status"></p><div id="recommendations-content" class="popular-row"></div></section>
+        <section id="inTheaters-section"><div class="section-heading"><div><h2>In theaters</h2></div><div class="shelf-controls"><button data-shelf="inTheaters-content" data-direction="-1" aria-label="Previous theater movies"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button><button data-shelf="inTheaters-content" data-direction="1" aria-label="Next theater movies"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4 6 6-6 6" /></svg></button></div></div><p id="inTheaters-status" role="status"></p><div id="inTheaters-content" class="popular-row"></div></section>
         <section id="popular-wrap">
-          <div id="popular-section" class="popular-section"><div class="section-heading popular-heading"><div><span class="eyebrow">TOP 10 FROM SEERR</span><h2>Popular right now</h2><p>Availability follows its latest library scan</p></div><button id="popular-collapse" aria-expanded="true" aria-controls="popular-content" aria-label="Collapse popular titles" title="Collapse"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><p id="popular-status" role="status"></p><div id="popular-content"><div class="shelf-heading"><h3>Top 10 movies</h3><div class="shelf-controls"><button data-shelf="popular-movies" data-direction="-1" aria-label="Previous popular movies"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button><button data-shelf="popular-movies" data-direction="1" aria-label="Next popular movies"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4 6 6-6 6" /></svg></button></div></div><div id="popular-movies" class="popular-row"></div><div class="shelf-heading"><h3>Top 10 TV shows</h3><div class="shelf-controls"><button data-shelf="popular-tv" data-direction="-1" aria-label="Previous popular TV shows"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button><button data-shelf="popular-tv" data-direction="1" aria-label="Next popular TV shows"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4 6 6-6 6" /></svg></button></div></div><div id="popular-tv" class="popular-row"></div></div></div>
+          <div id="popular-section" class="popular-section"><div class="section-heading popular-heading"><div><h2>Popular right now</h2></div><button id="popular-collapse" aria-expanded="true" aria-controls="popular-content" aria-label="Collapse popular titles" title="Collapse"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><p id="popular-status" role="status"></p><div id="popular-content"><div class="shelf-heading"><h3>Top 10 movies</h3><div class="shelf-controls"><button data-shelf="popular-movies" data-direction="-1" aria-label="Previous popular movies"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button><button data-shelf="popular-movies" data-direction="1" aria-label="Next popular movies"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4 6 6-6 6" /></svg></button></div></div><div id="popular-movies" class="popular-row"></div><div class="shelf-heading"><h3>Top 10 TV shows</h3><div class="shelf-controls"><button data-shelf="popular-tv" data-direction="-1" aria-label="Previous popular TV shows"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button><button data-shelf="popular-tv" data-direction="1" aria-label="Next popular TV shows"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4 6 6-6 6" /></svg></button></div></div><div id="popular-tv" class="popular-row"></div></div></div>
         </section>
         <section id="requests-section">
           <div class="section-heading">
-            <div><span class="eyebrow">THE QUIET QUEUE</span><h2>Requests</h2></div>
+            <div><h2>Requests</h2></div>
           </div>
           <label class="request-filter">Show<select id="requests-filter"><option value="all">Everyone's requests</option><option value="mine">My requests</option></select></label><div id="requests" class="requests-list"></div>
         </section>
@@ -281,7 +280,7 @@
     </dialog>
     <dialog id="episode-detail" aria-labelledby="episode-title">
       <div class="episode-surface"><img id="episode-backdrop" alt="" hidden /><div class="episode-hero"><div class="episode-poster-wrap"><img id="episode-poster" alt="" hidden /><div id="episode-poster-status"></div></div><div class="episode-heading"><h2 id="episode-title"></h2><p id="episode-certification-line" hidden></p><p id="episode-subtitle"></p><p id="episode-meta-top" class="episode-meta" aria-hidden="true"></p><p id="episode-air-date-top" class="episode-meta" hidden></p><div id="episode-genres-top" aria-hidden="true"></div><p id="episode-overview-top"></p><button type="button" id="episode-more" hidden aria-expanded="false">More</button></div><div class="episode-toolbar"><div class="episode-quick-actions"><button id="episode-star" class="watch-star detail-star" hidden></button><button id="episode-save" hidden>Add to favorites</button><a id="episode-play" target="_blank" rel="noopener noreferrer" hidden aria-label="Play in Jellyfin" title="Play in Jellyfin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 11 7-11 7Z"/></svg></a><a id="episode-trailer" target="_blank" rel="noopener noreferrer" aria-label="Find trailer on YouTube" title="Find trailer on YouTube"><img src="/icons/youtube.svg" alt="" aria-hidden="true" width="32" height="22"></a></div><button id="episode-close" aria-label="Close episode details"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" /></svg></button></div></div>
-      <div id="episode-trailer-player" hidden></div><div class="episode-body"><span id="episode-content-rating" class="content-rating" hidden></span><div id="episode-genres"></div><p id="episode-meta" class="episode-meta"></p><p id="episode-network" class="episode-network" hidden></p><p id="episode-rating" class="media-rating" hidden></p><p id="episode-air-date" class="episode-meta" hidden></p><p id="episode-cast" hidden></p><p id="episode-overview"></p><section id="episode-facts" aria-label="Title facts" hidden></section><div class="episode-actions"><button id="episode-request" hidden>Request</button></div><p id="episode-request-status" role="status" hidden></p><p id="episode-updated" class="episode-updated" hidden></p></div></div>
+      <div id="episode-trailer-player" hidden></div><div class="episode-body"><span id="episode-content-rating" class="content-rating" hidden></span><div id="episode-genres"></div><p id="episode-meta" class="episode-meta"></p><p id="episode-network" class="episode-network" hidden></p><p id="episode-rating" class="media-rating" hidden></p><p id="episode-air-date" class="episode-meta" hidden></p><p id="episode-cast" hidden></p><p id="episode-overview"></p><div class="episode-actions"><button id="episode-request" hidden>Request</button></div><p id="episode-request-status" role="status" hidden></p><section id="episode-facts" aria-label="Title facts" hidden></section><p id="episode-updated" class="episode-updated" hidden></p></div></div>
     </dialog>
     <dialog id="request-dialog" aria-labelledby="request-title">
       <form id="request-form" method="dialog">

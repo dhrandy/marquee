@@ -209,11 +209,22 @@ const sectionLabels = { search: "Search and request", weather: "Weather", watchl
 const defaultSectionOrder = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "topUnwatched", "leavingSoon", "requests"];
 let sectionOrder = [...defaultSectionOrder], orderWrites = Promise.resolve();
 const sectionElement = key => $(key === "weather" ? "#weather" : key === "popular" ? "#popular-wrap" : `#${key}-section`);
+const headerSearchQuery = window.matchMedia("(min-width: 768px)");
+function placeSearchBar() {
+  const form = $("#search-form"), section = $("#search-section"), account = $(".masthead .account");
+  if (!form || !section || !account) return;
+  const useHeader = headerSearchQuery.matches && !section.hidden;
+  const dot = $("#jellyfin-header-status");
+  if (useHeader && form.parentElement !== account) account.insertBefore(form, dot);
+  else if (!useHeader && form.parentElement !== section) section.insertBefore(form, $("#search-status"));
+  $("#dashboard").classList.toggle("search-in-header", useHeader);
+}
+headerSearchQuery.addEventListener?.("change", () => applySectionOrder());
 function applySectionOrder() {
   const main = $("#dashboard main"), row = $(".home-top-row");
   const visible = sectionOrder.filter(key => pageSections.discover.includes(key) && sectionElement(key) && !sectionElement(key).hidden);
   const searchAt = visible.indexOf("search"), weatherAt = visible.indexOf("weather");
-  const paired = searchAt >= 0 && weatherAt >= 0 && Math.abs(searchAt - weatherAt) === 1;
+  const paired = searchAt >= 0 && weatherAt >= 0 && Math.abs(searchAt - weatherAt) === 1 && !headerSearchQuery.matches;
   row.hidden = !paired;
   const desired = [];
   let rowPlaced = false;
@@ -240,24 +251,22 @@ let pageInitialized = false;
 function applyDashboardPage() {
   if (!pageInitialized) { dashboardPage = state.prefs.firstTab === "home" ? "home" : "discover"; pageInitialized = true; }
   const home = dashboardPage === "home";
-  const intro = $(".view-intro");
-  if (!home && state.prefs.search) $("#search-section").prepend(intro);
-  else $("#dashboard main").prepend(intro);
   $("#dashboard").dataset.page = dashboardPage;
-  $("#view-kicker").textContent = home ? "YOUR COLLECTION, YOUR PACE" : "FIND YOUR NEXT FAVORITE";
-  $("#view-title").textContent = home ? "Right where you left off." : "Something good is waiting.";
-  $("#view-description").textContent = home ? "Keep watching, save a favorite, and catch it before it's gone." : "Explore the latest arrivals, see what's next, and find your next watch.";
   $("#libraryStats-section").classList.toggle("page-away", !home);
   const visible = pageSections[dashboardPage];
   for (const key of sectionOrder) {
     const element = sectionElement(key);
     if (element) element.classList.toggle("page-away", !visible.includes(key));
   }
+  // Search stays on top of both dashboard pages.
+  const searchEl = $("#search-section");
+  if (home && !searchEl.hidden) searchEl.classList.remove("page-away");
   $("#nothing").hidden = (home && !$("#libraryStats-section").hidden) || visible.some(key => sectionElement(key) && !sectionElement(key).hidden);
   $("#nothing").textContent = home ? "Your On Jellyfin shelves are off. Turn on a personal shelf or Requests in Settings." : "Your Discover sections are off. Turn one on in Settings.";
   $("#page-nav").append(...(state.prefs.firstTab === "home" ? [$('button[data-page="home"]'), $('button[data-page="discover"]')] : [$('button[data-page="discover"]'), $('button[data-page="home"]')]));
   $("#tab-order").value = state.prefs.firstTab || "discover";
   all("button[data-page]").forEach(button => { if (button.dataset.page === dashboardPage) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current"); });
+  placeSearchBar();
 }
 $("#poster-size").addEventListener("change", event => { state.prefs.posterSize = event.target.value; persist(); });
 $("#tab-order").addEventListener("change", event => { state.prefs.firstTab = event.target.value; persist(); applyDashboardPage(); });
@@ -342,6 +351,7 @@ function applyPrefs() {
   $("#recent-section").hidden = !state.prefs.recent;
   $("#calendar-section").hidden = !state.prefs.calendar;
   $("#search-section").hidden = !state.prefs.search;
+  placeSearchBar();
   $("#popular-section").hidden = !state.prefs.popular || !state.prefs.search;
   $("#popular-wrap").hidden = !state.prefs.popular || !state.prefs.search;
   $("#popular-content").hidden = Boolean(state.prefs.popularCollapsed);
@@ -2211,7 +2221,7 @@ const personalLabels = { leavingSoon: "Leaving soon", watchlist: "Favorites", wa
 let personalLoad = 0;
 function buildPersonalShelfSections() {
   if (!$("#watchlist-section")) {
-    $("#personal-shelves").innerHTML = Object.entries(personalLabels).map(([key, label]) => `<section id="${key}-section" class="personal-section" hidden><div class="section-heading"><div><span class="eyebrow">JUST FOR YOU</span><h2>${label}</h2>${key === "watchNext" ? `<p>Unwatched picks already on your server</p><div class="watch-next-filters" aria-label="What to watch next filters"><button type="button" data-watch-next-filter="watchNextAnimation"></button><button type="button" data-watch-next-filter="watchNextType"></button></div>` : key === "leavingSoon" ? `<p class="departure-note">Scheduled by Maintainerr. Dates show eligibility, not guaranteed removal.</p>` : ""}</div><button class="personal-collapse" data-collapse="${key}" aria-controls="${key}-content" aria-expanded="true" aria-label="Collapse ${label}" title="Collapse ${label}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><div id="${key}-content" class="poster-row"></div></section>`).join("");
+    $("#personal-shelves").innerHTML = Object.entries(personalLabels).map(([key, label]) => `<section id="${key}-section" class="personal-section" hidden><div class="section-heading"><div><h2>${label}</h2>${key === "watchNext" ? `<div class="watch-next-filters" aria-label="What to watch next filters"><button type="button" data-watch-next-filter="watchNextAnimation"></button><button type="button" data-watch-next-filter="watchNextType"></button></div>` : ""}</div><button class="personal-collapse" data-collapse="${key}" aria-controls="${key}-content" aria-expanded="true" aria-label="Collapse ${label}" title="Collapse ${label}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg></button></div><div id="${key}-content" class="poster-row"></div></section>`).join("");
   }
   applyPrefs();
 }
@@ -2250,11 +2260,12 @@ function leavingLabel(item) {
 }
 const watchNextModes = {watchNextAnimation: ["no","only","mixed"],watchNextType: ["movie","tv","both"]};
 const watchNextModeLabels = {no:"No animation",only:"Animation only",mixed:"Mixed",movie:"Movies only",tv:"TV only",both:"Both"};
+const watchNextModeShort = {no:"None",only:"Only",mixed:"Mixed",movie:"Movies",tv:"TV",both:"Both"};
 function updateWatchNextControls() {
   for (const [key,modes] of Object.entries(watchNextModes)) {
     const button = $(`[data-watch-next-filter="${key}"]`); if (!button) continue;
     const mode = modes.includes(state.prefs[key]) ? state.prefs[key] : modes.at(-1);
-    button.textContent = watchNextModeLabels[mode];
+    button.textContent = `${key === "watchNextAnimation" ? "Animation" : "Type"}: ${watchNextModeShort[mode]}`;
     button.setAttribute("aria-label", `${key === "watchNextAnimation" ? "Animation filter" : "Title type filter"}: ${watchNextModeLabels[mode]}. Click for ${watchNextModeLabels[modes[(modes.indexOf(mode)+1)%3]]}`);
   }
 }
