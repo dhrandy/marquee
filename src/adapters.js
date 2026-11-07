@@ -546,18 +546,26 @@ export async function seerrDetails(type, id, userId) {
   return { ...detail, updatedAt: new Date(now).toISOString() };
 }
 // Seerr hands back TMDB's related videos; the popup can only embed YouTube
-// trailers, so keep the first Trailer entry with a valid 11-character key.
-export function trailerKey(videos) {
-  if (!Array.isArray(videos)) return null;
-  const hit = videos.find(
-    (video) =>
+// trailers. Many studio trailers refuse embedding, so keep a few valid
+// candidates (up to 4) in TMDB order and let the player try the next one.
+export function trailerKeys(videos) {
+  if (!Array.isArray(videos)) return [];
+  const keys = [];
+  for (const video of videos) {
+    if (
       video &&
       video.type === "Trailer" &&
       (!video.site || video.site === "YouTube") &&
       typeof video.key === "string" &&
-      /^[A-Za-z0-9_-]{11}$/.test(video.key),
-  );
-  return hit ? hit.key : null;
+      /^[A-Za-z0-9_-]{11}$/.test(video.key) &&
+      !keys.includes(video.key)
+    ) keys.push(video.key);
+    if (keys.length === 4) break;
+  }
+  return keys;
+}
+export function trailerKey(videos) {
+  return trailerKeys(videos)[0] ?? null;
 }
 async function fetchSeerrDetails(type, id, userId) {
   const headers = { "X-Api-Key": process.env.SEERR_API_KEY, "X-API-User": String(userId) };
@@ -600,6 +608,7 @@ async function fetchSeerrDetails(type, id, userId) {
     poster: safeArt(data.posterPath),
     backdrop: safeArt(data.backdropPath) || safeArt(data.posterPath),
     trailer: trailerKey(data.relatedVideos),
+    trailers: trailerKeys(data.relatedVideos),
   };
 }
 

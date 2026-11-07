@@ -3426,6 +3426,7 @@ test("trailers play inside the details popup with fallbacks", async ({
   // and record fallback navigations instead of opening real tabs.
   await page.addInitScript(() => {
     window.__opened = [];
+    window.__loaded = [];
     window.__captionCalls = [];
     window.open = (url) => {
       window.__opened.push(String(url));
@@ -3435,7 +3436,7 @@ test("trailers play inside the details popup with fallbacks", async ({
   await page.route("https://www.youtube.com/iframe_api", (route) =>
     route.fulfill({
       contentType: "application/javascript",
-      body: `window.YT={Player:class{constructor(el,opts){const f=document.createElement("iframe");f.src=opts.host+"/embed/"+opts.videoId;el.appendChild(f);let track=null;const t={playVideo(){window.__captionCalls.push("play")},setOption(a,b){window.__captionCalls.push("setOption:"+a+"/"+b);if(a==="captions"&&b==="track")track=null;},getOption(a,b){return a==="captions"&&b==="track"?track:null},unloadModule(m){window.__captionCalls.push("unloadModule:"+m)}};window.__setTrack=(tr)=>{track=tr};window.__fireState=(d)=>opts.events?.onStateChange?.({data:d,target:t});setTimeout(()=>{if(window.__trailerError)opts.events?.onError?.({data:101});else{opts.events?.onReady?.({target:t});}},0);}destroy(){}}};window.onYouTubeIframeAPIReady?.();`,
+      body: `window.YT={Player:class{constructor(el,opts){const f=document.createElement("iframe");f.src=opts.host+"/embed/"+opts.videoId;el.appendChild(f);let track=null;const t={playVideo(){window.__captionCalls.push("play")},loadVideoById(k){window.__loaded.push(k)},setOption(a,b){window.__captionCalls.push("setOption:"+a+"/"+b);if(a==="captions"&&b==="track")track=null;},getOption(a,b){return a==="captions"&&b==="track"?track:null},unloadModule(m){window.__captionCalls.push("unloadModule:"+m)}};window.__setTrack=(tr)=>{track=tr};window.__fireState=(d)=>opts.events?.onStateChange?.({data:d,target:t});window.__fireError=(d)=>opts.events?.onError?.({data:d,target:t});setTimeout(()=>{if(window.__trailerError)opts.events?.onError?.({data:101,target:t});else{opts.events?.onReady?.({target:t});}},0);}destroy(){}}};window.onYouTubeIframeAPIReady?.();`,
     }),
   );
   await page.route(/youtube-nocookie\.com/, (route) => route.abort());
@@ -3501,10 +3502,21 @@ test("trailers play inside the details popup with fallbacks", async ({
     .click();
   await expect(tile).toHaveAttribute("aria-label", "Play trailer");
   await tile.click();
+  // A tappable link replaces the player (script-opened tabs are blocked on iPad).
+  // First refusal (embedding disabled): the next trailer for the title loads in the same player.
+  await expect.poll(() => page.evaluate(() => window.__loaded)).toEqual(["9qhL2_UxXM0"]);
+  await expect(box.locator("iframe")).toBeVisible();
+  const fallbackLink = box.getByRole("link", { name: /Open on YouTube/ });
+  await expect(fallbackLink).toHaveCount(0);
+  // Last candidate refused too: only then the tappable link, for the trailer that failed last.
+  await page.evaluate(() => window.__fireError(150));
+  await expect(fallbackLink).toBeVisible();
+  await expect(fallbackLink).toHaveAttribute("href", "https://www.youtube.com/watch?v=9qhL2_UxXM0");
+  await expect(fallbackLink).toHaveAttribute("target", "_blank");
+  await expect(fallbackLink).toHaveAttribute("rel", "noopener noreferrer");
+  expect(await page.evaluate(() => window.__opened)).toEqual([]);
+  await tile.click();
   await expect(box).toBeHidden();
-  expect(await page.evaluate(() => window.__opened)).toEqual([
-    "https://www.youtube.com/watch?v=M7lc1UVf-VE",
-  ]);
   await page.getByRole("button", { name: "Close episode details" }).click();
   // Setting off: the tile keeps its plain YouTube search-link behavior.
   await openSettings(page);
@@ -3562,4 +3574,33 @@ test("home shelves load in section order, a few at a time", async ({ page }) => 
     "/api/seerr/requests",
   ]);
   expect(maxInFlight).toBeLessThanOrEqual(4);
+});
+
+test("a trailer tap before details arrive waits for the player instead of opening YouTube", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__opened = [];
+    window.open = (url) => { window.__opened.push(String(url)); return null; };
+  });
+  await page.route("https://www.youtube.com/iframe_api", (route) =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: `window.YT={Player:class{constructor(el,opts){const f=document.createElement("iframe");f.src=opts.host+"/embed/"+opts.videoId;el.appendChild(f);setTimeout(()=>opts.events?.onReady?.({target:{playVideo(){}}}),0);}destroy(){}}};window.onYouTubeIframeAPIReady?.();`,
+    }),
+  );
+  await page.route(/youtube-nocookie\.com/, (route) => route.abort());
+  await page.route("**/api/seerr/details/**", async (route) => {
+    await new Promise((r) => setTimeout(r, 700));
+    await route.continue();
+  });
+  // Count top-level navigations to YouTube: the plain search link must not fire.
+  const popups = [];
+  page.context().on("page", (p) => popups.push(p));
+  await login(page);
+  await view(page, "discover");
+  await page.getByPlaceholder("Search movies and shows").fill("orbit");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page.getByRole("button", { name: "Details for Orbit Nine" }).first().click();
+  await page.locator("#episode-trailer").click();
+  await expect(page.locator("#episode-trailer-player iframe")).toBeVisible();
+  expect(popups.length).toBe(0);
 });

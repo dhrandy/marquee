@@ -243,6 +243,7 @@ demoRequests.forEach((item, i) => {
 
 // Sample key from YouTube's embed docs; demo mode only, never a real lookup.
 export const demoTrailer = "M7lc1UVf-VE";
+export const demoTrailers = [demoTrailer, "9qhL2_UxXM0"];
 export const demoFacts = {
   status: "Released",
   productionCountries: [{ code: "US", name: "United States" }],

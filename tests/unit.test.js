@@ -1,4 +1,4 @@
-import { serviceUrl, upstream, trailerKey } from "../src/adapters.js";
+import { serviceUrl, upstream, trailerKey, trailerKeys } from "../src/adapters.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -594,4 +594,13 @@ test("details cache stamps the fetch time, serves repeats, expires and invalidat
     if (oldUrl === undefined) delete process.env.SEERR_URL; else process.env.SEERR_URL = oldUrl;
     if (oldKey === undefined) delete process.env.SEERR_API_KEY; else process.env.SEERR_API_KEY = oldKey;
   }
+});
+
+test("trailerKeys keeps up to four distinct valid YouTube trailers in order", () => {
+  const v = (key, type = "Trailer", site = "YouTube") => ({ key, type, site });
+  assert.deepEqual(
+    trailerKeys([v("aaaaaaaaaaa"), v("bbbbbbbbbbb", "Clip"), v("aaaaaaaaaaa"), v("ccccccccccc", "Trailer", "Vimeo"), v("ddddddddddd"), v("eeeeeeeeeee"), v("fffffffffff"), v("ggggggggggg")]),
+    ["aaaaaaaaaaa", "ddddddddddd", "eeeeeeeeeee", "fffffffffff"],
+  );
+  assert.deepEqual(trailerKeys(null), []);
 });

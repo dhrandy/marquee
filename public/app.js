@@ -920,7 +920,7 @@ async function loadMissingFacts(event) {
     const facts = data.facts;
     // Ignore the answer if another popup was opened in the meantime.
     if (request !== factsRequest || !$("#episode-detail").open || currentDetail !== event) return;
-    if (typeof data.trailer === "string" || data.trailer === null) { event.trailer = data.trailer; setDetailTrailer(event); }
+    if (typeof data.trailer === "string" || data.trailer === null) { event.trailer = data.trailer; event.trailers = Array.isArray(data.trailers) ? data.trailers.filter((k) => typeof k === "string") : []; setDetailTrailer(event); if (trailerTapPending === event) { trailerTapPending = null; if (state.prefs.trailers && typeof event.trailer === "string") toggleTrailerPlayer(event); else showTrailerSearchLink(); } }
     if (["movie", "tv"].includes(data.mediaType) && Number.isSafeInteger(data.mediaId)) { event.mediaType = data.mediaType; event.mediaId = data.mediaId; if (!event.favoriteId) Object.assign(event, { favoriteId: data.favoriteId, favorite: data.favorite }); setDetailSave(event); }
     if(data.watchKey) {event.watchKey=data.watchKey;setDetailStar(event);}
     if (data.network) { event.network = data.network; setDetailNetwork(event); }
@@ -1012,6 +1012,7 @@ function setDetailCertification(event) {
 let trailerPlayer = null;
 let trailerApiPromise = null;
 let trailerCaptionWatch = null;
+let trailerTapPending = null;
 function loadTrailerApi() {
   if (!trailerApiPromise)
     trailerApiPromise = new Promise((resolve, reject) => {
@@ -1052,12 +1053,24 @@ async function toggleTrailerPlayer(event) {
     destroyTrailerPlayer();
     return;
   }
-  const key = event.trailer;
+  const keys = event.trailers?.length ? event.trailers : [event.trailer];
+  let at = 0;
+  const box = $("#episode-trailer-player");
   // No embed (script blocked) or a refused embed (owner-disabled): open the
   // video on YouTube instead, the same escape hatch the search link gives.
-  const fallback = () =>
-    window.open(`https://www.youtube.com/watch?v=${key}`, "_blank", "noopener");
-  const box = $("#episode-trailer-player");
+  // A script-opened tab is blocked on iPad Safari once the tap has been used
+  // up (the player loads asynchronously), so the fallback is a real link the
+  // viewer can tap: it replaces the player in place.
+  const fallback = () => {
+    const link = document.createElement("a");
+    link.href = `https://www.youtube.com/watch?v=${keys[at]}`;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.className = "trailer-fallback";
+    link.textContent = "Trailer can't play here. Open on YouTube";
+    box.replaceChildren(link);
+    box.hidden = false;
+  };
   box.replaceChildren(document.createElement("div"));
   box.hidden = false;
   try {
@@ -1091,7 +1104,7 @@ async function toggleTrailerPlayer(event) {
     host: "https://www.youtube-nocookie.com",
     width: "100%",
     height: "100%",
-    videoId: key,
+    videoId: keys[0],
     playerVars: { rel: 0, origin: location.origin },
     events: {
       onReady: (e) => {
@@ -1111,15 +1124,34 @@ async function toggleTrailerPlayer(event) {
       onStateChange: (e) => {
         if (e.data === 1 /* PLAYING */ || e.data === 3 /* BUFFERING */) turnCaptionsOffOnce(e.target);
       },
-      onError: () => {
+      onError: (e) => {
+        // Embedding refused or video unavailable (100/101/150): try the
+        // next trailer for the title. Error 153 (player config/referer) would hit every
+        // video alike, so it goes straight to the link.
+        if (at + 1 < keys.length && [100, 101, 150].includes(e.data)) {
+          at++;
+          try { e.target.loadVideoById(keys[at]); return; } catch { /* fall through */ }
+        }
         destroyTrailerPlayer();
         fallback();
       },
     },
   });
 }
+function showTrailerSearchLink() {
+  const link = document.createElement("a");
+  link.href = $("#episode-trailer").href;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.className = "trailer-fallback";
+  link.textContent = "No trailer on file. Search on YouTube";
+  const box = $("#episode-trailer-player");
+  box.replaceChildren(link);
+  box.hidden = false;
+}
 function showDetail(event) {
   currentDetail = event;
+  trailerTapPending = null;
   destroyTrailerPlayer();
   setDetailTrailer(event);
   setDetailSave(event); setDetailStar(event);
@@ -1261,7 +1293,16 @@ $("#episode-close").addEventListener("click", () =>
   $("#episode-detail").close(),
 );
 $("#episode-trailer").addEventListener("click", (event) => {
-  if (!state.prefs.trailers || typeof currentDetail?.trailer !== "string") return;
+  if (!state.prefs.trailers) return;
+  // Tapped before the title's details arrived: hold the tap instead of letting
+  // the plain search link open YouTube, and act on it once the trailer is known.
+  // A second tap while still waiting (slow or failed lookup) uses the plain link.
+  if (currentDetail && currentDetail.trailer === undefined && trailerTapPending !== currentDetail) {
+    event.preventDefault();
+    trailerTapPending = currentDetail;
+    return;
+  }
+  if (typeof currentDetail?.trailer !== "string") return;
   event.preventDefault();
   toggleTrailerPlayer(currentDetail);
 });
