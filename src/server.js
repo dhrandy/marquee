@@ -49,10 +49,10 @@ const settingsPath = path.join(
   "settings.json",
 );
 let displayName = "Marquee";
-let savedSettings = { weatherByUser: {} };
+let savedSettings = {};
 try {
   const saved = JSON.parse(await fs.readFile(settingsPath, "utf8"));
-  savedSettings = { ...saved, weatherByUser: saved.weatherByUser || {} };
+  savedSettings = { ...saved };
   if (
     typeof saved.name === "string" &&
     saved.name.trim() &&
@@ -83,27 +83,6 @@ function saveSettings(update) {
     });
   settingsWrites = write;
   return write;
-}
-const defaultWeather = {
-  weather: false,
-  weatherCity: null,
-  weatherUnits: "fahrenheit",
-};
-function validWeather(value) {
-  const city = value?.weatherCity;
-  return (
-    typeof value?.weather === "boolean" &&
-    ["fahrenheit", "celsius"].includes(value.weatherUnits) &&
-    (city === null ||
-      (city &&
-        typeof city.label === "string" &&
-        city.label.length <= 200 &&
-        !/[<>\x00-\x1f]/.test(city.label) &&
-        Number.isFinite(city.latitude) &&
-        Math.abs(city.latitude) <= 90 &&
-        Number.isFinite(city.longitude) &&
-        Math.abs(city.longitude) <= 180))
-  );
 }
 const app = express();
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -314,7 +293,6 @@ GET  /api/watchlist               Jellyfin favorites; /api/favorite/:id checks o
 GET  /api/watch-later             Marquee watchlist
 GET  /api/recommendations, /api/leaving-soon, /api/in-theaters, /api/library-stats, /api/networks
 GET  /api/library/:id/facts
-GET  /api/weather?latitude=&longitude=&units=celsius|fahrenheit, /api/weather/cities?query=
 GET  /api/image/:id, /api/calendar-image/:id, /api/jellyfin-version
 GET  /api/seerr/search?q=, /api/seerr/popular, /api/seerr/requests, /api/seerr/details/:type/:id
 GET  /api/seerr/request-options, /api/seerr/content-ratings
@@ -677,43 +655,6 @@ app.post("/api/watchlist", requireUser, async (req, res) => {
     else await setFavorite(req.user, itemId, saved);
     res.json({ favoriteId: itemId, favorite: saved });
   } catch { res.status(502).json({ error: "Could not update your Jellyfin favorite. Try again." }); }
-});
-app.get("/api/weather-settings", requireUser, (req, res) => {
-  const value = savedSettings.weatherByUser[demo ? req.user.sid : req.user.id];
-  res.json(validWeather(value) ? value : defaultWeather);
-});
-app.post("/api/weather-settings", requireUser, async (req, res) => {
-  if (!validWeather(req.body))
-    return res
-      .status(400)
-      .json({ error: "Choose valid weather units and city coordinates." });
-  const { weather, weatherCity, weatherUnits } = req.body;
-  const value = {
-    weather,
-    weatherCity: weatherCity
-      ? {
-          label: weatherCity.label,
-          latitude: weatherCity.latitude,
-          longitude: weatherCity.longitude,
-        }
-      : null,
-    weatherUnits,
-  };
-  try {
-    await saveSettings((current) => ({
-      ...current,
-      weatherByUser: {
-        ...current.weatherByUser,
-        [demo ? req.user.sid : req.user.id]: value,
-      },
-    }));
-    res.json(value);
-  } catch {
-    res.status(500).json({
-      error:
-        "Could not save weather settings. Check the settings volume is writable.",
-    });
-  }
 });
 app.post("/api/display-name", requireUser, async (req, res) => {
   if (!req.user.isAdmin)
@@ -1403,133 +1344,6 @@ app.get("/api/calendar-image/:id", requireUser, async (req, res) => {
     res.sendStatus(502);
   }
 });
-const weatherCache = new Map();
-const weatherAttempts = new Map();
-function weatherLimit(req, res, next) {
-  const old = weatherAttempts.get(demo ? req.user.sid : req.user.id);
-  const entry =
-    old && old.until > Date.now()
-      ? old
-      : { count: 0, until: Date.now() + 60000 };
-  entry.count++;
-  weatherAttempts.set(demo ? req.user.sid : req.user.id, entry);
-  if (entry.count > 30)
-    return res
-      .status(429)
-      .json({ error: "Too many weather requests. Try again in a minute." });
-  next();
-}
-app.get("/api/weather/cities", requireUser, weatherLimit, async (req, res) => {
-  const query = req.query.query;
-  if (
-    typeof query !== "string" ||
-    query.trim().length < 2 ||
-    query.length > 100
-  )
-    return res
-      .status(400)
-      .json({ error: "Enter a city name of 2 to 100 characters." });
-  if (demo)
-    return res.json({
-      cities: [
-        {
-          id: 1,
-          label: "Sample City, Example Region",
-          latitude: 40,
-          longitude: -75,
-        },
-      ],
-    });
-  try {
-    const params = new URLSearchParams({
-      name: query.trim(),
-      count: "8",
-      language: "en",
-      format: "json",
-    });
-    const response = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?${params}`,
-      { signal: AbortSignal.timeout(10000), redirect: "error" },
-    );
-    if (!response.ok) throw new Error();
-    const data = await response.json();
-    const cities = (data.results || [])
-      .filter(
-        (c) => Number.isFinite(c.latitude) && Number.isFinite(c.longitude),
-      )
-      .slice(0, 8)
-      .map((c) => ({
-        id: c.id,
-        label: [c.name, c.admin1, c.country]
-          .filter(Boolean)
-          .join(", ")
-          .slice(0, 240),
-        latitude: c.latitude,
-        longitude: c.longitude,
-      }));
-    res.json({ cities });
-  } catch {
-    res.status(502).json({ error: "City search is temporarily unavailable." });
-  }
-});
-app.get("/api/weather", requireUser, weatherLimit, async (req, res) => {
-  const { latitude: lat, longitude: lon, units } = req.query;
-  const latitude = Number(lat),
-    longitude = Number(lon);
-  if (
-    typeof lat !== "string" ||
-    typeof lon !== "string" ||
-    !lat.trim() ||
-    !lon.trim() ||
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude) ||
-    Math.abs(latitude) > 90 ||
-    Math.abs(longitude) > 180 ||
-    !["celsius", "fahrenheit"].includes(units)
-  )
-    return res
-      .status(400)
-      .json({ error: "Choose a city and temperature units in Settings." });
-  if (demo) {
-    const celsius = units === "celsius";
-    return res.json({
-      current: { temperature_2m: celsius ? 20 : 68, weather_code: 2 },
-      current_units: { temperature_2m: celsius ? "°C" : "°F" },
-      daily: {
-        time: ["2026-10-10", "2026-10-11", "2026-10-12", "2026-10-13", "2026-10-14"],
-        weather_code: [2, 3, 61, 0, 2],
-        temperature_2m_max: celsius ? [22, 23, 22, 24, 21] : [72, 74, 71, 75, 70],
-        temperature_2m_min: celsius ? [12, 13, 11, 12, 10] : [54, 56, 52, 54, 50],
-      },
-    });
-  }
-  const key = `${latitude}:${longitude}:${units}`;
-  const cached = weatherCache.get(key);
-  if (cached && cached.expires > Date.now()) return res.json(cached.data);
-  try {
-    const params = new URLSearchParams({
-      latitude,
-      longitude,
-      current: "temperature_2m,weather_code",
-      daily: "temperature_2m_max,temperature_2m_min,weather_code",
-      forecast_days: "5",
-      timezone: "auto",
-      temperature_unit: units,
-    });
-    const response = await fetch(
-      `https://api.open-meteo.com/v1/forecast?${params}`,
-      { signal: AbortSignal.timeout(10000), redirect: "error" },
-    );
-    if (!response.ok) throw new Error();
-    const data = await response.json();
-    if (weatherCache.size >= 200)
-      weatherCache.delete(weatherCache.keys().next().value);
-    weatherCache.set(key, { data, expires: Date.now() + 15 * 60 * 1000 });
-    res.json(data);
-  } catch {
-    res.status(502).json({ error: "Weather is temporarily unavailable." });
-  }
-});
 // Country flags come from the flag-icons package (MIT), so they render as real
 // images on every device instead of depending on emoji fonts.
 app.use(
@@ -1568,8 +1382,6 @@ app.use((err, req, res, next) =>
 );
 setInterval(() => {
   sessions.sweep();
-  for (const [id, data] of weatherAttempts)
-    if (data.until < Date.now()) weatherAttempts.delete(id);
   for (const [id, data] of apiAttempts)
     if (data.until < Date.now()) apiAttempts.delete(id);
   for (const [ip, data] of attempts)

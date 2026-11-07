@@ -5,6 +5,15 @@ fs.mkdirSync(shots, { recursive: true });
 async function view(page, name) {
   await page.locator(`#page-nav button[data-page="${name}"]`).click();
 }
+// At >=768px Settings and Log out live in the header menu; below, they are header buttons.
+async function headerAction(page, name) {
+  await page.waitForSelector("body[data-entry-loaded]");
+  const menu = page.locator("#menu-button");
+  if (await menu.isVisible()) await menu.click();
+  await page.getByRole("button", { name, exact: true }).click();
+}
+const openSettings = page => headerAction(page, "Settings");
+
 async function login(page) {
   // Existing-user fixture: most tests exercise the search-enabled home page.
   await page.addInitScript(() => {
@@ -27,7 +36,7 @@ test("private APIs require login, writes reject cross-origin, and headers preven
   for (const path of [
     "/api/recent",
     "/api/calendar",
-    "/api/weather",
+    "/api/recommendations",
     "/api/me",
     "/api/seerr/popular",
     "/api/in-theaters",
@@ -49,7 +58,7 @@ test("private APIs require login, writes reject cross-origin, and headers preven
     "frame-ancestors 'none'",
   );
 });
-test("desktop navigation, status filters, settings, weather, and session invalidation", async ({
+test("desktop navigation, status filters, settings, and session invalidation", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1100 });
@@ -76,22 +85,13 @@ test("desktop navigation, status filters, settings, weather, and session invalid
     page.locator(".entry").filter({ hasText: "North of Nowhere" }),
   ).toHaveCount(0);
   await page.locator('[data-type="tv"]').check();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByPlaceholder("City name").fill("Sample");
-  await page.getByRole("button", { name: "Find city", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Sample City, Example Region", exact: true })
-    .click();
-  await page.locator('[data-pref="weather"]').check();
-  await page.getByRole("button", { name: "Close settings" }).click();
-  await expect(page.locator("#weather-content")).toContainText("68°F");
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator('[data-pref="recent"]').uncheck();
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(page.locator("#recent-section")).toBeHidden();
   await page.reload();
   await expect(page.locator("#recent-section")).toBeHidden();
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await headerAction(page, "Sign out");
   await expect(
     page.getByRole("button", { name: "Explore demo" }),
   ).toBeVisible();
@@ -295,13 +295,13 @@ test("demo search, request flow, requests list, and settings toggles", async ({
   await expect(
     page.locator("#search-results .result-card .poster-status"),
   ).toHaveAttribute("aria-label", "Processing");
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator('[data-pref="requests"]').uncheck();
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(page.locator("#requests-section")).toBeHidden();
   await page.reload();
   await expect(page.locator("#requests-section")).toBeHidden();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator('[data-pref="requests"]').check();
   await page.locator('[data-pref="search"]').uncheck();
   await page.getByRole("button", { name: "Close settings" }).click();
@@ -441,7 +441,7 @@ test("hide-unmonitored filter drops unmonitored entries and persists", async ({
 
 test("settings connection tests report results", async ({ page }) => {
   await login(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.getByRole("button", { name: "Jellyfin", exact: true }).click();
   await expect(page.locator("#connection-result")).toHaveText(
     "Jellyfin: connected.",
@@ -543,30 +543,18 @@ test("search footers stay aligned with long titles, missing overviews, and after
 });
 
 for (const width of [1440, 393, 320, 280]) {
-  test(`weather city picker and administrator name settings at ${width}px`, async ({
+  test(`administrator name settings at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 1000 });
     await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.getByPlaceholder("City name").fill("Sample");
-    await page.getByRole("button", { name: "Find city", exact: true }).click();
-    await page
-      .getByRole("button", { name: "Sample City, Example Region", exact: true })
-      .click();
-    await page.locator("#weather-units").selectOption("celsius");
-    await page.locator('[data-pref="weather"]').check();
-    await expect(page.locator("#weather-content")).toContainText("20°C");
+    await openSettings(page);
     await page.locator("#display-name").fill("Movie Room");
     await page.getByRole("button", { name: "Save name", exact: true }).click();
     await expect(page.locator("#display-name-status")).toHaveText(
       "Saved for everyone.",
     );
     await expect(page.locator(".masthead .app-name")).toHaveText("Movie Room");
-    await page.locator("#weather-settings").scrollIntoViewIfNeeded();
-    await page
-      .locator("#settings")
-      .screenshot({ path: `${shots}/marquee-settings-weather-${width}.png` });
     await page.locator("#display-name-settings").scrollIntoViewIfNeeded();
     await page
       .locator("#settings")
@@ -576,17 +564,10 @@ for (const width of [1440, 393, 320, 280]) {
         .locator("#settings")
         .evaluate((el) => el.scrollWidth <= el.clientWidth),
     ).toBe(true);
-    await expect(page.locator("#weather-settings-status")).toHaveText(
-      "Saved to your account.",
-    );
     await page.getByRole("button", { name: "Close settings" }).click();
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await expect(page.locator("#weather-content")).toContainText("20°C");
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await expect(page.locator("#weather-city-selected")).toHaveText(
-      "Sample City, Example Region",
-    );
+    await openSettings(page);
     await page.locator("#display-name").fill("Marquee");
     await page.getByRole("button", { name: "Save name", exact: true }).click();
     await expect(page.locator("#display-name-status")).toHaveText(
@@ -763,7 +744,7 @@ test("top ten collapse and settings hiding persist", async ({ page }) => {
   );
   await page.locator("#popular-collapse").click();
   await expect(page.locator("#popular-content")).toBeVisible();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator('[data-pref="popular"]').uncheck();
   await expect(page.locator("#popular-section")).toBeHidden();
 });
@@ -800,30 +781,6 @@ for (const width of [1440, 393, 280]) {
   });
 }
 
-test("weather refreshes on a 15-minute timer and stops when disabled", async ({
-  page,
-}) => {
-  await login(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByPlaceholder("City name").fill("Sample");
-  await page.getByRole("button", { name: "Find city", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Sample City, Example Region", exact: true })
-    .click();
-  await page.locator('[data-pref="weather"]').check();
-  await expect(page.locator("#weather-content")).toContainText("68°F");
-  await page.clock.install();
-  await page.evaluate(() => scheduleWeather());
-  let calls = 0;
-  page.on("request", (req) => {
-    if (req.url().includes("/api/weather?")) calls++;
-  });
-  await page.clock.fastForward(15 * 60 * 1000);
-  await expect.poll(() => calls).toBe(1);
-  await page.locator('[data-pref="weather"]').uncheck();
-  await page.clock.fastForward(30 * 60 * 1000);
-  expect(calls).toBe(1);
-});
 
 test("shared queue is titled Requests and keeps requester names", async ({
   page,
@@ -1096,7 +1053,7 @@ for (const width of [1440, 393, 280]) {
       .locator("#episode-detail")
       .screenshot({ path: `${shots}/marquee-ratings-popup-${width}.png` });
     await page.locator("#episode-close").click();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await page.locator('[data-pref="ratings"]').uncheck();
     await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#recent .media-rating")).toBeHidden();
@@ -1170,7 +1127,7 @@ for (const width of [1440, 393, 320, 280]) {
     await page
       .locator(".masthead")
       .screenshot({ path: `${shots}/marquee-shortcut-${width}.png` });
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await expect(page.locator('[data-pref="colorblind"]')).not.toBeChecked();
     await page.locator('[data-pref="colorblind"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
@@ -1231,7 +1188,7 @@ test("blue orange accessibility palette applies to every calendar view", async (
   const normal = await page
     .locator(".entry.available")
     .evaluate((el) => getComputedStyle(el).color);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator('[data-pref="colorblind"]').check();
   await page.getByRole("button", { name: "Close settings" }).click();
   const colors = {
@@ -1264,7 +1221,7 @@ test("blue orange accessibility palette applies to every calendar view", async (
       path: `${shots}/marquee-deuteran-${view.toLowerCase()}.png`,
     });
   }
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator('[data-pref="colorblind"]').uncheck();
   await page.getByRole("button", { name: "Close settings" }).click();
   expect(
@@ -1299,7 +1256,7 @@ for (const width of [393, 320, 280]) {
       .screenshot({ path: `${shots}/marquee-login-16px-${width}.png` });
     await page.unroute("**/api/config");
     await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     for (const input of await page.locator("input, select, textarea").all()) {
       expect(
         await input.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
@@ -1559,21 +1516,6 @@ test("search is live: results follow typing after a pause, stale answers are ign
   await expect(page.locator("#search-results .result-card")).toHaveCount(0);
 });
 
-test("weather forecast shows five readable day tiles on phones", async ({ page }) => {
-  await page.setViewportSize({ width: 393, height: 900 });
-  await login(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByPlaceholder("City name").fill("Sample");
-  await page.getByRole("button", { name: "Find city", exact: true }).click();
-  await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
-  await page.locator('[data-pref="weather"]').check();
-  await page.getByRole("button", { name: "Close settings" }).click();
-  const days = page.locator("#weather-forecast .forecast-day");
-  await expect(days).toHaveCount(5);
-  expect(await days.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(14);
-  const boxes = await days.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().right));
-  expect(Math.max(...boxes)).toBeLessThanOrEqual(393);
-});
 
 for (const width of [1440, 393]) {
   test(`request dialog: season picker and advanced options at ${width}px`, async ({ page }) => {
@@ -1631,7 +1573,7 @@ for (const width of [1440, 393]) {
   test(`settings shows who is signed in at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     const card = page.locator("#settings-user");
     await expect(card).toBeVisible();
     await expect(page.locator("#settings-username")).not.toHaveText("");
@@ -1796,16 +1738,9 @@ for (const width of [1440, 834, 393, 320, 280]) {
   test(`page spacing idle and search states at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1100 });
     await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.getByPlaceholder("City name").fill("Sample");
-    await page.getByRole("button", { name: "Find city", exact: true }).click();
-    await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
-    await page.locator('[data-pref="weather"]').check();
-    await page.getByRole("button", { name: "Close settings" }).click();
-    await expect(page.locator("#weather-content")).toContainText("68°F");
-    const gap = () => page.evaluate(() => document.querySelector("#weather").getBoundingClientRect().top - document.querySelector("#search-form").getBoundingClientRect().bottom);
+    const gap = () => page.evaluate(() => document.querySelector("#recent-section").getBoundingClientRect().top - document.querySelector("#search-form").getBoundingClientRect().bottom);
     const idleGap = await gap();
-    if (width < 768) expect(idleGap).toBe(57);
+    expect(idleGap).toBeGreaterThan(0);
     await expect(page.locator("#search-status")).toBeHidden();
     await expect(page.locator("#search-results")).toBeHidden();
     await page.screenshot({ path: `${shots}/marquee-spacing-after-${width}.png`, fullPage: true });
@@ -1826,11 +1761,9 @@ for (const width of [1440, 834, 393, 320, 280]) {
     await expect(page.locator("#search-status")).toBeVisible();
     await input.press("Escape");
     expect(await gap()).toBe(idleGap);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.locator('[data-pref="weather"]').uncheck();
+    await openSettings(page);
     await page.locator('[data-pref="recent"]').uncheck();
     await page.getByRole("button", { name: "Close settings" }).click();
-    await expect(page.locator("#weather")).toBeHidden();
     await expect(page.locator("#recent-section")).toBeHidden();
     const hiddenGap = await page.evaluate(w => document.querySelector("#calendar-section").getBoundingClientRect().top - document.querySelector(w >= 768 ? "#page-nav" : "#search-form").getBoundingClientRect().bottom, width);
     expect(hiddenGap).toBeGreaterThanOrEqual(24);
@@ -1859,7 +1792,7 @@ for (const [label, saved, enabled] of [
     await expect(page.locator("#recent .poster-card")).toHaveCount(6);
     await expect(page.locator("#search-form")).toBeVisible({ visible: enabled });
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("marquee:Demo viewer:preferences")).search)).toBe(enabled);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await expect(page.locator('[data-pref="search"]')).toBeChecked({ checked: enabled });
     await page.locator('[data-pref="search"]').setChecked(!enabled);
     await page.getByRole("button", { name: "Close settings" }).click();
@@ -1868,7 +1801,7 @@ for (const [label, saved, enabled] of [
     await expect(page.locator("#recent .poster-card")).toHaveCount(6);
     await expect(page.locator("#search-form")).toBeVisible({ visible: !enabled });
     if (label === "fresh") {
-      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await openSettings(page);
       await page.locator('[data-pref="search"]').check();
       await page.getByRole("button", { name: "Close settings" }).click();
       await page.screenshot({ path: `${shots}/marquee-search-default-on-tablet.png` });
@@ -1878,35 +1811,12 @@ for (const [label, saved, enabled] of [
   });
 }
 
-test("weather location is device opt-in, approximate, and falls back to configured city", async ({ page, context }) => {
-  await context.grantPermissions(["geolocation"]);
-  await context.setGeolocation({ latitude: 35.123456, longitude: -80.987654 });
-  await login(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await expect(page.locator("#weather-location")).not.toBeChecked();
-  await page.getByPlaceholder("City name").fill("Sample");
-  await page.getByRole("button", { name: "Find city", exact: true }).click();
-  await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
-  await page.locator('[data-pref="weather"]').check();
-  const located = page.waitForRequest(req => req.url().includes("/api/weather?") && new URL(req.url()).searchParams.get("latitude") === "35.12");
-  await page.locator("#weather-location").check();
-  const url = new URL((await located).url());
-  expect(url.searchParams.get("longitude")).toBe("-80.99");
-  await expect(page.locator("#weather-location-status")).toContainText("approximate location");
-  await expect(page.locator(".forecast-icon")).toHaveCount(5);
-  await expect(page.locator("#weather-content")).not.toContainText("Sample City");
-  await page.addInitScript(() => Object.defineProperty(navigator, "geolocation", { value: { getCurrentPosition: (_success, fail) => fail({ code: 1 }) } }));
-  await page.reload();
-  await expect(page.locator("#weather-content")).toContainText("68°F");
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await expect(page.locator("#weather-location-status")).toContainText("Using your saved city");
-});
 
 test("personal shelves are opt-in, collapsible and account-scoped watchlist saves never request", async ({ page, context }) => {
   await page.setViewportSize({ width: 1440, height: 1100 });
   await login(page);
   for (const key of ["watchlist", "continueWatching", "nextUp"]) await expect(page.locator(`#${key}-section`)).toBeHidden();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   for (const key of ["watchlist", "continueWatching", "nextUp"]) await page.locator(`[data-pref="${key}"]`).check();
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(page.locator("#continueWatching-content .poster-card")).toHaveCount(3);
@@ -1951,7 +1861,7 @@ test("personal shelves are opt-in, collapsible and account-scoped watchlist save
 
 test("display sync is opt-in, filtered and restores the account choices", async ({ page }) => {
   await login(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await expect(page.locator("#sync-display")).not.toBeChecked();
   await page.locator("#sync-display").check();
   await expect(page.locator("#sync-display-status")).toHaveText("Display settings synced.");
@@ -1959,7 +1869,7 @@ test("display sync is opt-in, filtered and restores the account choices", async 
   await expect.poll(async () => (await (await page.request.get("/api/display-preferences")).json()).preferences.calendar).toBe(false);
   await page.reload();
   await expect(page.locator("#calendar-section")).toBeHidden();
-  const response = await page.request.post("/api/display-preferences", { headers: { Origin: "http://127.0.0.1:8739" }, data: { calendar: true, weatherLocation: true, token: "not-stored", userId: "other" } });
+  const response = await page.request.post("/api/display-preferences", { headers: { Origin: "http://127.0.0.1:8739" }, data: { calendar: true, junk: true, token: "not-stored", userId: "other" } });
   expect(await response.json()).toEqual({ preferences: { calendar: true } });
   await page.reload();
   await expect(page.locator("#calendar-section")).toBeVisible();
@@ -1967,48 +1877,12 @@ test("display sync is opt-in, filtered and restores the account choices", async 
   expect((await page.request.post("/api/watchlist", { headers: { Origin: "http://127.0.0.1:8739" }, data: { mediaType: "movie", mediaId: -1, saved: true } })).status()).toBe(400);
 });
 
-for (const width of [1440, 1100, 834, 393]) {
-  test(`weather moves left when search is hidden at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
-    await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.getByPlaceholder("City name").fill("Sample");
-    await page.getByRole("button", { name: "Find city", exact: true }).click();
-    await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
-    await page.locator('[data-pref="weather"]').check();
-    await page.getByRole("button", { name: "Close settings" }).click();
-    await expect(page.locator("#weather-content")).toContainText("68°F");
-    const positions = () => page.evaluate(() => {
-      const weather = document.querySelector("#weather").getBoundingClientRect();
-      const content = document.querySelector("#weather-content").getBoundingClientRect();
-      return { left: weather.left, center: (weather.left + weather.right) / 2, contentLeft: content.left, contentCenter: (content.left + content.right) / 2 };
-    });
-    if (width >= 768) {
-      const before = await positions();
-      expect(Math.abs(before.contentLeft - before.left)).toBeLessThan(1);
-    }
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.locator('[data-pref="search"]').uncheck();
-    await page.getByRole("button", { name: "Close settings" }).click();
-    const hidden = await positions();
-    expect(Math.abs(hidden.contentLeft - hidden.left)).toBeLessThan(1);
-    await page.screenshot({ path: `${shots}/marquee-weather-left-${width}.png` });
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.locator('[data-pref="search"]').check();
-    await page.getByRole("button", { name: "Close settings" }).click();
-    if (width >= 768) {
-      const after = await positions();
-      expect(Math.abs(after.contentLeft - after.left)).toBeLessThan(1);
-    }
-  });
-}
-
 for (const width of [1440, 393]) {
   test(`section order drag, server reload, hidden sections and reset at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 950 });
     await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await expect(page.locator("#section-order-list li")).toHaveCount(15);
+    await openSettings(page);
+    await expect(page.locator("#section-order-list li")).toHaveCount(14);
     const handle = page.getByRole("button", { name: "Drag Release calendar", exact: true });
     const target = page.locator('#section-order-list li[data-order-key="search"]');
     await handle.scrollIntoViewIfNeeded();
@@ -2029,8 +1903,8 @@ for (const width of [1440, 393]) {
     await page.waitForSelector("body[data-entry-loaded]");
     await expect(page.locator("#recent .poster-card")).toHaveCount(6);
     expect(await page.evaluate(() => document.querySelector("#calendar-section").getBoundingClientRect().top < document.querySelector("#search-section").getBoundingClientRect().top)).toBe(true);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.getByRole("button", { name: "Move Weather down", exact: true }).click();
+    await openSettings(page);
+    await page.getByRole("button", { name: "Move Search and request down", exact: true }).click();
     await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
     await page.locator('[data-pref="watchlist"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
@@ -2041,22 +1915,18 @@ for (const width of [1440, 393]) {
   await view(page, "home");
     await page.locator("#watchlist-section").getByRole("button", { name: "Collapse Favorites" }).click();
     await expect(page.locator("#watchlist-content")).toBeHidden();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await page.getByRole("button", { name: "Reset Discover order", exact: true }).click();
     await expect(page.locator("#section-order-list li").first()).toHaveAttribute("data-order-key", "search");
     await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
   });
 }
 
-test("section ordering keeps separated search/weather and saves touch drag", async ({ browser }) => {
+test("section ordering saves a touch drag", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 393, height: 900 }, hasTouch: true, isMobile: true });
   const page = await context.newPage(); await login(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByPlaceholder("City name").fill("Sample");
-  await page.getByRole("button", { name: "Find city", exact: true }).click();
-  await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
-  await page.locator('[data-pref="weather"]').check();
-  const handle = page.getByRole("button", { name: "Drag Weather", exact: true });
+  await openSettings(page);
+  const handle = page.getByRole("button", { name: "Drag Recently added", exact: true });
   await handle.scrollIntoViewIfNeeded();
   const from = await handle.boundingBox();
   const to = await page.locator('[data-order-key="calendar"]').boundingBox();
@@ -2065,51 +1935,15 @@ test("section ordering keeps separated search/weather and saves touch drag", asy
   await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: to.x + 15, y: to.y + 15 }] });
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
-  expect((await (await page.request.get("/api/section-order")).json()).order.filter(key => ["search", "weather", "recent", "calendar", "recommendations", "popular"].includes(key)).indexOf("weather")).toBe(3);
+  expect((await (await page.request.get("/api/section-order")).json()).order.filter(key => ["search", "recent", "calendar"].includes(key)).indexOf("recent")).toBe(2);
   await page.getByRole("button", { name: "Close settings" }).click();
-  await expect(page.locator(".home-top-row")).toBeHidden();
-  expect(await page.locator("#weather").evaluate(el => el.parentElement.tagName)).toBe("MAIN");
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.locator("#weather").scrollIntoViewIfNeeded();
-  await page.screenshot({ path: `${shots}/marquee-order-weather-separated.png` });
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.getByRole("button", { name: "Reset Discover order", exact: true }).click();
   await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
   await page.getByRole("button", { name: "Close settings" }).click();
-  await page.setViewportSize({ width: 393, height: 900 });
-  await expect(page.locator(".home-top-row")).toBeVisible();
   await context.close();
 });
 
-test("weather dragged above search still shares the desktop row", async ({ browser }) => {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-  const page = await context.newPage(); await login(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByPlaceholder("City name").fill("Sample");
-  await page.getByRole("button", { name: "Find city", exact: true }).click();
-  await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
-  await page.locator('[data-pref="weather"]').check();
-  await page.locator('[data-order-key="weather"] [data-order-move="-1"]').click();
-  await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
-  await page.getByRole("button", { name: "Close settings" }).click();
-  const row = page.locator(".home-top-row");
-  // Wide layouts keep search in the masthead, so weather stands alone in the saved order.
-  await expect(row).toBeHidden();
-  expect(await page.locator("#weather").evaluate(el => el.parentElement.tagName)).toBe("MAIN");
-  const wide = await page.evaluate(() => ({ weather: document.querySelector("#weather").getBoundingClientRect().top, search: document.querySelector("#search-section").getBoundingClientRect().top }));
-  expect(wide.weather).toBeLessThan(wide.search);
-  // Narrow: they pair again and stack in the saved order, weather above search.
-  await page.setViewportSize({ width: 500, height: 900 });
-  await expect(row).toBeVisible();
-  expect(await row.evaluate(el => [...el.children].map(child => child.id))).toEqual(["weather", "search-section"]);
-  const stacked = await row.evaluate(el => { const search = el.querySelector("#search-section").getBoundingClientRect(), weather = el.querySelector("#weather").getBoundingClientRect(); return { gap: search.top - weather.top, divider: getComputedStyle(el.querySelector("#weather")).borderBottomWidth }; });
-  expect(stacked.gap).toBeGreaterThan(100);
-  expect(stacked.divider).toBe("1px");
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("button", { name: "Reset Discover order", exact: true }).click();
-  await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
-  await context.close();
-});
 
 test("continue watching renders series, movies and episode labels without changing playback", async ({ page }) => {
   await page.setViewportSize({ width: 532, height: 900 });
@@ -2121,7 +1955,7 @@ test("continue watching renders series, movies and episode labels without changi
     { id: "episode", title: "A show", subtitle: "S2E3 · Episode title", art: "orbit", progress: 50, remaining: 20, detail: {} },
   ] } }));
   await login(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator('[data-pref="continueWatching"]').check();
   await page.getByRole("button", { name: "Close settings" }).click();
   await view(page, "home");
@@ -2146,7 +1980,7 @@ for (const width of [1440, 393, 280]) {
   test(`personal collapse arrows stay with reordered headers at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1100 });
     await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     for (const key of ["watchlist", "continueWatching", "nextUp"]) await page.locator(`[data-pref="${key}"]`).check();
     await page.getByRole("button", { name: "Close settings" }).click();
     await view(page, "home");
@@ -2164,7 +1998,7 @@ for (const width of [1440, 393, 280]) {
     }
   await view(page, "home");
     await page.locator("#nextUp-section .section-heading").screenshot({ path: `${shots}/marquee-arrow-header-${width}.png` });
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await page.getByRole("button", { name: "Move Next up down", exact: true }).click();
     await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#nextUp-section h2")).toBeVisible();
@@ -2177,7 +2011,7 @@ test("media shelves auto-refresh quietly, skip disabled/hidden tabs, and defer f
   await page.setViewportSize({ width: 393, height: 900 });
   await page.clock.install();
   await login(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await expect(page.locator("#shelf-refresh-minutes")).toHaveValue("5");
   await page.locator('[data-pref="continueWatching"]').check();
   await page.locator('[data-pref="nextUp"]').check();
@@ -2226,7 +2060,7 @@ test("media shelves auto-refresh quietly, skip disabled/hidden tabs, and defer f
   expect(calls).toEqual(hiddenCalls);
   await page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, value: false }); document.dispatchEvent(new Event("visibilitychange")); });
   await expect(page.locator("#recent")).toContainText("Updated 4");
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator('[data-pref="nextUp"]').uncheck();
   await page.locator('[data-pref="continueWatching"]').uncheck();
   await page.getByRole("button", { name: "Close settings" }).click();
@@ -2235,7 +2069,7 @@ test("media shelves auto-refresh quietly, skip disabled/hidden tabs, and defer f
   await page.clock.runFor(75000);
   await expect(page.locator("#recent")).toContainText("Updated 5");
   expect(calls.nextUp).toBe(disabledCalls.nextUp); expect(calls.continueWatching).toBe(disabledCalls.continueWatching);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator("#shelf-refresh-minutes").selectOption("0");
   await page.getByRole("button", { name: "Close settings" }).click();
   const stoppedCalls = { ...calls };
@@ -2263,13 +2097,9 @@ for (const width of [1440, 834, 393, 280]) {
   test(`whole app audit enabled sections, dialogs, console and accessible controls at ${width}px`, async ({ page }) => {
     const errors = []; page.on("pageerror", error => errors.push(error.message));
     await page.setViewportSize({ width, height: 1100 }); await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    for (const key of ["watchlist", "continueWatching", "nextUp", "weather"]) await page.locator(`[data-pref="${key}"]`).check();
-    await page.getByPlaceholder("City name").fill("Sample");
-    await page.getByRole("button", { name: "Find city", exact: true }).click();
-    await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
+    await openSettings(page);
+    for (const key of ["watchlist", "continueWatching", "nextUp"]) await page.locator(`[data-pref="${key}"]`).check();
     await page.getByRole("button", { name: "Close settings" }).click();
-    await expect(page.locator("#weather-content")).toContainText("68°F");
     await expect(page.locator("#continueWatching-content .poster-card")).toHaveCount(3);
     await expect(page.locator("#nextUp-content .poster-card")).toHaveCount(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -2282,7 +2112,7 @@ for (const width of [1440, 834, 393, 280]) {
       await page.getByRole("button", { name: "Close episode details" }).click();
     }
     await page.screenshot({ path: `${shots}/marquee-audit-full-${width}.png`, fullPage: true });
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await page.locator("#settings").screenshot({ path: `${shots}/marquee-audit-settings-${width}.png` });
     expect(errors).toEqual([]);
   });
@@ -2290,7 +2120,7 @@ for (const width of [1440, 834, 393, 280]) {
 
 test("refresh interval persists and syncs, collapsed shelves remain collapsed after updates", async ({ page }) => {
   await page.clock.install(); await login(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator("#shelf-refresh-minutes").selectOption("2");
   await page.locator("#sync-display").check();
   await expect.poll(async () => (await (await page.request.get("/api/display-preferences")).json()).preferences?.shelfRefreshMinutes).toBe(2);
@@ -2305,7 +2135,7 @@ test("refresh interval persists and syncs, collapsed shelves remain collapsed af
   await expect(page.locator("#continueWatching-content")).toContainText("Fresh episode");
   await page.reload();
   await expect(page.locator("#recent .poster-card")).toHaveCount(6);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await expect(page.locator("#shelf-refresh-minutes")).toHaveValue("2");
   await expect(page.locator("#sync-display")).toBeChecked();
 });
@@ -2319,7 +2149,7 @@ for (const width of [1440, 393]) {
     await page.route("**/api/personal/nextUp", route => route.fulfill({ json: { items: [{ id: "episode", title: "Rewatch example", subtitle: "S2E4 · The Wedding", watched: true, watchedScope: "episode", art: "north", detail: { title: "Rewatch example", subtitle: "S2E4 · The Wedding" } }] } }));
     await page.locator("#refresh").click();
     await expect(page.locator("#recent .watched-badge")).toHaveCount(2);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await page.locator('[data-pref="nextUp"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#nextUp-content .watched-badge")).toHaveAttribute("aria-label", "Episode watched");
@@ -2337,7 +2167,7 @@ for (const width of [1440, 393]) {
 for (const width of [1440, 393]) {
   test(`favorites heart, recommendations and my requests preview at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 }); await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await page.locator('[data-pref="watchlist"]').check();
     await page.locator('[data-pref="recommendations"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
@@ -2369,7 +2199,7 @@ for (const width of [1440, 393, 280]) {
   test(`Maintainerr Leaving soon preview, defaults and safe popout at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 }); await login(page);
     await expect(page.locator("#leavingSoon-section")).toBeHidden();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await page.locator('[data-pref="leavingSoon"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#leavingSoon-content .poster-card")).toHaveCount(3);
@@ -2393,7 +2223,7 @@ for (const width of [1440, 393, 280]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto("/"); await page.getByRole("button", { name: "Explore demo" }).click();
     await expect(page.locator("#recent .poster-card")).toHaveCount(6);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     for (const key of ["watchlist", "continueWatching", "nextUp", "leavingSoon", "recommendations", "requests"]) await page.locator(`[data-pref="${key}"]`).check();
     await page.getByRole("button", { name: "Close settings" }).click();
     for (const view of ["discover", "home"]) {
@@ -2405,7 +2235,7 @@ for (const width of [1440, 393, 280]) {
     await expect(page.locator("#calendar-section")).toBeHidden();
     await view(page, "home");
   await expect(page.locator("#requests-section")).toBeVisible();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await page.locator("#tab-order").selectOption("home");
     await expect(page.locator("#page-nav button").first()).toHaveText("On Jellyfin");
     await page.locator("#tab-order-settings").screenshot({ path: `${shots}/marquee-nav-settings-${width}.png` });
@@ -2415,31 +2245,20 @@ for (const width of [1440, 393, 280]) {
 }
 
 for (const width of [1440, 393, 280]) {
-  test(`five day weather tab mockup at ${width}px`, async ({ page }) => {
+  test(`header search placement at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 }); await page.goto("/");
     await page.getByRole("button", { name: "Explore demo" }).click();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.getByPlaceholder("City name").fill("Sample");
-    await page.getByRole("button", { name: "Find city", exact: true }).click();
-    await page.getByRole("button", { name: "Sample City, Example Region", exact: true }).click();
-    await page.locator('[data-pref="weather"]').check();
-    await page.getByRole("button", { name: "Close settings" }).click();
-    await expect(page.locator("#weather-forecast .forecast-day")).toHaveCount(5);
     if (width >= 768) {
+      await page.waitForFunction(() => document.querySelector("#search-form")?.parentElement?.classList.contains("account"));
       const header = await page.evaluate(() => ({
         inAccount: document.querySelector("#search-form").parentElement.classList.contains("account"),
         formRight: document.querySelector("#search-form").getBoundingClientRect().right,
         dotLeft: document.querySelector("#jellyfin-header-status").getBoundingClientRect().left,
-        search: document.querySelector("#search-section").getBoundingClientRect().width,
-        weather: document.querySelector("#weather").getBoundingClientRect().width,
       }));
       expect(header.inAccount).toBe(true);
       expect(header.formRight).toBeLessThanOrEqual(header.dotLeft + 1);
-      expect(Math.abs(header.search - header.weather)).toBeLessThan(2);
     }
     await page.evaluate(() => scrollTo(0, 0));
-    await page.screenshot({ path: `${shots}/marquee-nav-weather-${width}.png` });
-    await page.locator("#weather").screenshot({ path: `${shots}/marquee-five-days-${width}.png` });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
@@ -2447,7 +2266,7 @@ for (const width of [1440, 393, 280]) {
 test("tab startup sync, empty states and shelf order stay independent", async ({ page }) => {
   await login(page);
   const order = (await (await page.request.get("/api/section-order")).json()).order;
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator("#sync-display").check();
   await page.locator("#tab-order").selectOption("home");
   for (const key of ["watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "leavingSoon", "requests"]) await page.locator(`[data-pref="${key}"]`).uncheck();
@@ -2465,7 +2284,7 @@ test("tab startup sync, empty states and shelf order stay independent", async ({
 
 test("Home refreshes its active personal shelves without polling Discover", async ({ page }) => {
   await page.clock.install(); await login(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   for (const key of ["continueWatching", "nextUp"]) await page.locator(`[data-pref="${key}"]`).check();
   // Isolate the personal-shelf timer from the independently tested Requests read.
   await page.locator('[data-pref="requests"]').uncheck();
@@ -2494,10 +2313,10 @@ test("Home refreshes its active personal shelves without polling Discover", asyn
 for (const width of [1440, 393, 280]) {
   test(`page-specific shelf ordering preserves the other page at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 }); await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     const keys = pageName => page.locator(`[data-order-page="${pageName}"] li`).evaluateAll(rows => rows.map(row => row.dataset.orderKey));
     const discover = await keys("discover"), home = await keys("home");
-    expect(discover).toHaveLength(7); expect(home).toHaveLength(8);
+    expect(discover).toHaveLength(6); expect(home).toHaveLength(8);
     await page.getByRole("button", { name: "Move Continue watching up", exact: true }).click();
     expect(await keys("discover")).toEqual(discover);
     expect((await keys("home"))[0]).toBe("continueWatching");
@@ -2511,7 +2330,7 @@ for (const width of [1440, 393, 280]) {
     await page.locator('[data-order-page="home"]').screenshot({ path: `${shots}/marquee-order-jellyfin-${width}.png` });
     expect(await page.locator("#settings").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.getByRole("button", { name: "Close settings" }).click(); await page.reload();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     expect(await keys("home")).toEqual(home); expect(await keys("discover")).toEqual(changedDiscover);
   });
 }
@@ -2520,7 +2339,7 @@ for (const width of [1440, 834, 393, 360, 280]) {
   test(`twenty recommendations keep readable poster widths at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.route("**/api/recommendations", route => route.fulfill({ json: { seed: "Cops", items: Array.from({ length: 20 }, (_, i) => ({ id: 200 + i, mediaType: "tv", title: ["Rob Dyrdek's Fantasy Factory", "Counting Cars International", "Married at First Sight"][i % 3], year: String(2009 + i), rating: { value: 7.8, source: "TMDB" }, poster: ["north", "signal", "orbit"][i % 3], availability: i === 0 ? 5 : i === 1 ? 3 : 1 })) } }));
-    await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await login(page); await openSettings(page);
     await page.locator('[data-pref="recommendations"]').check(); await page.getByRole("button", { name: "Close settings" }).click();
     const row = page.locator("#recommendations-content"), cards = row.locator(".result-card");
     await expect(cards).toHaveCount(20);
@@ -2544,7 +2363,7 @@ for (const width of [1440, 834, 393, 360, 280]) {
 for (const width of [1440, 834, 393, 280]) {
   test(`poster sizes are consistent and device-only at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 }); await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     for (const key of ["continueWatching", "nextUp", "recommendations", "leavingSoon"]) await page.locator(`[data-pref="${key}"]`).check();
     await page.locator("#sync-display").check();
     let previous = 0;
@@ -2564,12 +2383,12 @@ for (const width of [1440, 834, 393, 280]) {
         const box = await bounds(selector); expect(Math.abs(box.width - recent.width)).toBeLessThan(1); expect(Math.abs(box.height - recent.height)).toBeLessThan(1);
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await openSettings(page);
     }
     await expect.poll(async () => (await (await page.request.get("/api/display-preferences")).json()).preferences?.firstTab).toBe("discover");
     expect((await (await page.request.get("/api/display-preferences")).json()).preferences).not.toHaveProperty("posterSize");
     await page.getByRole("button", { name: "Close settings" }).click(); await page.reload();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await expect(page.locator("#poster-size")).toHaveValue("large");
     await page.locator("#poster-size").screenshot({ path: `${shots}/marquee-poster-size-settings-${width}.png` });
   });
@@ -2579,7 +2398,7 @@ for (const width of [1440, 393]) {
   test(`last five recommendations and purple scrollbars preview at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.route("**/api/recommendations", route => route.fulfill({ json: { seeds: ["Cops", "The Last Signal", "North of Nowhere", "Orbit Nine", "After Hours"], items: Array.from({ length: 20 }, (_, i) => ({ id: 300 + i, mediaType: i % 2 ? "movie" : "tv", title: ["Rob Dyrdek's Fantasy Factory", "A New Movie", "Counting Cars", "Another Movie"][i % 4], year: "2024", rating: { value: 7.8, source: "TMDB" }, poster: ["north", "signal", "orbit"][i % 3], availability: 1 })) } }));
-    await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await login(page); await openSettings(page);
     await page.locator('[data-pref="recommendations"]').check(); await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#recommendation-seed")).toHaveText("Recent picks · Because you watched Cops, The Last Signal, North of Nowhere, Orbit Nine, After Hours");
     const row = page.locator("#recommendations-content");
@@ -2605,7 +2424,7 @@ for (const width of [1440, 834, 393, 280]) {
     const items = Array.from({ length: 12 }, (_, i) => ({ id: 400 + i, mediaType: i % 2 ? "movie" : "tv", title: ["Short", "A much longer movie title wrapping over several lines", "Medium title"][i % 3], year: i % 3 ? "2024" : "", rating: i % 2 ? { value: 7.8, source: "TMDB" } : null, poster: ["north", "signal", "orbit"][i % 3], availability: i === 4 ? 5 : 1 }));
     await page.route("**/api/recommendations", route => route.fulfill({ json: { seeds: ["Cops", "A film"], items } }));
     await page.route("**/api/seerr/popular", route => route.fulfill({ json: { movies: items.map(item => ({ ...item, mediaType: "movie" })), tv: items.map(item => ({ ...item, mediaType: "tv" })) } }));
-    await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await login(page); await openSettings(page);
     await page.locator('[data-pref="recommendations"]').check();
     for (const size of ["small", "standard", "large"]) {
       await page.locator("#poster-size").selectOption(size); await page.getByRole("button", { name: "Close settings" }).click();
@@ -2619,14 +2438,14 @@ for (const width of [1440, 834, 393, 280]) {
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.locator("#recommendations-section").screenshot({ path: `${shots}/marquee-request-icon-${size}-${width}.png` });
-      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await openSettings(page);
     }
   });
 }
 
 test("poster plus starts a request without opening details; popout still has full Request", async ({ page }) => {
   await page.route("**/api/recommendations", route => route.fulfill({ json: { seeds: ["Cops"], items: [{ id: 7, mediaType: "movie", title: "A film", poster: "signal", availability: 1 }] } }));
-  await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click(); await page.locator('[data-pref="recommendations"]').check(); await page.getByRole("button", { name: "Close settings" }).click();
+  await login(page); await openSettings(page); await page.locator('[data-pref="recommendations"]').check(); await page.getByRole("button", { name: "Close settings" }).click();
   await page.locator("#recommendations-content .poster-request").click();
   await expect(page.locator("#request-dialog")).toBeVisible(); await expect(page.locator("#episode-detail")).not.toBeVisible();
   await page.locator("#request-dialog").getByRole("button", { name: "Cancel", exact: true }).click();
@@ -2669,12 +2488,12 @@ test("library TV popout fills its network after metadata lookup", async ({ page 
 for (const width of [1440,393]) {
   test(`watchlist heart preview in all sizes at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 }); await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click(); await page.locator('[data-pref="watchlist"]').check();
+    await openSettings(page); await page.locator('[data-pref="watchlist"]').check();
     await page.getByRole("button", { name: "Close settings" }).click(); await view(page,"home");
     await page.evaluate(() => { state.watchlistItems = [{ id: "x" }]; applyPrefs(); });
     await page.evaluate(() => renderPersonalShelf("watchlist", Array.from({ length: 12 }, (_, i) => ({ id: `preview-${i}`, favoriteId: `preview-${i}`, favorite: true, title: ["The Last Signal","North of Nowhere","After Hours"][i%3], subtitle: "2026 · Series", art: ["signal","north","orbit"][i%3], watched: i%2===0, watchedScope: "series" }))));
     for (const size of ["small","standard","large"]) {
-      await page.getByRole("button", { name: "Settings", exact: true }).click(); await page.locator("#poster-size").selectOption(size); await page.getByRole("button", { name: "Close settings" }).click();
+      await openSettings(page); await page.locator("#poster-size").selectOption(size); await page.getByRole("button", { name: "Close settings" }).click();
       await expect(page.locator("#watchlist-content .watchlist-remove").first()).toHaveAttribute("aria-pressed","true");
       await page.locator("#watchlist-section").screenshot({ path: `${shots}/marquee-watchlist-heart-${size}-${width}.png` });
     }
@@ -2682,7 +2501,7 @@ for (const width of [1440,393]) {
 }
 
 test("watchlist heart removes a favorite without opening popout or requesting media", async ({ page }) => {
-  await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await login(page); await openSettings(page);
   for (const key of ["watchlist","continueWatching"]) await page.locator(`[data-pref="${key}"]`).check();
   await page.getByRole("button", { name: "Close settings" }).click(); await view(page,"home");
   await page.locator("#continueWatching-content [data-personal]").first().click(); await page.getByRole("button", { name: "Add to Jellyfin favorites", exact: true }).click(); await page.getByRole("button", { name: "Close episode details" }).click();
@@ -2696,22 +2515,22 @@ for (const width of [1440,393]) {
   test(`Jellyfin version Settings preview at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height:900 }); await login(page);
     await page.route("**/api/jellyfin-version", route => route.fulfill({ json: {version:"10.11.2", online: true} }));
-    await page.getByRole("button", {name:"Settings",exact:true}).click();
+    await openSettings(page);
     await expect(page.locator("#jellyfin-version")).toHaveText("Jellyfin server version: 10.11.2");
     await page.locator("#jellyfin-version").scrollIntoViewIfNeeded();
     await page.locator("#settings").screenshot({path:`${shots}/marquee-jellyfin-version-${width}.png`});
   });
 }
 test("Jellyfin version has honest demo, unavailable and text-only states", async ({ page }) => {
-  await login(page); await page.getByRole("button", {name:"Settings",exact:true}).click();
+  await login(page); await openSettings(page);
   await expect(page.locator("#jellyfin-version")).toContainText("demo mode (no server connected)");
   await page.getByRole("button", {name:"Close settings"}).click();
   await page.route("**/api/jellyfin-version", route => route.fulfill({json:{version:null}}));
-  await page.getByRole("button", {name:"Settings",exact:true}).click();
+  await openSettings(page);
   await expect(page.locator("#jellyfin-version")).toHaveText("Jellyfin server version: unavailable");
   await page.getByRole("button", {name:"Close settings"}).click();
   await page.route("**/api/jellyfin-version", route => route.fulfill({json:{version:"<img src=x onerror=alert(1)>"}}));
-  await page.getByRole("button", {name:"Settings",exact:true}).click();
+  await openSettings(page);
   await expect(page.locator("#jellyfin-version")).toContainText("<img src=x onerror=alert(1)>");
   await expect(page.locator("#jellyfin-version img")).toHaveCount(0);
 });
@@ -2719,7 +2538,7 @@ test("Jellyfin version has honest demo, unavailable and text-only states", async
 for (const width of [393,1440]) {
   test(`Settings icon guide in all poster sizes at ${width}px`, async ({page}) => {
     await page.setViewportSize({width,height:1200}); await login(page);
-    await page.getByRole("button", {name:"Settings",exact:true}).click();
+    await openSettings(page);
     for (const size of ["small","standard","large"]) {
       await page.locator("#poster-size").selectOption(size);
       await expect(page.locator("#icon-guide li")).toHaveCount(10);
@@ -2737,7 +2556,7 @@ for (const width of [393,1440]) {
 
 test("Settings ends with Connections below the icon guide", async ({page}) => {
   await page.setViewportSize({width:393,height:1000}); await login(page);
-  await page.getByRole("button",{name:"Settings",exact:true}).click();
+  await openSettings(page);
   expect(await page.locator("#settings").evaluate(el=> {const guide=el.querySelector("#icon-guide"),connections=el.querySelector(".connections");return Boolean(guide.compareDocumentPosition(connections)&Node.DOCUMENT_POSITION_FOLLOWING);})).toBe(true);
   await page.locator("#settings").evaluate(el=>el.scrollTop=el.scrollHeight);
   await page.locator("#settings").screenshot({path:`${shots}/marquee-settings-guide-connections-393.png`});
@@ -2752,26 +2571,26 @@ for (const width of [393, 1440]) {
     await page.route("**/api/jellyfin-version", route => route.fulfill({ json: status }));
 
     await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await expect(page.locator(".jellyfin-version-line .jellyfin-status")).toHaveAttribute("data-status", "online");
     await page.locator(".jellyfin-version-line").scrollIntoViewIfNeeded();
     await page.locator("#settings").screenshot({ path: `${shots}/marquee-held-status-settings-online-${width}.png` });
     status = { version: null, online: false };
     await page.getByRole("button", { name: "Close settings" }).click();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await expect(page.locator(".jellyfin-version-line .jellyfin-status")).toHaveAttribute("data-status", "offline");
     await page.locator(".jellyfin-version-line").scrollIntoViewIfNeeded();
     await page.locator("#settings").screenshot({ path: `${shots}/marquee-held-status-settings-offline-${width}.png` });
     await page.getByRole("button", { name: "Close settings" }).click();
     status = { version: "10.11.2", online: true };
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     // Reset this test account only. Each page must leave the other page alone.
     for (const label of ["Discover", "On Jellyfin"]) {
       await page.getByRole("button", { name: `Reset ${label} order`, exact: true }).click();
       await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
     }
     const keys = page.locator("#section-order-list li");
-    expect(await keys.evaluateAll(rows => rows.map(row => row.dataset.orderKey))).toEqual(["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "topUnwatched", "leavingSoon", "requests"]);
+    expect(await keys.evaluateAll(rows => rows.map(row => row.dataset.orderKey))).toEqual(["search", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "topUnwatched", "leavingSoon", "requests"]);
     await page.getByRole("button", { name: "Move Next up down", exact: true }).click();
     await expect(page.locator("#section-order-status")).toHaveText("Saved to your account.");
     const beforeHome = await page.locator('[data-order-page="home"] li').evaluateAll(rows => rows.map(row => row.dataset.orderKey));
@@ -2785,10 +2604,10 @@ for (const width of [393, 1440]) {
     await expect(page.locator("#jellyfin-header-status")).toBeVisible();
     await expect(page.locator("#jellyfin-header-status")).toHaveAttribute("data-status", "online");
     await page.locator(".masthead").screenshot({ path: `${shots}/marquee-held-status-header-${width}.png` });
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await page.route("**/api/jellyfin-version", route => route.abort());
     await page.getByRole("button", { name: "Close settings" }).click();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await expect(page.locator(".jellyfin-version-line .jellyfin-status")).toHaveAttribute("data-status", "unknown");
   });
 }
@@ -2801,12 +2620,12 @@ test("header status sits left of Jellyfin and uses colorblind colors", async ({ 
   await expect(dot).toBeVisible();
   await expect(dot).toHaveAttribute("aria-label", "Jellyfin online");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator('[data-pref="colorblind"]').check();
   await expect(dot).toHaveCSS("background-color", "rgb(36, 168, 255)");
   await page.getByRole("button", { name: "Close settings" }).click();
   await page.route("**/api/jellyfin-version", route => route.fulfill({ json: { online: false, version: null } }));
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await expect(dot).toHaveAttribute("aria-label", "Jellyfin offline");
   await expect(dot).toHaveCSS("background-color", "rgb(255, 180, 91)");
 });
@@ -2815,7 +2634,7 @@ for (const width of [393, 1440, 280]) {
   test(`notification choices persist, start off and stay readable at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await page.getByRole("tab", { name: "Notifications", exact: true }).click();
     await expect(page.locator("#notify-requests")).not.toBeChecked();
     await expect(page.locator("#notify-show-list")).toContainText("No shows selected");
@@ -2829,7 +2648,7 @@ for (const width of [393, 1440, 280]) {
     await page.locator("#notify-requests").check();
     await expect(page.locator("#notify-save-status")).toHaveText("Saved to your account.");
     await page.getByRole("button", { name: "Close settings" }).click();
-    await page.reload(); await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.reload(); await openSettings(page);
     await page.getByRole("tab", { name: "Notifications", exact: true }).click();
     await expect(page.locator("#notify-requests")).toBeChecked();
     await expect(page.locator("[data-reminder-type=airs]")).toBeChecked();
@@ -2849,10 +2668,10 @@ for (const width of [393, 1440]) {
   test(`on-poster progress is clamped and fits every size at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 950 });
     await page.route("**/api/personal/continueWatching", route => route.fulfill({ json: { items: Array.from({ length: 12 }, (_, i) => ({ id: `progress-${i}`, title: ["North of Nowhere", "Wild Coast", "The Last Signal"][i % 3], subtitle: `S2E${i + 1} · Episode title`, art: ["north", "coast", "signal"][i % 3], progress: [42, 74, -5, 150][i % 4], remaining: 23, detail: {} })) } }));
-    await login(page); await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await login(page); await openSettings(page);
     await page.locator('[data-pref="continueWatching"]').check(); await page.getByRole("button", { name: "Close settings" }).click(); await view(page, "home");
     for (const size of ["small", "standard", "large"]) {
-      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await openSettings(page);
       await page.locator("#poster-size").selectOption(size); await page.getByRole("button", { name: "Close settings" }).click();
       const bars = page.locator("#continueWatching-content .poster-art progress"); await expect(bars).toHaveCount(12);
       await expect(bars.nth(2)).toHaveAttribute("value", "0"); await expect(bars.nth(3)).toHaveAttribute("value", "100");
@@ -2891,7 +2710,7 @@ for (const width of [393, 1440, 280]) {
     const position = await page.evaluate(() => {
       const dot = document.querySelector("#jellyfin-header-status").getBoundingClientRect();
       const logo = document.querySelector("#jellyfin-home").getBoundingClientRect();
-      const settings = document.querySelector("#settings-button").getBoundingClientRect();
+      const actionSel = document.querySelector("#menu-button").checkVisibility() ? "#menu-button" : "#settings-button"; const settings = document.querySelector(actionSel).getBoundingClientRect();
       return { dotEnd: dot.right, logoStart: logo.left, logoEnd: logo.right, settingsStart: settings.left, centerDiff: Math.abs(dot.y + dot.height / 2 - logo.y - logo.height / 2) };
     });
     expect(position.dotEnd).toBeLessThan(position.logoStart);
@@ -2907,7 +2726,7 @@ for (const width of [393, 1440, 280]) {
   test(`dedicated Notifications settings tab at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1050 });
     await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     const general = page.getByRole("tab", { name: "General", exact: true });
     const notifications = page.getByRole("tab", { name: "Notifications", exact: true });
     await expect(general).toHaveAttribute("aria-selected", "true");
@@ -2923,7 +2742,7 @@ for (const width of [393, 1440, 280]) {
     await page.keyboard.press("Home"); await expect(general).toBeFocused();
     await expect(page.locator("#notification-settings")).toBeHidden();
     await page.getByRole("button", { name: "Close settings" }).click();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await expect(general).toHaveAttribute("aria-selected", "true");
   });
 }
@@ -2932,7 +2751,7 @@ for (const width of [393, 1440, 280]) {
   test(`show reminders search as typed without punctuation at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1050 });
     await login(page);
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await page.getByRole("tab", { name: "Notifications", exact: true }).click();
     const search = page.getByRole("textbox", { name: "Search shows", exact: true });
     await search.fill("rj decker");
@@ -2958,7 +2777,7 @@ for (const width of [393, 1440, 280]) {
 
 test("show search ignores an older response after a new query", async ({ page }) => {
   await login(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.getByRole("tab", { name: "Notifications", exact: true }).click();
   let release;
   let reached;
@@ -2987,7 +2806,7 @@ for (const width of [393, 1440]) {
     await expect(page.locator("#inTheaters-content .result-card").nth(1).locator(".request-btn")).toHaveCount(0);
     await expect(page.locator("#inTheaters-content .result-card").nth(2).locator(".request-btn")).toHaveCount(1);
     for (const size of ["small", "standard", "large"]) {
-      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await openSettings(page);
       await page.locator("#poster-size").selectOption(size);
       await page.getByRole("button", { name: "Close settings" }).click();
       await page.locator("#inTheaters-section").scrollIntoViewIfNeeded();
@@ -2998,12 +2817,12 @@ for (const width of [393, 1440]) {
       await page.locator("#inTheaters-section").screenshot({ path: `${shots}/marquee-theaters-${size}-${width}.png` });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await page.locator('[data-pref="inTheaters"]').uncheck();
     await page.getByRole("button", { name: "Close settings" }).click();
     await expect(page.locator("#inTheaters-section")).toBeHidden();
     await page.reload(); await expect(page.locator("#inTheaters-section")).toBeHidden();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettings(page);
     await page.locator('[data-pref="inTheaters"]').check();
     await page.getByRole("button", { name: "Close settings" }).click();
     await page.getByRole("button", { name: "On Jellyfin", exact: true }).click();
@@ -3070,13 +2889,7 @@ for (const width of [280, 320, 393, 1440]) {
     await refresh.click();
     await expect(refresh).toBeEnabled();
     await page.locator(".calendar-toolbar").screenshot({ path: `${shots}/marquee-refresh-icon-${width}.png` });
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    const city = page.getByRole("button", { name: "Find city", exact: true });
-    await expect(city).toHaveText("");
-    await page.getByPlaceholder("City name").fill("Sample");
-    await city.click();
-    await expect(page.getByRole("button", { name: "Sample City, Example Region", exact: true })).toBeVisible();
-    await page.locator("#weather-city-query").locator("..").screenshot({ path: `${shots}/marquee-city-icon-${width}.png` });
+    await openSettings(page);
     await page.getByRole("tab", { name: "Notifications", exact: true }).click();
     const find = page.getByRole("button", { name: "Find shows", exact: true });
     await expect(find).toHaveText("");
@@ -3192,7 +3005,7 @@ for (const width of [1440, 834, 601, 393, 280]) {
 for (const width of [393,1440]) {
  test(`recommendation metadata follows title and scores align at ${width}px`, async ({page})=>{
   await page.setViewportSize({width,height:1000});await login(page);
-  await page.getByRole("button",{name:"Settings",exact:true}).click();await page.locator('[data-pref="recommendations"]').check();await page.getByRole("button",{name:"Close settings"}).click();
+  await openSettings(page);await page.locator('[data-pref="recommendations"]').check();await page.getByRole("button",{name:"Close settings"}).click();
   await page.evaluate(()=>{document.querySelector("#recommendations-content").innerHTML=["Law & Order: Special Victims Unit","Reacher","The Office"].map((title,i)=>resultCardHtml({id:800+i,title,mediaType:"tv",year:2026,contentRating:"TV-MA",poster:"north",rating:{value:8.1,source:"TMDB"}})).join("");});
   const positions=await page.locator('#recommendations-content .result-card').evaluateAll(cards=>cards.map(card=>({titleBottom:card.querySelector('.caption-copy h3').getBoundingClientRect().bottom,meta:card.querySelector('.caption-copy .result-meta').getBoundingClientRect().y,score:card.querySelector('.media-rating').getBoundingClientRect().y})));
   for(const value of positions){expect(value.meta-value.titleBottom).toBeGreaterThanOrEqual(0);expect(value.meta-value.titleBottom).toBeLessThan(8);expect(Math.abs(value.score-positions[0].score)).toBeLessThan(1);}
@@ -3411,7 +3224,7 @@ for(const width of [393,1440]) test(`watchnext genre/type cycles are instant, co
 });
 
 test('star watchlist only saves library titles and leaves catalog titles unstarred',async({page})=>{
- await login(page);await page.getByRole('button',{name:'Settings',exact:true}).click();await page.locator('[data-pref="watchLater"]').check();await page.locator('[data-pref="watchlist"]').check();await page.getByRole('button',{name:'Close settings'}).click();
+ await login(page);await openSettings(page);await page.locator('[data-pref="watchLater"]').check();await page.locator('[data-pref="watchlist"]').check();await page.getByRole('button',{name:'Close settings'}).click();
  await page.locator('#recent [data-watch-key]').first().click();await view(page,'home');await expect(page.locator('#watchLater-content .poster-card')).toHaveCount(1);await expect(page.locator('#watchlist-content .poster-card')).toHaveCount(0);
  await page.locator('#watchLater-content [data-watch-later-index]').first().click();await expect(page.locator('#episode-star')).toHaveAttribute('aria-pressed','true');await page.getByRole('button',{name:'Close episode details'}).click();
  await view(page,'discover');await page.locator('#search-form input[name="query"]').fill('Orbit');await page.locator('#search-results .result-card').first().waitFor();await expect(page.locator('#search-results [data-watch-key]')).toHaveCount(0);await page.locator('#search-results [data-detail-id]').first().click();await expect(page.locator('#episode-star')).toBeHidden();await page.getByRole('button',{name:'Close episode details'}).click();await page.locator('#recent [data-recent-index]').first().click();await expect(page.locator('#episode-star')).toBeVisible();const geometry=await page.locator('#episode-star').evaluate(el=>{const s=getComputedStyle(el);return [s.width,s.height,s.borderRadius]});expect(geometry).toEqual(['42px','42px','8px']);await page.setViewportSize({width:393,height:1000});await page.screenshot({path:`${shots}/library-star-detail-393.png`});await page.setViewportSize({width:1440,height:900});await page.screenshot({path:`${shots}/library-star-detail-1440.png`});await page.getByRole('button',{name:'Close episode details'}).click();await page.locator('#recent [data-watch-key]').nth(2).click();await view(page,'home');await expect(page.locator('#watchLater-content .poster-card')).toHaveCount(2);
@@ -3429,8 +3242,8 @@ for (const width of [393,1440]) test(`requested by certification line uses reque
  const row=page.locator('#episode-certification-line');
  await expect(row).toHaveText('TV-14 · Requested by Alex Sample, Morgan Example');await expect(row.locator('strong')).toHaveText('TV-14');expect(await page.locator('#episode-facts .detail-fact strong').allTextContents()).toEqual(['Status','Original language']);
  await page.locator('#episode-detail').screenshot({path:`${shots}/requestedby-${width}.png`});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await page.getByRole('button',{name:'Close episode details'}).click();await page.getByRole('button',{name:'Settings',exact:true}).click();await page.locator('[data-pref="requestedBy"]').uncheck();await page.getByRole('button',{name:'Close settings'}).click();await page.locator('#search-results [data-detail-id="77"]').click();await expect(row).not.toContainText("Requested by");await page.getByRole('button',{name:'Close episode details'}).click();
- await page.getByRole('button',{name:'Settings',exact:true}).click();await page.locator('[data-pref="requestedBy"]').check();await page.getByRole('button',{name:'Close settings'}).click();await page.locator('#search-results [data-detail-id="78"]').click();await expect(row).not.toContainText("Requested by");await page.getByRole('button',{name:'Close episode details'}).click();await page.locator('#search-results [data-detail-id="77"]').click();await expect(row).toContainText('Alex Sample');
+ await page.getByRole('button',{name:'Close episode details'}).click();await openSettings(page);await page.locator('[data-pref="requestedBy"]').uncheck();await page.getByRole('button',{name:'Close settings'}).click();await page.locator('#search-results [data-detail-id="77"]').click();await expect(row).not.toContainText("Requested by");await page.getByRole('button',{name:'Close episode details'}).click();
+ await openSettings(page);await page.locator('[data-pref="requestedBy"]').check();await page.getByRole('button',{name:'Close settings'}).click();await page.locator('#search-results [data-detail-id="78"]').click();await expect(row).not.toContainText("Requested by");await page.getByRole('button',{name:'Close episode details'}).click();await page.locator('#search-results [data-detail-id="77"]').click();await expect(row).toContainText('Alex Sample');
 });
 
 for (const width of [393,1440]) test(`request filter hides Everyone for Seerr restricted accounts and recovers at ${width}px`,async({page})=>{
@@ -3444,25 +3257,25 @@ for (const width of [393,1440]) test(`request filter hides Everyone for Seerr re
 for (const size of [{width:834,height:1194},{width:1194,height:834},{width:768,height:1024},{width:1024,height:768}]) test(`tablet sticky navigation reserves status bar at ${size.width}x${size.height}`,async({page})=>{
  await page.setViewportSize(size);await login(page);await page.evaluate(()=>document.documentElement.style.setProperty('--safe-top','24px'));
  await page.screenshot({path:`${shots}/ipad-top-${size.width}.png`});
- await page.evaluate(()=>scrollTo(0,140));await expect(page.locator('#page-nav')).toBeVisible();const nav=await page.locator('#page-nav').boundingBox(),button=await page.locator('#page-nav button').first().boundingBox();expect(nav.y).toBeGreaterThanOrEqual(0);expect(button.y).toBeGreaterThanOrEqual(24);expect(await page.locator('#page-nav').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(16, 18, 27)');
+ await page.evaluate(()=>scrollTo(0,140));await expect(page.locator('#page-nav')).toBeVisible();const mast=await page.locator('.masthead').boundingBox(),button=await page.locator('#page-nav button').first().boundingBox();expect(mast.y).toBe(0);expect(button.y).toBeGreaterThanOrEqual(24);expect(await page.locator('.masthead').evaluate(el=>/^rgba?\(16, 18, 27/.test(getComputedStyle(el).backgroundColor))).toBe(true);
  await page.screenshot({path:`${shots}/ipad-scrolled-${size.width}.png`});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.evaluate(()=>scrollTo(0,0));expect(await page.evaluate(()=>document.querySelector('#search-form').parentElement.classList.contains('account'))).toBe(true);
 });
 
 for (const saved of [false,true]) test(`personal section defaults are enabled unless saved off: ${saved}`,async({page})=>{
  if(saved)await page.addInitScript(()=>localStorage.setItem('marquee:Demo viewer:preferences',JSON.stringify({personalShelvesReset:true,shelvesDefaultsV3:true,continueWatching:false,nextUp:false,watchNext:false})));
- await page.goto('/');await page.getByRole('button',{name:'Explore demo'}).click();await view(page,'home');await page.getByRole('button',{name:'Settings',exact:true}).click();
+ await page.goto('/');await page.getByRole('button',{name:'Explore demo'}).click();await view(page,'home');await openSettings(page);
  for(const key of ['continueWatching','nextUp','watchNext']){if(saved)await expect(page.locator(`[data-pref="${key}"]`)).not.toBeChecked();else await expect(page.locator(`[data-pref="${key}"]`)).toBeChecked();}
  await expect(page.locator('[data-pref="requests"]')).toBeChecked();await page.getByRole('button',{name:'Close settings'}).click();for(const key of ['continueWatching','nextUp','watchNext']){if(saved)await expect(page.locator(`#${key}-section`)).toBeHidden();else await expect(page.locator(`#${key}-section`)).toBeVisible();}
 });
 
-test('empty next up and continue watching hide and return when refreshed with items',async({page})=>{
+test('empty next up, continue watching and watch next hide and return when refreshed with items',async({page})=>{
  let empty=true;
- for(const key of ['continueWatching','nextUp'])await page.route(`**/api/personal/${key}`,route=>route.fulfill({json:{items:empty?[]:[{id:'sample',title:'Sample series',subtitle:'S1E2 · Sample episode',art:'north',detail:{}}]}}));
- await page.addInitScript(()=>localStorage.setItem('marquee:Demo viewer:preferences',JSON.stringify({continueWatching:true,nextUp:true,watchNext:false})));
- await login(page);await view(page,'home');for(const key of ['continueWatching','nextUp'])await expect(page.locator(`#${key}-section`)).toBeHidden();
- empty=false;await page.reload();await view(page,'home');for(const key of ['continueWatching','nextUp'])await expect(page.locator(`#${key}-section`)).toBeVisible();
- empty=true;await page.reload();await view(page,'home');for(const key of ['continueWatching','nextUp'])await expect(page.locator(`#${key}-section`)).toBeHidden();
+ for(const key of ['continueWatching','nextUp','watchNext'])await page.route(`**/api/personal/${key}`,route=>route.fulfill({json:{items:empty?[]:[{id:'sample',title:'Sample series',subtitle:'S1E2 · Sample episode',art:'north',detail:{}}]}}));
+ await page.addInitScript(()=>localStorage.setItem('marquee:Demo viewer:preferences',JSON.stringify({continueWatching:true,nextUp:true,watchNext:true})));
+ await login(page);await view(page,'home');for(const key of ['continueWatching','nextUp','watchNext'])await expect(page.locator(`#${key}-section`)).toBeHidden();
+ empty=false;await page.reload();await view(page,'home');for(const key of ['continueWatching','nextUp','watchNext'])await expect(page.locator(`#${key}-section`)).toBeVisible();
+ empty=true;await page.reload();await view(page,'home');for(const key of ['continueWatching','nextUp','watchNext'])await expect(page.locator(`#${key}-section`)).toBeHidden();
 });
 
 for(const width of [280,393,834,1440]) test(`library count cards at bottom of Jellyfin, hideable and selectable at ${width}px`,async({page})=>{
@@ -3471,7 +3284,7 @@ for(const width of [280,393,834,1440]) test(`library count cards at bottom of Je
  await page.addInitScript(()=>{const key='marquee:Demo viewer:preferences';if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify({search:true,requests:true,watchNext:false,personalShelvesReset:true,shelvesDefaultsV3:true,continueWatching:false,nextUp:false,libraryStats:true}));});
  await login(page);await view(page,'home');await expect(page.locator('#libraryStats-content article')).toHaveCount(6);await expect(page.locator('#libraryStats-content')).toContainText('15,834');await expect(page.locator('#libraryStats-section')).not.toContainText('catalog');await expect(page.locator('#dashboard main > section').last()).toHaveAttribute('id','libraryStats-section');
  await page.locator('#libraryStats-section').scrollIntoViewIfNeeded();await page.locator('#libraryStats-section').screenshot({path:`${shots}/library-counts-${width}.png`});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await view(page,'discover');await expect(page.locator('#libraryStats-section')).toBeHidden();await view(page,'home');await page.getByRole('button',{name:'Settings',exact:true}).click();await page.locator('#kids-movies-library').selectOption('family');await expect(page.locator('#libraryStats-content')).toContainText('987');await page.locator('[data-pref="libraryStats"]').uncheck();await page.getByRole('button',{name:'Close settings'}).click();await expect(page.locator('#libraryStats-section')).toBeHidden();await page.reload();await view(page,'home');await expect(page.locator('#libraryStats-section')).toBeHidden();await page.getByRole('button',{name:'Settings',exact:true}).click();await page.locator('[data-pref="libraryStats"]').check();await expect(page.locator('#kids-movies-library')).toHaveValue('family');await page.getByRole('button',{name:'Close settings'}).click();await expect(page.locator('#libraryStats-section')).toBeVisible();
+ await view(page,'discover');await expect(page.locator('#libraryStats-section')).toBeHidden();await view(page,'home');await openSettings(page);await page.locator('#kids-movies-library').selectOption('family');await expect(page.locator('#libraryStats-content')).toContainText('987');await page.locator('[data-pref="libraryStats"]').uncheck();await page.getByRole('button',{name:'Close settings'}).click();await expect(page.locator('#libraryStats-section')).toBeHidden();await page.reload();await view(page,'home');await expect(page.locator('#libraryStats-section')).toBeHidden();await openSettings(page);await page.locator('[data-pref="libraryStats"]').check();await expect(page.locator('#kids-movies-library')).toHaveValue('family');await page.getByRole('button',{name:'Close settings'}).click();await expect(page.locator('#libraryStats-section')).toBeVisible();
 });
 
 test('library counts reject stale responses, report errors without invented zeroes and keep unchanged cards',async({page})=>{
@@ -3487,12 +3300,12 @@ test("old saved off Next up and Continue watching are turned on once, then choic
   await page.addInitScript(() => { if (!localStorage.getItem("marquee:Demo viewer:preferences")) localStorage.setItem("marquee:Demo viewer:preferences", JSON.stringify({ search: true, continueWatching: false, nextUp: false })); });
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await expect(page.locator('[data-pref="continueWatching"]')).toBeChecked();
   await expect(page.locator('[data-pref="nextUp"]')).toBeChecked();
   await page.locator('[data-pref="nextUp"]').uncheck();
   await page.reload();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await expect(page.locator('[data-pref="nextUp"]')).not.toBeChecked();
   await expect(page.locator('[data-pref="continueWatching"]')).toBeChecked();
 });
@@ -3504,7 +3317,7 @@ test("new defaults: four shelves on, empty shelves hidden, Next up and Continue 
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();
   await expect(page.locator("#recent .poster-card")).toHaveCount(6);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   for (const key of ["watchlist", "watchLater", "leavingSoon", "recommendations"]) await expect(page.locator(`[data-pref="${key}"]`)).toBeChecked();
   await expect(page.locator("#live-shelf-minutes")).toHaveValue("1");
   await expect(page.locator("#shelf-refresh-minutes")).toHaveValue("5");
@@ -3548,7 +3361,7 @@ test("Top unwatched movies shelf is on by default, hideable and uses the shared 
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();
   await expect(page.locator("#recent .poster-card")).toHaveCount(6);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await expect(page.locator('[data-pref="topUnwatched"]')).toBeChecked();
   await page.getByRole("button", { name: "Close settings" }).click();
   await view(page, "home");
@@ -3557,7 +3370,7 @@ test("Top unwatched movies shelf is on by default, hideable and uses the shared 
   const same = await page.evaluate(() => { const a = document.querySelector("#topUnwatched-content .poster-card"), b = document.querySelector("#continueWatching-content .poster-card"); return a.className === b.className && getComputedStyle(a).width === getComputedStyle(b).width; });
   expect(same).toBe(true);
   await page.screenshot({ path: `${shots}/marquee-top-unwatched.png`, fullPage: true });
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator('[data-pref="topUnwatched"]').uncheck();
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(page.locator("#topUnwatched-section")).toBeHidden();
@@ -3694,7 +3507,7 @@ test("trailers play inside the details popup with fallbacks", async ({
   ]);
   await page.getByRole("button", { name: "Close episode details" }).click();
   // Setting off: the tile keeps its plain YouTube search-link behavior.
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page);
   await page.locator('[data-pref="trailers"]').uncheck();
   await page.getByRole("button", { name: "Close settings" }).click();
   await page

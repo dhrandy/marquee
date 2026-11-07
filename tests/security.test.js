@@ -79,12 +79,12 @@ try {
     const gets = [
       "/api/seerr/details/movie/1",
       "/api/seerr/popular",
-      "/api/weather-settings",
+      "/api/accessibility-settings",
       "/api/calendar-image/id",
       "/api/me",
       "/api/recent",
       "/api/calendar?start=2026-10-01&end=2026-10-02",
-      "/api/weather",
+      "/api/recommendations",
       "/api/seerr/search?query=x",
       "/api/seerr/image?path=/abc.jpg",
       "/api/seerr/requests",
@@ -284,7 +284,7 @@ try {
     assert.equal(body.error.includes("topsecret-marker"), false);
   });
 
-  await test("new endpoints reject invalid IDs, array search terms and weather markup", async () => {
+  await test("new endpoints reject invalid IDs and array search terms", async () => {
     const cookie = await login();
     for (const path of [
       "/api/seerr/details/movie/0",
@@ -292,27 +292,12 @@ try {
       "/api/seerr/details/tv/1000000001",
       "/api/seerr/details/tv/1abc",
       "/api/seerr/search?query[]=x",
-      "/api/weather?latitude[]=0&longitude=0&units=celsius",
     ])
       assert.equal(
         (await fetch(`${base}${path}`, { headers: { Cookie: cookie } })).status,
         400,
         path,
       );
-    assert.equal(
-      (
-        await post(
-          "/api/weather-settings",
-          JSON.stringify({
-            weather: true,
-            weatherUnits: "celsius",
-            weatherCity: { label: "<img>", latitude: 0, longitude: 0 },
-          }),
-          { Cookie: cookie },
-        )
-      ).status,
-      400,
-    );
     assert.equal(
       (await post("/api/display-name", '{"name":"Hidden"}', { Cookie: cookie }))
         .status,
@@ -334,12 +319,12 @@ try {
     adminRole = false;
     assert.equal((await post("/api/display-name", '{"name":"Blocked admin"}', { Cookie: jar })).status, 403);
     accountOutage = true;
-    assert.equal((await post("/api/weather-settings", '{}', { Cookie: jar })).status, 503);
+    assert.equal((await post("/api/accessibility-settings", '{}', { Cookie: jar })).status, 503);
     accountOutage = false;
-    assert.equal((await fetch(`${base}/api/weather-settings`, { headers: { Cookie: jar } })).status, 200);
+    assert.equal((await fetch(`${base}/api/accessibility-settings`, { headers: { Cookie: jar } })).status, 200);
     revokedAccount = true;
     assert.equal((await post("/api/display-name", '{"name":"Blocked revoked"}', { Cookie: jar })).status, 401);
-    for (const target of ["/api/calendar?start=2026-10-01&end=2026-10-02", "/api/me", "/api/weather-settings"])
+    for (const target of ["/api/calendar?start=2026-10-01&end=2026-10-02", "/api/me", "/api/accessibility-settings"])
       assert.equal((await fetch(`${base}${target}`, { headers: { Cookie: jar } })).status, 401);
     revokedAccount = false;
     assert.equal((await fetch(`${base}/api/me`, { headers: { Cookie: jar } })).status, 401);
@@ -347,7 +332,7 @@ try {
 
   await test("parallel read authorization is coalesced while writes use fresh policy", async () => {
     const jar = await login(), before = accountReads;
-    const results = await Promise.all(Array.from({ length: 15 }, () => fetch(`${base}/api/weather-settings`, { headers: { Cookie: jar } })));
+    const results = await Promise.all(Array.from({ length: 15 }, () => fetch(`${base}/api/accessibility-settings`, { headers: { Cookie: jar } })));
     assert.ok(results.every(response => response.status === 200));
     assert.equal(accountReads, before + 1);
     await post("/api/display-name", '{"name":"No admin"}', { Cookie: jar });
@@ -359,7 +344,7 @@ try {
     let status;
     for (let i = 0; i < 241; i++)
       status = (
-        await fetch(`${base}/api/weather-settings`, {
+        await fetch(`${base}/api/accessibility-settings`, {
           headers: { Cookie: cookie },
         })
       ).status;

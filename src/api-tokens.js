@@ -30,8 +30,6 @@ export const readRoutes = [
   /^\/api\/in-theaters$/,
   /^\/api\/networks$/,
   /^\/api\/jellyfin-version$/,
-  /^\/api\/weather$/,
-  /^\/api\/weather\/cities$/,
   /^\/api\/image\/[^/]+$/,
   /^\/api\/calendar-image\/[^/]+$/,
   /^\/api\/seerr\/(search|popular|requests|request-options|content-ratings|image)$/,

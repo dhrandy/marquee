@@ -965,36 +965,6 @@ try {
     );
     assert.equal(stored.name, "Movie Room");
     assert.equal((await update(admin, "Marquee")).status, 200);
-    assert.equal(
-      (
-        await fetch(
-          `${base}/api/weather?latitude=91&longitude=0&units=celsius`,
-          { headers: { Cookie: viewer } },
-        )
-      ).status,
-      400,
-    );
-    assert.equal(
-      (
-        await fetch(
-          `${base}/api/weather?latitude=0&longitude=0&units=invalid`,
-          { headers: { Cookie: viewer } },
-        )
-      ).status,
-      400,
-    );
-    assert.equal(
-      (
-        await fetch(`${base}/api/weather/cities?query=a`, {
-          headers: { Cookie: viewer },
-        })
-      ).status,
-      400,
-    );
-    assert.equal(
-      (await fetch(`${base}/api/weather/cities?query=city`)).status,
-      401,
-    );
   });
 
   await test("Seerr maps Jellyfin IDs and enforces media permissions, quotas, and trusted target IDs", async () => {
@@ -1165,53 +1135,6 @@ try {
       data.items[0].subtitle,
       /^Season 1 \/ 4 Episodes · Episode 1:/,
     );
-  });
-  await test("weather preferences are account-private and saved with shared display settings", async () => {
-    const login = await signin("alice");
-    const cookie = login.headers.get("set-cookie").split(";")[0];
-    const value = {
-      weather: true,
-      weatherCity: { label: "Sample City", latitude: 40, longitude: -80 },
-      weatherUnits: "celsius",
-    };
-    const response = await fetch(`${base}/api/weather-settings`, {
-      method: "POST",
-      headers: {
-        Cookie: cookie,
-        Origin: base,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(value),
-    });
-    assert.equal(response.status, 200);
-    const secondLogin = await signin("alice");
-    const second = secondLogin.headers.get("set-cookie").split(";")[0];
-    assert.deepEqual(
-      await (
-        await fetch(`${base}/api/weather-settings`, {
-          headers: { Cookie: second },
-        })
-      ).json(),
-      value,
-    );
-    const other = await signin("bob");
-    const otherCookie = other.headers.get("set-cookie").split(";")[0];
-    assert.equal(
-      (
-        await (
-          await fetch(`${base}/api/weather-settings`, {
-            headers: { Cookie: otherCookie },
-          })
-        ).json()
-      ).weather,
-      false,
-    );
-    const disk = JSON.parse(
-      await (
-        await import("node:fs/promises")
-      ).readFile(join(settingsDir, "settings.json"), "utf8"),
-    );
-    assert.deepEqual(disk.weatherByUser.alice, value);
   });
   await test("popular lists use linked Seerr user and return ten titles per type with availability", async () => {
     const login = await signin("alice");
@@ -1504,7 +1427,7 @@ try {
     assert.equal((await post("/api/watch-later",alice,{key:"tmdb:movie:99999999",saved:true})).status,404);
     assert.equal((await post("/api/watch-later",alice,{key:catalog.watchKey,saved:false})).status,200);
     assert.equal((await get("/api/watch-later",alice)).items.length,0);
-    const order = ["watchNext", "calendar", "search", "weather", "watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "recent", "leavingSoon", "recommendations", "popular", "inTheaters", "requests"];
+    const order = ["watchNext", "calendar", "search", "watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "recent", "leavingSoon", "recommendations", "popular", "inTheaters", "requests"];
     assert.equal((await post("/api/section-order", alice, { order })).status, 200);
     assert.deepEqual((await get("/api/section-order", alice)).order, order);
     assert.notDeepEqual((await get("/api/section-order", bob)).order, order);

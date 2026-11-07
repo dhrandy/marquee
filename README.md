@@ -41,14 +41,14 @@ Marquee runs from source on the official Node image; there is no published image
 - Search also matches TV networks: pick a network button to browse its newest series premieres.
 - Detail popouts with cast, ratings, certifications, TV network and overview. Play/Resume opens Jellyfin, and the YouTube button plays the trailer right in the popout (official YouTube embed in privacy-enhanced mode, hideable in Settings; titles without an embeddable trailer fall back to a YouTube search), and any title in your library shows a Play in Jellyfin button. Seerr requester names show as Requested by when available.
 - Small, Standard or Large posters per device. Shelf arrows on desktop; phones and tablets swipe.
-- Optional weather and five-day forecast (free Open-Meteo, no key), colorblind-friendly status colors, and display-settings sync across browsers.
+- Colorblind-friendly status colors and display-settings sync across browsers.
 - Shelves refresh automatically in an open, visible tab and pause while you interact. Unchanged results leave cards and posters untouched.
 - Library counts at the bottom of On Jellyfin: Movies, TV Shows and Episodes, with Kids counts split out using the kids libraries you pick in Settings.
 - Optional push notifications and an In theaters shelf (see below).
 - Settings shows your Jellyfin server version and connection tests; Jellyfin administrators can change the shared display name.
 - Installable home-screen app (PWA). Demo mode uses fictional titles and needs no external credentials.
 
-Most shelves are on by default and hideable in Settings; empty shelves stay out of the page. Personal shelves and weather start off. Display choices stay on the current device unless you enable sync. The watched badge is read-only and never changes viewing history.
+Most shelves are on by default and hideable in Settings; empty shelves stay out of the page. Display choices stay on the current device unless you enable sync. The watched badge is read-only and never changes viewing history.
 
 ## Run with Docker Compose
 
@@ -310,8 +310,6 @@ SEERR_API_KEY=replace-with-your-seerr-api-key
 # Optional In theaters shelf: your own TMDB API key (server-side only).
 TMDB_API_KEY=
 
-# Weather is set per viewer in Settings: city picker and F/C units.
-# Open-Meteo weather and city search are free for non-commercial use. No API key or account needed.
 # Dashboard display name is set by a Jellyfin administrator in Settings (default Marquee).
 
 # Optional read-only Leaving soon shelf. Internal URL, including BASE_PATH if used.
@@ -328,17 +326,12 @@ Dockhand users can put these variables in the stack's Environment tab instead of
 - `JELLYFIN_URL`: server base URL, including a path prefix if configured. No Jellyfin API key; each user enters their own username/password on the sign-in screen.
 - `SONARR_URL`/`SONARR_API_KEY`, `RADARR_URL`/`RADARR_API_KEY`, `SEERR_URL`/`SEERR_API_KEY` (Jellyseerr or Overseerr): base URLs and API keys from each app's Settings > General.
 - Internal/external URL split: the `*_URL` values are how the container reaches each service (Docker network or LAN). `JELLYFIN_WEB_URL` is the public address browsers open when someone taps a poster; it defaults to `JELLYFIN_URL`. Set both when containers use an internal address phones cannot open.
-- Weather: each viewer picks a city, F/C units and enables the widget in Settings; saved on the server per viewer, not in `.env`.
 - Display name: Jellyfin administrators see a name field in Settings (default Marquee), stored in the settings volume. It changes the dashboard header and browser tab; installed PWA icons/name remain Marquee.
 - `TZ`: server timezone. Calendar air times and poster dates use the viewer's browser timezone.
 
 The app server must be able to reach all configured services; requests go through the server, so no browser CORS settings are needed. Service URLs may include a URL-base path; trailing slashes are optional, and a missing scheme defaults to HTTP. HTTPS certificates must be trusted, and API redirects are not followed. Connection tests and calendar warnings distinguish HTTP errors, redirects, timeouts and invalid API responses.
 
 ## Optional shelves and extras
-
-### Weather
-
-Uses free Open-Meteo weather and city search: no key, no account, free for non-commercial use. City searches share the typed city name with Open-Meteo; forecasts share the selected city's coordinates, cached 15 minutes. See [Open-Meteo documentation](https://open-meteo.com/en/docs) for service terms and use limits.
 
 ### Maintainerr Leaving soon (optional)
 
@@ -368,7 +361,7 @@ Optional. A Jellyfin admin turns on **Settings > API access > Allow API tokens**
 
 - Send `Authorization: Bearer <token>`. The token is shown once; only a hash is stored. Deleting `session-secret` from the settings folder ends every token.
 - Tokens cannot open Settings, notifications, sign-in or token routes. Revoking a token ends its Jellyfin login.
-- Reads cover what that user sees in Marquee: continue watching, next up, watch history, libraries and library browsing, favorites and watchlist, recently added, calendar, recommendations, leaving soon, weather and Seerr search/requests. Browsing a library is limited to its first 10,000 items. The full endpoint list is at `/api/docs` when signed in.
+- Reads cover what that user sees in Marquee: continue watching, next up, watch history, libraries and library browsing, favorites and watchlist, recently added, calendar, recommendations, leaving soon and Seerr search/requests. Browsing a library is limited to its first 10,000 items. The full endpoint list is at `/api/docs` when signed in.
 - Request tokens can also cancel one of their own requests while it is still waiting for approval: `DELETE /api/seerr/request/<id>`. Someone else's request answers 404.
 - Limits: 120 requests per minute and 10 writes per minute per token.
 - Keep tokens in your assistant's secret store, never in chat or a file you share.

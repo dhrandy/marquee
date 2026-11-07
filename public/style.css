@@ -74,13 +74,6 @@ button:disabled {
   font-size: 23px;
   letter-spacing: -0.7px;
 }
-.brand span {
-  display: block;
-  color: var(--muted);
-  font-size: 9px;
-  letter-spacing: 2px;
-  margin-top: 5px;
-}
 .account {
   display: flex;
   align-items: center;
@@ -100,7 +93,6 @@ main {
   margin: auto;
   padding: 30px 36px 18px;
 }
-/* The search/weather row measures itself: side by side only while the row is wide enough for both halves. */
 #dashboard main {
   container-type: inline-size;
 }
@@ -512,9 +504,6 @@ dialog small {
   .brand strong {
     font-size: 20px;
   }
-  .brand span {
-    display: none;
-  }
   .brand-mark {
     width: 42px;
     height: 36px;
@@ -655,45 +644,6 @@ dialog small {
   .date-nav h3 {
     font-size: 14px;
   }
-}
-.weather {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 22px;
-  margin-bottom: 26px;
-  gap: 20px;
-}
-.weather h2 {
-  font-size: 23px;
-}
-.weather p {
-  color: var(--muted);
-  font-size: 12px;
-}
-.weather a {
-  color: var(--muted);
-  font-size: 10px;
-}
-.weather-forecast { display: flex; gap: 22px; margin-top: 6px; color: var(--muted); font-size: 13px; }
-.forecast-day { display: inline-flex; gap: 6px; align-items: baseline; white-space: nowrap; }
-.forecast-day b { font-weight: 600; color: #c5cad6; }
-.forecast-day small { font-size: inherit; opacity: .75; }
-@media (max-width: 600px) {
-  .weather {
-    align-items: start;
-    flex-direction: column;
-    gap: 0;
-  }
-  .weather h2 {
-    font-size: 22px;
-  }
-  /* Three equal day tiles on phones, readable type instead of one tiny line. */
-  .weather-forecast { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; width: 100%; font-size: 15px; }
-  .forecast-day { flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border: 1px solid #ffffff1f; border-radius: 8px; background: #ffffff08; }
-  .forecast-day b { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-  .forecast-day small { font-size: 13px; }
 }
 #search-section,
 #requests-section {
@@ -975,19 +925,6 @@ button.primary:hover {
 .settings-input-row button {
   flex-shrink: 0;
   font-size: 12px;
-}
-.city-results {
-  display: grid;
-  gap: 6px;
-  margin-top: 10px;
-}
-.city-results button {
-  text-align: left;
-  white-space: normal;
-  line-height: 1.5;
-}
-#weather-city-selected {
-  color: var(--ink);
 }
 .brand strong {
   overflow-wrap: anywhere;
@@ -1335,14 +1272,11 @@ button[aria-label="Close settings"]:hover { background: #1b1730; border-color: #
 /* Empty search helpers should not reserve a blank result row on the home page. */
 #search-status:empty,
 #search-results:empty { display: none; }
-/* Keep a steady section rhythm, including when weather or shelves are hidden. */
+/* Keep a steady section rhythm, including when shelves are hidden. */
 #requests-section,
 #popular-wrap { margin-top: 32px; }
 /* Don't stack the shelf's scrollbar padding onto the next section's gap. */
 .calendar-heading { margin-top: 24px; }
-@media (max-width: 600px) {
-  .weather { gap: 8px; }
-}
 
 /* Each visible section owns one divider. Hidden wrappers leave no line. */
 main > section:not([hidden]), .personal-section:not([hidden]) {
@@ -1352,29 +1286,6 @@ main > section:not([hidden]), .personal-section:not([hidden]) {
 #popular-wrap .popular-section { border-top: 0; padding-top: 0; }
 #popular-wrap, #requests-section { margin-top: 0; }
 .calendar-heading { margin-top: 0; }
-.home-top-row { display: flex; flex-direction: column; gap: 28px; border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
-.home-top-row:has(#search-section[hidden]):has(#weather[hidden]) { display: none; }
-.home-top-row #search-section { margin-bottom: 0; }
-.home-top-row .weather { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
-/* Divider between the two halves when stacked, whichever order they were dragged into. */
-.home-top-row > section:not([hidden]):has(+ section:not([hidden])) { border-bottom: 1px solid var(--line); padding-bottom: 28px; }
-.forecast-icon { width: 24px; height: 24px; color: #d7c6ff; flex: 0 0 auto; }
-@container (min-width: 1024px) {
-  .home-top-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; padding-bottom: 32px; margin-bottom: 32px; }
-  .home-top-row #search-section { order: 1; max-width: none; }
-  .home-top-row #search-section .search-bar { max-width: 560px; }
-  .home-top-row #search-section .section-heading { margin-bottom: 24px; }
-  .home-top-row .weather { order: 2; flex-direction: column; align-items: center; text-align: center; justify-content: center; gap: 0; }
-  .home-top-row .weather h2 { font-size: 31px; margin: 8px 0 16px; }
-  .home-top-row .weather-forecast { justify-content: center; gap: 24px; margin-top: 0; font-size: 14px; min-height: 40px; align-items: center; }
-  .home-top-row .forecast-day { display: grid; grid-template-columns: auto; justify-items: center; gap: 4px; }
-  .home-top-row .weather a { margin-top: 8px; }
-  .home-top-row > section:not([hidden]):has(+ section:not([hidden])) { border-bottom: 0; padding-bottom: 0; }
-  .home-top-row:has(#search-section[hidden]), .home-top-row:has(#weather[hidden]) { grid-template-columns: minmax(0, 1fr); }
-  .home-top-row:has(#search-section[hidden]) .weather { align-items: flex-start; text-align: left; }
-  .home-top-row:has(#search-section[hidden]) .weather-forecast { justify-content: flex-start; }
-}
-@media (min-width: 601px) and (max-width: 1099px) { .forecast-day { flex-wrap: wrap; } }
 .personal-section { margin-bottom: 28px; }
 .personal-collapse { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 36px; width: 36px; height: 36px; padding: 8px; color: var(--muted); }
 .personal-collapse svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
@@ -1405,13 +1316,6 @@ body.colorblind .jellyfin-status[data-status="offline"] { background: #ffb45b; }
 .order-footer { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); }
 main > #search-section { max-width: none; margin-top: 0; }
 main > #search-section .search-bar { max-width: 560px; }
-@media (min-width: 1100px) {
-  main > .weather { flex-direction: column; align-items: flex-start; justify-content: flex-start; text-align: left; gap: 0; }
-  main > .weather h2 { font-size: 31px; margin: 8px 0 16px; }
-  main > .weather-forecast, main > .weather .weather-forecast { gap: 24px; }
-  main > .weather .forecast-day { display: grid; justify-items: center; gap: 4px; }
-  main > .weather a { margin-top: 8px; }
-}
 
 .watched-badge { position: absolute; left: 8px; top: 8px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 1px solid #ffffff60; border-radius: 5px; color: #fff; background: #191f2ded; box-shadow: 0 2px 6px #0006; font-size: 10px; line-height: 1; font-weight: 600; z-index: 1; pointer-events: none; }
 .watched-badge svg { width: 13px; height: 13px; fill: none; stroke: #c4b5fd; stroke-width: 2.5; }
@@ -1434,7 +1338,6 @@ main > #search-section .search-bar { max-width: 560px; }
 .page-nav button { min-height: 42px; padding: 10px 22px; border-color: transparent; color: var(--muted); }
 .page-nav button[aria-current] { color: var(--ink); border-color: #b49aff65; background: #b49aff18; }
 .page-away { display: none !important; }
-.home-top-row:has(.page-away) { display: block; }
 @media (max-width: 700px) { .page-nav { padding: 8px 16px; gap: 3px; } .page-nav button { flex: 1; padding: 10px 6px; font-size: 13px; } }
 @media (max-width: 340px) { .page-nav { padding: 8px 10px; } .page-nav button { padding: 10px 3px; font-size: 12px; } }
 
@@ -1464,19 +1367,6 @@ main > #search-section .search-bar { max-width: 560px; }
 .poster-link { transition: border-color .18s, background .18s; }
 @media (max-width: 700px) { #dashboard[data-page="discover"] .search-btn { padding-left: 16px; padding-right: 16px; } }
 @media (prefers-reduced-motion: reduce) { .poster-link { transition: none; } }
-
-.weather-forecast { gap: 18px; }
-@media (max-width: 600px) {
-  .weather-forecast { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-  .forecast-day { padding: 10px 2px; font-size: 14px; }
-  .forecast-day > span { display: flex; flex-direction: column; align-items: center; gap: 3px; }
-  .forecast-day small { font-size: 12px; }
-}
-@media (max-width: 600px) { .weather > div { width: 100%; } .weather-forecast { display: grid; width: 100%; } }
-
-@media (min-width: 1100px) {
-  #dashboard[data-page="discover"] .home-top-row { align-items: start; }
-}
 
 .page-nav button span { white-space: nowrap; }
 .page-nav button svg { flex-shrink: 0; }
@@ -1566,7 +1456,6 @@ main > #search-section .search-bar { max-width: 560px; }
 .icon-guide-symbol.heart.filled > svg, .icon-guide-symbol.play > svg, .icon-guide-symbol.solid > svg { fill: currentColor; }
 .icon-guide-symbol.solid > svg { stroke: none; }
 .icon-guide-symbol .mini-icon { fill: none; stroke: none; }
-.icon-guide-symbol .forecast-icon { fill: none; }
 .icon-guide-symbol.pair > svg { width: 20px; }
 .icon-guide-symbol.wordmark { font-size: 11px; font-weight: 700; }
 
@@ -1762,3 +1651,74 @@ body { padding-top:var(--safe-top); }
   #dashboard.search-in-header #search-status:empty { display: none; }
   #dashboard.search-in-header #search-section:not(:has(#search-results > *)):not(:has(#search-status:not(:empty))):not(:has(#network-matches > *)) { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
 }
+
+/* Single sticky header: page tabs join the masthead at >=768px. */
+@media (min-width: 768px) {
+  #dashboard.nav-in-header .masthead {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    gap: 20px;
+    padding-top: calc(22px + var(--safe-top));
+    background: #10121bf2;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  #dashboard.nav-in-header .page-nav {
+    position: static;
+    padding: 0;
+    border-bottom: 0;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+  }
+  #dashboard.nav-in-header .page-nav button { min-height: 44px; }
+  #dashboard.search-in-header.nav-in-header .masthead .account .search-bar { width: clamp(150px, 24vw, 360px); }
+}
+@media (min-width: 768px) and (max-width: 1279px) {
+  #dashboard.nav-in-header .masthead .brand-mark { width: 46px; height: 40px; }
+  #dashboard.nav-in-header .page-nav button { min-width: 0; padding: 11px 16px; }
+}
+@media (min-width: 768px) and (max-width: 900px) {
+  #dashboard.nav-in-header .masthead { padding-left: 18px; padding-right: 18px; gap: 14px; }
+  #dashboard.nav-in-header .demo-badge { display: none; }
+  #dashboard.nav-in-header .page-nav button { padding: 10px 12px; gap: 8px; }
+  #dashboard.search-in-header.nav-in-header .masthead .account .search-bar { width: clamp(150px, 26vw, 230px); }
+  #dashboard.search-in-header.nav-in-header .masthead .search-bar input { min-height: 40px; padding: 7px 12px; }
+  #dashboard.search-in-header.nav-in-header .masthead .search-btn { min-height: 40px; padding: 7px 12px; }
+}
+
+/* Header menu: Settings and Log out fold into a hamburger once the header is combined. */
+#menu-button { display: none; }
+#dashboard #menu-button { display: inline-flex; }
+#dashboard #settings-button, #dashboard #logout { display: none; }
+.account { position: relative; }
+#header-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  flex-direction: column;
+  min-width: 168px;
+  padding: 6px;
+  background: #171a26f8;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 14px 36px #000a;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 40;
+}
+#header-menu.open { display: flex; }
+#header-menu button {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+#header-menu button:hover { background: #ffffff14; }

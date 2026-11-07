@@ -407,7 +407,7 @@ test("section order adds Leaving soon while preserving approved ten-section orde
 
  test("default shelf orders match the two pages without changing saved orders", async () => {
   const { cleanSectionOrder, sectionOrderDefaults } = await import("../src/personal.js");
-  const discover = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations"];
+  const discover = ["search", "recent", "calendar", "popular", "inTheaters", "recommendations"];
   const home = ["nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "topUnwatched", "leavingSoon", "requests"];
   assert.deepEqual(sectionOrderDefaults, [...discover, ...home]);
   const saved = [...home].reverse().concat([...discover].reverse());

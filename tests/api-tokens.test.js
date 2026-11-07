@@ -11,7 +11,7 @@ test("token route rules", () => {
   for (const kind of ["continueWatching", "nextUp", "watchNext", "topUnwatched"])
     assert.equal(tokenAllowed("read", "GET", "/api/personal/" + kind), true, kind);
   assert.equal(tokenAllowed("read", "GET", "/api/seerr/search"), true);
-  for (const p of ["/api/history", "/api/libraries", "/api/libraries/demo-movies/items", "/api/weather", "/api/weather/cities", "/api/calendar"])
+  for (const p of ["/api/history", "/api/libraries", "/api/libraries/demo-movies/items", "/api/networks", "/api/jellyfin-version", "/api/calendar"])
     assert.equal(tokenAllowed("read", "GET", p), true, p);
   assert.equal(tokenAllowed("read", "GET", "/api/libraries/demo-movies"), false);
   assert.equal(tokenAllowed("read", "POST", "/api/seerr/request"), false);
@@ -21,7 +21,7 @@ test("token route rules", () => {
   assert.equal(tokenAllowed("request", "DELETE", "/api/seerr/request"), false);
   assert.equal(tokenAllowed("request", "DELETE", "/api/seerr/request/abc"), false);
   assert.equal(tokenAllowed("request", "DELETE", "/api/seerr/request/1/extra"), false);
-  for (const p of ["/api/display-preferences", "/api/section-order", "/api/weather-settings", "/api/accessibility-settings", "/api/notifications", "/api/tokens", "/api/login", "/api/logout", "/api/test-connection"]) {
+  for (const p of ["/api/display-preferences", "/api/section-order", "/api/display-name", "/api/accessibility-settings", "/api/notifications", "/api/tokens", "/api/login", "/api/logout", "/api/test-connection"]) {
     assert.equal(tokenAllowed("request", "GET", p), false, p);
     assert.equal(tokenAllowed("request", "POST", p), false, p);
   }
@@ -56,7 +56,7 @@ test("token lifecycle on a demo server", async () => {
     assert.ok(Array.isArray(personal.items) && personal.items.length > 0);
     assert.equal((await fetch(base + "/api/personal/continue-watching", { headers: bearer })).status, 404);
     // Never reaches settings, tokens or notifications.
-    for (const p of ["/api/tokens", "/api/display-preferences", "/api/notifications", "/api/weather-settings", "/api/accessibility-settings"])
+    for (const p of ["/api/tokens", "/api/display-preferences", "/api/notifications", "/api/section-order", "/api/accessibility-settings"])
       assert.equal((await fetch(base + p, { headers: bearer })).status, 403, p);
     assert.equal((await fetch(base + "/api/docs", { headers: bearer })).status, 200);
     // Jellyfin user data reads work with a bearer token in demo mode.
@@ -79,8 +79,8 @@ test("token lifecycle on a demo server", async () => {
     // Calendar works with a token, with a valid range required.
     assert.equal((await fetch(base + "/api/calendar?start=2026-10-01&end=2026-10-08", { headers: bearer })).status, 200);
     assert.equal((await fetch(base + "/api/calendar", { headers: bearer })).status, 400);
-    assert.equal((await fetch(base + "/api/weather?latitude=35.2&longitude=-80.8&units=fahrenheit", { headers: bearer })).status, 200);
-    assert.equal((await fetch(base + "/api/weather/cities?query=charlotte", { headers: bearer })).status, 200);
+    assert.equal((await fetch(base + "/api/networks?query=war", { headers: bearer })).status, 200);
+    assert.equal((await fetch(base + "/api/jellyfin-version", { headers: bearer })).status, 200);
     // Read-only token cannot request, and POST needs no Origin for bearer.
     const noOrigin = { "Content-Type": "application/json", ...bearer };
     const req = { mediaType: "movie", mediaId: 603 };

@@ -23,10 +23,6 @@ const defaults = {
   legend: true,
   addedDates: true,
   shelfNavigation: true,
-  weather: false,
-  weatherLocation: false,
-  weatherCity: null,
-  weatherUnits: "fahrenheit",
   search: true,
   hideUnmonitored: false,
   requests: true,
@@ -157,15 +153,14 @@ function report(error) {
   $("#global-error").hidden = false;
 }
 function persist() {
-  const { weather, weatherCity, weatherUnits, weatherLocation, colorblind, ...devicePrefs } =
-    state.prefs;
-  localStorage.setItem(state.key, JSON.stringify({ ...devicePrefs, weatherLocation: state.prefs.weatherLocation }));
+  const { colorblind, ...devicePrefs } = state.prefs;
+  localStorage.setItem(state.key, JSON.stringify(devicePrefs));
   applyPrefs();
   if (state.prefs.syncDisplay) syncDisplayWrite();
 }
 let displayWrites = Promise.resolve();
 function syncDisplayWrite() {
-  const { weather, weatherCity, weatherUnits, colorblind, syncDisplay, weatherLocation, posterSize, ...value } = state.prefs;
+  const { colorblind, syncDisplay, posterSize, ...value } = state.prefs;
   displayWrites = displayWrites.catch(() => {}).then(() => api("/api/display-preferences", { method: "POST", body: JSON.stringify(value) })).then(() => { $("#sync-display-status").textContent = "Display settings synced."; }).catch(error => { $("#sync-display-status").textContent = error.message; });
   return displayWrites;
 }
@@ -183,32 +178,10 @@ $("#sync-display").addEventListener("change", async event => {
     await Promise.all([loadPersonalShelves(), loadRecommendations(), loadRequests(), loadCalendar(),loadLibraryStats()]);
   } catch (error) { event.target.checked = false; $("#sync-display-status").textContent = error.message; }
 });
-let weatherWrites = Promise.resolve();
-function saveWeather() {
-  const value = {
-    weather: state.prefs.weather,
-    weatherCity: state.prefs.weatherCity,
-    weatherUnits: state.prefs.weatherUnits,
-  };
-  $("#weather-settings-status").textContent = "Saving…";
-  weatherWrites = weatherWrites
-    .catch(() => {})
-    .then(async () => {
-      await api("/api/weather-settings", {
-        method: "POST",
-        body: JSON.stringify(value),
-      });
-      $("#weather-settings-status").textContent = "Saved to your account.";
-    })
-    .catch((error) => {
-      $("#weather-settings-status").textContent = error.message;
-    });
-  return weatherWrites;
-}
-const sectionLabels = { search: "Search and request", weather: "Weather", watchlist: "Favorites", watchLater: "Watchlist", topUnwatched: "Top unwatched movies", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", leavingSoon: "Leaving soon", recommendations: "Recommendations", popular: "Popular right now", inTheaters: "In theaters", requests: "Request status" };
-const defaultSectionOrder = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "topUnwatched", "leavingSoon", "requests"];
+const sectionLabels = { search: "Search and request", watchlist: "Favorites", watchLater: "Watchlist", topUnwatched: "Top unwatched movies", continueWatching: "Continue watching", watchNext: "What to watch next", nextUp: "Next up", recent: "Recently added", calendar: "Release calendar", leavingSoon: "Leaving soon", recommendations: "Recommendations", popular: "Popular right now", inTheaters: "In theaters", requests: "Request status" };
+const defaultSectionOrder = ["search", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "topUnwatched", "leavingSoon", "requests"];
 let sectionOrder = [...defaultSectionOrder], orderWrites = Promise.resolve();
-const sectionElement = key => $(key === "weather" ? "#weather" : key === "popular" ? "#popular-wrap" : `#${key}-section`);
+const sectionElement = key => $(key === "popular" ? "#popular-wrap" : `#${key}-section`);
 const headerSearchQuery = window.matchMedia("(min-width: 768px)");
 function placeSearchBar() {
   const form = $("#search-form"), section = $("#search-section"), account = $(".masthead .account");
@@ -218,24 +191,23 @@ function placeSearchBar() {
   if (useHeader && form.parentElement !== account) account.insertBefore(form, dot);
   else if (!useHeader && form.parentElement !== section) section.insertBefore(form, $("#search-status"));
   $("#dashboard").classList.toggle("search-in-header", useHeader);
+  placePageNav();
+}
+function placePageNav() {
+  const nav = $("#page-nav"), masthead = $(".masthead"), dashboard = $("#dashboard"), account = $(".masthead .account");
+  if (!nav || !masthead || !dashboard || !account) return;
+  const inHeader = headerSearchQuery.matches;
+  if (inHeader && nav.parentElement !== masthead) masthead.insertBefore(nav, account);
+  else if (!inHeader && nav.parentElement === masthead) dashboard.insertBefore(nav, $("main"));
+  dashboard.classList.toggle("nav-in-header", inHeader);
 }
 headerSearchQuery.addEventListener?.("change", () => applySectionOrder());
 function applySectionOrder() {
-  const main = $("#dashboard main"), row = $(".home-top-row");
-  const visible = sectionOrder.filter(key => pageSections.discover.includes(key) && sectionElement(key) && !sectionElement(key).hidden);
-  const searchAt = visible.indexOf("search"), weatherAt = visible.indexOf("weather");
-  const paired = searchAt >= 0 && weatherAt >= 0 && Math.abs(searchAt - weatherAt) === 1 && !headerSearchQuery.matches;
-  row.hidden = !paired;
+  const main = $("#dashboard main");
   const desired = [];
-  let rowPlaced = false;
   for (const key of sectionOrder) {
     const element = sectionElement(key);
-    if (!element) continue;
-    if (paired && ["search", "weather"].includes(key)) {
-      // Always re-append: the row keeps the saved order even when the halves never left it.
-      row.append(element);
-      if (!rowPlaced) { desired.push(row); rowPlaced = true; }
-    } else desired.push(element);
+    if (element) desired.push(element);
   }
   const actual = [...main.children].filter(el => desired.includes(el));
   if (desired.some((el, index) => actual[index] !== el)) {
@@ -246,7 +218,7 @@ function applySectionOrder() {
   applyDashboardPage();
 }
 let dashboardPage = "discover";
-const pageSections = { home: ["watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "watchNext", "leavingSoon", "requests"], discover: ["weather", "search", "recent", "popular", "inTheaters", "calendar", "recommendations"] };
+const pageSections = { home: ["watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "watchNext", "leavingSoon", "requests"], discover: ["search", "recent", "popular", "inTheaters", "calendar", "recommendations"] };
 let pageInitialized = false;
 function applyDashboardPage() {
   if (!pageInitialized) { dashboardPage = state.prefs.firstTab === "home" ? "home" : "discover"; pageInitialized = true; }
@@ -395,15 +367,12 @@ function applyPrefs() {
   }
   $("#personal-shelves").hidden = !["watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "watchNext", "leavingSoon"].some(key => state.prefs[key]);
   $("#nothing").hidden = state.prefs.recent || state.prefs.calendar || state.prefs.watchlist || state.prefs.watchLater || state.prefs.topUnwatched || state.prefs.continueWatching || state.prefs.nextUp || state.prefs.watchNext || state.prefs.leavingSoon || state.prefs.recommendations;
-  $("#weather").hidden = !state.prefs.weather;
-  if (state.prefs.weather) loadWeather();
-  scheduleWeather();
   applySectionOrder();
   updateWatchNextControls();
   scheduleShelfRefresh();
 }
 // Shelves that only make sense with something in them stay out of the page when empty.
-const hideWhenEmpty = ["watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "leavingSoon"];
+const hideWhenEmpty = ["watchlist", "watchLater", "topUnwatched", "continueWatching", "nextUp", "watchNext", "leavingSoon"];
 function shelfIsEmpty(key) {
   if (!hideWhenEmpty.includes(key)) return false;
   const items = key === "watchlist" ? state.watchlistItems : state.personalItems[key];
@@ -434,7 +403,6 @@ function buildSettings() {
     legend: "Calendar status legend",
     addedDates: "Poster added dates",
     shelfNavigation: "Poster navigation arrows",
-    weather: "Weather (off by default)",
   };
   $("#feature-settings").innerHTML = Object.entries(labels)
     .map(
@@ -453,7 +421,6 @@ function buildSettings() {
           method: "POST",
           body: JSON.stringify({ colorblind: el.checked }),
         }).catch(report);
-      if (el.dataset.pref === "weather") saveWeather();
       if (el.dataset.pref === "recommendations" && el.checked) loadRecommendations();
       if (el.dataset.pref === "recent" && el.checked) loadRecent();
       if (el.dataset.pref === "popular" && el.checked) loadPopular();
@@ -469,13 +436,7 @@ function buildSettings() {
   $("#live-shelf-minutes").value = liveShelfInterval();
   $("#default-view").value = state.prefs.defaultView;
   $("#poster-size").value = state.prefs.posterSize || "standard";
-  $("#weather-units").value = state.prefs.weatherUnits;
-  $("#weather-location").checked = Boolean(state.prefs.weatherLocation);
-  $("#weather-city-selected").textContent =
-    state.prefs.weatherCity?.label || "No city selected";
   $("#display-name").value = state.name;
-  $("#weather-city-results").replaceChildren();
-  $("#weather-settings-status").textContent = "";
 }
 async function enter(name, knownMe) {
   resetAccountState();
@@ -496,10 +457,7 @@ async function enter(name, knownMe) {
     $("#section-order-status").textContent = error.message;
     return {};
   });
-  const settingsPromise = Promise.all([
-    api("/api/weather-settings"),
-    api("/api/accessibility-settings"),
-  ]);
+  const settingsPromise = Promise.all([api("/api/accessibility-settings")]);
   const mePromise = knownMe ? Promise.resolve(knownMe) : api("/api/me");
   // Independent entry reads all start together: display sync no longer waits
   // its own round trip before section order, settings and identity begin.
@@ -515,14 +473,14 @@ async function enter(name, knownMe) {
   // flag keeps later choices alone.
   if (!state.prefs.personalShelvesReset) {
     state.prefs.continueWatching = true; state.prefs.nextUp = true; state.prefs.personalShelvesReset = true;
-    try { const { weather, weatherCity, weatherUnits, colorblind, ...devicePrefs } = state.prefs; localStorage.setItem(state.key, JSON.stringify(devicePrefs)); } catch { /* storage full or blocked */ }
+    try { const { colorblind, ...devicePrefs } = state.prefs; localStorage.setItem(state.key, JSON.stringify(devicePrefs)); } catch { /* storage full or blocked */ }
     if (state.prefs.syncDisplay) syncDisplayWrite();
   }
   // One-time reset (0.2.0-beta.3): Favorites, Watchlist, Leaving soon and Recommendations are on by
   // default now (and hide themselves when empty). Saved "off" values from before are turned on once.
   if (!state.prefs.shelvesDefaultsV3) {
     Object.assign(state.prefs, { watchlist: true, watchLater: true, leavingSoon: true, recommendations: true, shelvesDefaultsV3: true });
-    try { const { weather, weatherCity, weatherUnits, colorblind, ...devicePrefs } = state.prefs; localStorage.setItem(state.key, JSON.stringify(devicePrefs)); } catch { /* storage full or blocked */ }
+    try { const { colorblind, ...devicePrefs } = state.prefs; localStorage.setItem(state.key, JSON.stringify(devicePrefs)); } catch { /* storage full or blocked */ }
     if (state.prefs.syncDisplay) syncDisplayWrite();
   }
   pageInitialized = false;
@@ -531,6 +489,7 @@ async function enter(name, knownMe) {
   // together so the shelves below start round trips sooner.
   try {
     let { order } = await orderPromise;
+    if (Array.isArray(order)) order = order.filter(key => key !== "weather");
     if (Array.isArray(order) && [9, 10, 11, 12].includes(order.length)) { order = [...order]; for (const key of ["leavingSoon", "recommendations"]) if (!order.includes(key)) order.splice(order.indexOf("popular"), 0, key); }
     if (Array.isArray(order) && order.length === 11 && !order.includes("inTheaters")) { order = [...order]; order.splice(order.indexOf("popular") + 1, 0, "inTheaters"); }
     if (Array.isArray(order) && !order.includes("watchNext") && order.includes("continueWatching")) { order = [...order]; order.splice(order.indexOf("continueWatching")+1, 0, "watchNext"); }
@@ -538,10 +497,10 @@ async function enter(name, knownMe) {
     if (Array.isArray(order) && !order.includes("topUnwatched") && order.includes("watchLater")) { order = [...order]; order.splice(order.indexOf("watchLater") + 1, 0, "topUnwatched"); }
     if (Array.isArray(order) && order.length === defaultSectionOrder.length && new Set(order).size === order.length && order.every(key => defaultSectionOrder.includes(key))) sectionOrder = order;
   } catch (error) { $("#section-order-status").textContent = error.message; }
-  const [weatherSettings, accessibilitySettings] = await settingsPromise;
-  Object.assign(state.prefs, weatherSettings, accessibilitySettings);
+  const [accessibilitySettings] = await settingsPromise;
+  Object.assign(state.prefs, accessibilitySettings);
   // Reading account settings on entry must not write them back and race another device.
-  const { weather, weatherCity, weatherUnits, colorblind, ...entryPrefs } = state.prefs;
+  const { colorblind, ...entryPrefs } = state.prefs;
   localStorage.setItem(state.key, JSON.stringify(entryPrefs));
   state.view =
     state.prefs.lastView ||
@@ -1366,106 +1325,6 @@ function move(amount) {
     state.date = addDays(state.date, amount * (state.view === "week" ? 7 : 1));
   loadCalendar();
 }
-let weatherTimer;
-let weatherLastLoaded = 0;
-function scheduleWeather() {
-  clearInterval(weatherTimer);
-  if (!state.prefs.weather || (!state.prefs.weatherCity && !state.prefs.weatherLocation)) return;
-  weatherTimer = setInterval(
-    () => {
-      if (!document.hidden && !$("#dashboard").hidden) loadWeather();
-    },
-    15 * 60 * 1000,
-  );
-}
-document.addEventListener("visibilitychange", () => {
-  if (
-    !document.hidden &&
-    !$("#dashboard").hidden &&
-    state.prefs.weather &&
-    Date.now() - weatherLastLoaded >= 15 * 60 * 1000
-  )
-    loadWeather();
-});
-let weatherLocationRequest = null;
-async function deviceWeatherLocation() {
-  if (!state.prefs.weatherLocation) return null;
-  if (!navigator.geolocation || !window.isSecureContext) {
-    $("#weather-location-status").textContent = "Device location requires HTTPS. Using your saved city.";
-    return null;
-  }
-  if (!weatherLocationRequest) {
-    weatherLocationRequest = new Promise(resolve => navigator.geolocation.getCurrentPosition(
-      position => {
-        if (Date.now() - position.timestamp >= 15 * 60 * 1000) { resolve(null); return; }
-        $("#weather-location-status").textContent = "Using this device's approximate location.";
-        resolve({ latitude: Math.round(position.coords.latitude * 100) / 100, longitude: Math.round(position.coords.longitude * 100) / 100 });
-      },
-      () => { $("#weather-location-status").textContent = "Device location unavailable. Using your saved city."; resolve(null); },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 15 * 60 * 1000 },
-    )).finally(() => { weatherLocationRequest = null; });
-  }
-  return weatherLocationRequest;
-}
-$("#weather-location").addEventListener("change", event => {
-  state.prefs.weatherLocation = event.target.checked;
-  if (!event.target.checked) $("#weather-location-status").textContent = "";
-  persist();
-});
-function forecastIcon(code) {
-  let label = "Cloudy", paths = '<path d="M5 18h13a4 4 0 0 0 0-8 6 6 0 0 0-11-1 4.5 4.5 0 0 0-2 9Z"/>';
-  if (code === 0 || code === 1) { label = "Clear"; paths = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>'; }
-  else if (code >= 51 && code <= 67 || code >= 80 && code <= 82) { label = "Rain"; paths += '<path d="m7 20-1 2m6-2-1 2m6-2-1 2"/>'; }
-  else if (code >= 71 && code <= 77 || code === 85 || code === 86) { label = "Snow"; paths += '<path d="M7 21h.01M12 21h.01M17 21h.01"/>'; }
-  else if (code >= 95) { label = "Thunderstorms"; paths += '<path d="m13 16-3 4h4l-3 4"/>'; }
-  else if (code === 45 || code === 48) { label = "Fog"; paths = '<path d="M3 8h18M5 12h14M3 16h18M6 20h12"/>'; }
-  return `<svg class="forecast-icon" viewBox="0 0 24 24" role="img" aria-label="${label}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
-}
-async function loadWeather() {
-  try {
-    const locationEnabled = state.prefs.weatherLocation;
-    const located = await deviceWeatherLocation();
-    const city = locationEnabled && state.prefs.weatherLocation ? located || state.prefs.weatherCity : state.prefs.weatherCity;
-    if (!city) {
-      $("#weather-content").textContent = "Choose a city in Settings";
-      $("#weather-forecast").textContent = "";
-      return;
-    }
-    const params = new URLSearchParams({
-      latitude: city.latitude,
-      longitude: city.longitude,
-      units: state.prefs.weatherUnits,
-    });
-    const data = await api(`/api/weather?${params}`);
-    weatherLastLoaded = Date.now();
-    const codes = {
-      0: "Clear",
-      1: "Mostly clear",
-      2: "Partly cloudy",
-      3: "Overcast",
-      45: "Fog",
-      48: "Fog",
-      51: "Drizzle",
-      61: "Rain",
-      63: "Rain",
-      65: "Heavy rain",
-      71: "Snow",
-      80: "Showers",
-      95: "Thunderstorms",
-    };
-    $("#weather-content").textContent =
-      `${Math.round(data.current.temperature_2m)}°${data.current_units.temperature_2m.replace("°", "")} · ${codes[data.current.weather_code] || "Mixed conditions"}`;
-    $("#weather-forecast").innerHTML = data.daily.time
-      .map(
-        (date, i) =>
-          `<span class="forecast-day">${Number.isInteger(data.daily.weather_code?.[i]) ? forecastIcon(data.daily.weather_code[i]) : ""}<b>${escape(new Date(`${date}T12:00:00`).toLocaleDateString([], { weekday: "short" }))}</b><span>${Math.round(data.daily.temperature_2m_max[i])}° <small>/ ${Math.round(data.daily.temperature_2m_min[i])}°</small></span></span>`,
-      )
-      .join("");
-  } catch (error) {
-    $("#weather-content").textContent = error.message;
-    $("#weather-forecast").innerHTML = "";
-  }
-}
 function resultCardHtml(r, includeContentRating = false) {
   const shelf = !includeContentRating;
   const label = mediaActionLabel(r);
@@ -1732,52 +1591,6 @@ $("#save-display-name").addEventListener("click", async () => {
     button.disabled = false;
   }
 });
-$("#weather-city-search").addEventListener("click", async () => {
-  const button = $("#weather-city-search");
-  button.disabled = true;
-  $("#weather-city-results").replaceChildren();
-  try {
-    const data = await api(
-      `/api/weather/cities?query=${encodeURIComponent($("#weather-city-query").value.trim())}`,
-    );
-    state.cityResults = data.cities;
-    $("#weather-city-results").innerHTML = data.cities
-      .map(
-        (city, index) =>
-          `<button data-city="${index}">${escape(city.label)}</button>`,
-      )
-      .join("");
-    $("#weather-settings-status").textContent = data.cities.length
-      ? "Choose your city below."
-      : "No cities found. Try a nearby city or add a country.";
-  } catch (error) {
-    $("#weather-settings-status").textContent = error.message;
-  } finally {
-    button.disabled = false;
-  }
-});
-$("#weather-city-query").addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    $("#weather-city-search").click();
-  }
-});
-$("#weather-city-results").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-city]");
-  if (!button) return;
-  const city = state.cityResults[Number(button.dataset.city)];
-  if (!city) return;
-  state.prefs.weatherCity = city;
-  $("#weather-city-selected").textContent = city.label;
-  $("#weather-city-results").replaceChildren();
-  persist();
-  saveWeather();
-});
-$("#weather-units").addEventListener("change", (event) => {
-  state.prefs.weatherUnits = event.target.value;
-  persist();
-  saveWeather();
-});
 let jellyfinVersionRequest = 0;
 function setJellyfinStatus(status) {
   const labels = { online: "Jellyfin online", offline: "Jellyfin offline", unknown: "Jellyfin status unknown", demo: "Demo mode: no Jellyfin connected" };
@@ -1832,6 +1645,25 @@ $("#settings-tabs").addEventListener("keydown", event => {
   selectSettingsTab(tabs[next].dataset.settingsTab, true);
 });
 $("#settings-button").addEventListener("click", () => { selectSettingsTab("general"); buildSectionOrder(); buildIconGuide(); $("#settings").showModal(); loadJellyfinVersion(); });
+
+const headerMenu = $("#header-menu"), menuButton = $("#menu-button");
+function closeHeaderMenu() {
+  headerMenu.classList.remove("open");
+  menuButton.setAttribute("aria-expanded", "false");
+}
+menuButton.addEventListener("click", event => {
+  event.stopPropagation();
+  const open = headerMenu.classList.toggle("open");
+  menuButton.setAttribute("aria-expanded", String(open));
+});
+$("#menu-settings").addEventListener("click", () => { closeHeaderMenu(); $("#settings-button").click(); });
+$("#menu-logout").addEventListener("click", () => { closeHeaderMenu(); $("#logout").click(); });
+document.addEventListener("click", event => {
+  if (headerMenu.classList.contains("open") && !headerMenu.contains(event.target) && event.target !== menuButton) closeHeaderMenu();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") closeHeaderMenu();
+});
 $("#default-view").addEventListener("change", (event) => {
   state.prefs.defaultView = event.target.value;
   delete state.prefs.lastView;
@@ -1888,7 +1720,6 @@ $("#refresh").addEventListener("click", () =>
     loadCalendar(),
     loadRequests(),
     loadPersonalShelves(),
-    ...(state.prefs.weather ? [loadWeather()] : []),
   ]),
 );
 $("#filter-button").addEventListener("click", () => {

@@ -36,8 +36,10 @@ export function cleanDisplayPreferences(value) {
   return clean;
 }
 
-export const sectionOrderDefaults = ["search", "weather", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "topUnwatched", "leavingSoon", "requests"];
+export const sectionOrderDefaults = ["search", "recent", "calendar", "popular", "inTheaters", "recommendations", "nextUp", "continueWatching", "watchNext", "watchlist", "watchLater", "topUnwatched", "leavingSoon", "requests"];
 export function cleanSectionOrder(value) {
+  // Orders saved before weather was removed still carry the key; drop it first.
+  if (Array.isArray(value)) value = value.filter(key => key !== "weather");
   if (!Array.isArray(value) || new Set(value).size !== value.length || value.some(key => !sectionOrderDefaults.includes(key))) return null;
   const required = sectionOrderDefaults.filter(key => !["recommendations", "leavingSoon", "inTheaters", "watchNext", "watchLater", "topUnwatched"].includes(key));
   if (!required.every(key => value.includes(key))) return null;
