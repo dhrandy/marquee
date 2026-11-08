@@ -1013,6 +1013,10 @@ let trailerPlayer = null;
 let trailerApiPromise = null;
 let trailerCaptionWatch = null;
 let trailerTapPending = null;
+// iPadOS reports as a Macintosh; the touch point count gives it away.
+const isIOS =
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 function loadTrailerApi() {
   if (!trailerApiPromise)
     trailerApiPromise = new Promise((resolve, reject) => {
@@ -1060,16 +1064,21 @@ async function toggleTrailerPlayer(event) {
   // video on YouTube instead, the same escape hatch the search link gives.
   // A script-opened tab is blocked on iPad Safari once the tap has been used
   // up (the player loads asynchronously), so the fallback is a real link the
-  // viewer can tap: it replaces the player in place.
+  // viewer can tap: it replaces the player in place. On iOS the tab also
+  // navigates to YouTube on its own - navigating the current tab is not a
+  // popup, so the blocker does not stop it - and the link stays in place in
+  // case the navigation is refused.
   const fallback = () => {
+    const url = `https://www.youtube.com/watch?v=${keys[at]}`;
     const link = document.createElement("a");
-    link.href = `https://www.youtube.com/watch?v=${keys[at]}`;
+    link.href = url;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.className = "trailer-fallback";
     link.textContent = "Trailer can't play here. Open on YouTube";
     box.replaceChildren(link);
     box.hidden = false;
+    if (isIOS) location.assign(url);
   };
   box.replaceChildren(document.createElement("div"));
   box.hidden = false;

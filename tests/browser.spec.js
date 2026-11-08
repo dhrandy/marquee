@@ -3515,6 +3515,8 @@ test("trailers play inside the details popup with fallbacks", async ({
   await expect(fallbackLink).toHaveAttribute("target", "_blank");
   await expect(fallbackLink).toHaveAttribute("rel", "noopener noreferrer");
   expect(await page.evaluate(() => window.__opened)).toEqual([]);
+  // Off iOS there is no automatic navigation: the viewer stays on Marquee.
+  expect(new URL(page.url()).origin).toBe("http://127.0.0.1:8739");
   await tile.click();
   await expect(box).toBeHidden();
   await page.getByRole("button", { name: "Close episode details" }).click();
@@ -3531,6 +3533,59 @@ test("trailers play inside the details popup with fallbacks", async ({
     "href",
     /youtube\.com\/results\?search_query=/,
   );
+});
+
+test("on iOS a failed trailer takes the tab to YouTube instead of waiting for a tap", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:8739",
+    userAgent:
+      "Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+    viewport: { width: 820, height: 1180 },
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+  // Same YouTube stub as the main trailer test: CI never touches the network.
+  await page.addInitScript(() => {
+    window.__loaded = [];
+  });
+  await page.route("https://www.youtube.com/iframe_api", (route) =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: `window.YT={Player:class{constructor(el,opts){const f=document.createElement("iframe");f.src=opts.host+"/embed/"+opts.videoId;el.appendChild(f);let track=null;const t={playVideo(){},loadVideoById(k){window.__loaded.push(k)},setOption(){},getOption(){return null},unloadModule(){}};window.__fireError=(d)=>opts.events?.onError?.({data:d,target:t});setTimeout(()=>{if(window.__trailerError)opts.events?.onError?.({data:101,target:t});else{opts.events?.onReady?.({target:t});}},0);}destroy(){}}};window.onYouTubeIframeAPIReady?.();`,
+    }),
+  );
+  await page.route(/youtube-nocookie\.com/, (route) => route.abort());
+  // The watch page stands in for YouTube; the navigation itself is the result.
+  await page.route(/youtube\.com\/watch/, (route) =>
+    route.fulfill({ contentType: "text/html", body: "<html><body>YouTube</body></html>" }),
+  );
+  await login(page);
+  await view(page, "discover");
+  await page.getByPlaceholder("Search movies and shows").fill("orbit");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Details for Orbit Nine" })
+    .first()
+    .click();
+  const tile = page.locator("#episode-trailer");
+  await expect(tile).toHaveAttribute("aria-label", "Play trailer");
+  await page.evaluate(() => {
+    window.__trailerError = true;
+  });
+  await tile.click();
+  // A first refusal still retries the next trailer inside the player; the
+  // viewer has not left Marquee.
+  await expect
+    .poll(() => page.evaluate(() => window.__loaded))
+    .toEqual(["9qhL2_UxXM0"]);
+  expect(new URL(page.url()).origin).toBe("http://127.0.0.1:8739");
+  // Once the last candidate is refused, the tab goes to YouTube on its own -
+  // no second tap on the fallback link.
+  await page.evaluate(() => window.__fireError(150));
+  await expect(page).toHaveURL("https://www.youtube.com/watch?v=9qhL2_UxXM0");
+  await context.close();
 });
 
 test("home shelves load in section order, a few at a time", async ({ page }) => {
